@@ -73,7 +73,7 @@ function signIn() {
       </div>
       <DialogFooter>
         <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton type="submit" :loading="busy" :disabled="busy || tooLong" data-testid="report-send">{{ t("catalog.reportSend") }}</DialogButton>
+        <DialogButton type="submit" :busy="busy" :disabled="busy || tooLong" data-testid="report-send">{{ t("catalog.reportSend") }}</DialogButton>
       </DialogFooter>
     </form>
   </ModalDialog>

@@ -269,7 +269,7 @@ async function allow() {
       <DialogButton type="button" close autofocus data-testid="grant-cancel" @click="close()">
         {{ request.review ? t("grant.notNow") : t("common.cancel") }}
       </DialogButton>
-      <DialogButton type="button" :loading="busy" data-testid="grant-allow" :disabled="busy" @click="allow">{{ update ? t("grant.updateAllow") : t("grant.allow") }}</DialogButton>
+      <DialogButton type="button" :busy="busy" data-testid="grant-allow" :disabled="busy" @click="allow">{{ update ? t("grant.updateAllow") : t("grant.allow") }}</DialogButton>
     </DialogFooter>
   </component>
 </template>

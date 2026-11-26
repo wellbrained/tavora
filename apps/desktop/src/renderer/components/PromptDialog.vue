@@ -45,7 +45,7 @@ async function submit() {
       </div>
       <DialogFooter>
         <DialogButton type="button" close @click="dialog = null">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton type="submit" :loading="busy" data-testid="prompt-submit" :disabled="busy">{{ request.confirm }}</DialogButton>
+        <DialogButton type="submit" :busy="busy" data-testid="prompt-submit" :disabled="busy">{{ request.confirm }}</DialogButton>
       </DialogFooter>
     </form>
   </ModalDialog>

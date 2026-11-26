@@ -2,11 +2,6 @@
   "version": 1,
   "about": "Known breaks of the module rules (tavora docs/module-rules.md). pnpm check:modules fails only on new ones; --update-baseline rewrites this file.",
   "files": {
-    "modules/calculator/src/App.vue": {
-      "kit-control": {
-        "<Button variant=\"ghost\" size=\"icon-sm\" :class=\"settings.history && 'bg-accent text-accent-foreground'\"": 1
-      }
-    },
     "modules/clock-counter/src/App.vue": {
       "dom-query": {
         "setTimeout(() => document.querySelector<HTMLElement>(focus)?.focus(), 60);": 1
@@ -92,7 +87,6 @@
     },
     "modules/notes/src/ImageBar.vue": {
       "kit-control": {
-        "<Button v-for=\"choice in choices\" :key=\"choice.id\"": 1,
         "<div class=\"bg-popover text-popover-foreground fixed z-50 flex items-center gap-0.5 rounded-md border p-1 text-xs shadow-lg\"": 1
       },
       "shadow": {
@@ -127,8 +121,6 @@
         "outline: none;": 1
       },
       "kit-control": {
-        "<Button v-else variant=\"ghost\" size=\"icon-sm\"": 1,
-        "<Button v-for=\"tool in group\" :key=\"tool.label\"": 1,
         "<div class=\"flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden\" role=\"toolbar\" :aria-label=\"t('editor.formatting')\">": 1
       },
       "radius": {
@@ -185,12 +177,6 @@
       "z-index": {
         "z-index: 1;": 1,
         "z-index: 2;": 1
-      }
-    },
-    "modules/playground/src/examples/buttons/ToggleButtons.vue": {
-      "kit-control": {
-        "<Button size=\"icon-sm\" variant=\"ghost\" aria-label=\"Bold\" title=\"Bold\" :aria-pressed=\"true\" class=\"bg-secondary\"><Bold /></Button>": 1,
-        "<Button size=\"icon-sm\" variant=\"ghost\" aria-label=\"Italic\" title=\"Italic\" :aria-pressed=\"false\"><Italic /></Button>": 1
       }
     },
     "modules/playground/src/examples/colour-stars/CustomColour.vue": {
@@ -399,15 +385,12 @@
     },
     "modules/whiteboard/src/App.vue": {
       "z-index": {
-        "<EmptyState v-if=\"boardState.empty\" :title=\"t('empty.hint')\" class=\"text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0\" data-testid=\"empty-hint\" />": 1
+        "<EmptyState v-if=\"boardState.empty\" variant=\"bare\" :title=\"t('empty.hint')\" class=\"text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 bg-transparent p-0\" data-testid=\"empty-hint\" />": 1
       }
     },
     "modules/whiteboard/src/PictureLocks.vue": {
-      "kit-control": {
-        "<Button v-for=\"spot in spots\" :key=\"spot.id\"": 1
-      },
       "palette": {
-        "'picture-lock pointer-events-auto absolute size-6 -translate-x-1/2 -translate-y-1/2 bg-black/65 text-white opacity-0 transition-opacity hover:bg-black/80 hover:text-white hover:opacity-100 focus-visible:opacity-100',": 4
+        "'picture-lock pointer-events-auto absolute size-6 min-w-0 -translate-x-1/2 -translate-y-1/2 bg-black/65 text-white opacity-0 transition-opacity hover:bg-black/80 hover:text-white hover:opacity-100 focus-visible:opacity-100 data-[state=on]:bg-black/65 data-[state=on]:text-white data-[state=on]:hover:": 8
       },
       "z-index": {
         "<div v-if=\"spots.length > 0\" :class=\"LOCKS_CLASS\" class=\"pointer-events-none absolute inset-0 z-[2] overflow-hidden\">": 1

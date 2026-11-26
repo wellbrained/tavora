@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.72",
+    "date": "2026-11-26",
+    "notes": [
+      "The history button looks like every other on/off button, and buttons, fields and lists line up at the same heights."
+    ]
+  },
+  {
     "version": "0.1.71",
     "date": "2026-11-25",
     "notes": [

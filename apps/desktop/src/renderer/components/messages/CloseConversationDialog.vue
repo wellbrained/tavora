@@ -49,7 +49,7 @@ async function close() {
       </div>
       <DialogFooter>
         <DialogButton type="button" close @click="emit('close')">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton type="submit" :loading="busy" :disabled="busy" data-testid="close-conversation-submit">{{ t("inbox.close") }}</DialogButton>
+        <DialogButton type="submit" :busy="busy" :disabled="busy" data-testid="close-conversation-submit">{{ t("inbox.close") }}</DialogButton>
       </DialogFooter>
     </form>
   </ModalDialog>

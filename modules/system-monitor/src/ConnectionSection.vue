@@ -118,7 +118,7 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
   <div class="flex flex-col gap-2 p-2" data-testid="connection-section">
     <p v-if="missing" class="text-muted-foreground px-1 text-xs" data-testid="connection-old">{{ t("connection.old") }}</p>
     <template v-else>
-      <Notice v-if="banner" variant="error" :title="banner.title" data-testid="connection-banner">{{ banner.text }}</Notice>
+      <Notice v-if="banner" variant="destructive" :title="banner.title" data-testid="connection-banner">{{ banner.text }}</Notice>
 
       <!-- Four cards in a row on a wide panel, two by two below 620 px, one by one on a very narrow one. -->
       <div class="grid grid-cols-1 items-stretch gap-2 @min-[320px]:grid-cols-2 @min-[620px]:grid-cols-4">

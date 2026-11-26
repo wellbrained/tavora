@@ -365,7 +365,7 @@ async function remove() {
 </script>
 
 <template>
-  <Notice v-if="!store && error" variant="error" class="m-4" data-testid="status">{{ t("connectError") }}</Notice>
+  <Notice v-if="!store && error" variant="destructive" class="m-4" data-testid="status">{{ t("connectError") }}</Notice>
   <div v-else-if="!store" class="flex flex-col gap-2 p-4" data-testid="status">
     <Progress :model-value="starting" :aria-label="t('loading')" />
     <p class="text-muted-foreground text-sm">{{ t("loading") }}</p>

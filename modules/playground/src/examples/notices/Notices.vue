@@ -8,7 +8,7 @@ import { Notice } from "@tavora/official-ui/components/ui/notice";
     <Notice>Notes are shared by every panel of this module in the current workspace.</Notice>
     <Notice variant="success">Imported 24 to-dos.</Notice>
     <Notice variant="warning" title="Almost full">This note is almost at its size limit.</Notice>
-    <Notice variant="error">
+    <Notice variant="destructive">
       Could not save. Your change is kept and will be tried again.
       <template #action><Button size="xs" variant="secondary">Retry</Button></template>
     </Notice>

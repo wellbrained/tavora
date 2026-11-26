@@ -103,7 +103,6 @@ watch(current, saveFields, { flush: "pre" });
 const COLOR_NAMES = ["white", "yellow", "orange", "red", "pink", "violet", "blue", "teal", "green", "black"] as const;
 const colorLabels = computed(() => COLOR_NAMES.map((name) => t(`color.${name}`)));
 /** Segments that share the control column evenly. */
-const fill = "w-full min-w-0 [&>*]:flex-1 [&>*]:px-0";
 
 function change(touched: string[], apply: (data: ItemList) => void): void {
   savedAt.value = Date.now();
@@ -620,7 +619,7 @@ onBeforeUnmount(saveFields);
                   { value: 'self', label: t('edit.scopeSelf'), testid: 'scope-self' },
                   { value: 'group', label: t('edit.scopeGroup'), testid: 'scope-group' },
                 ]"
-                :class="fill"
+                fill
               />
             </SettingsRow>
             <SettingsRow :label="t('edit.text')" :hint="t(whole ? 'edit.textHint.group' : item.kind === 'counter' ? 'edit.textHint.count' : 'edit.textHint.time')" stacked>
@@ -660,10 +659,10 @@ onBeforeUnmount(saveFields);
           </template>
           <SettingsSection :title="t('edit.all')">
             <SettingsRow :label="t('edit.font')">
-              <SegmentedControl v-model="font" :label="t('edit.font')" :options="FONTS.map((value) => ({ value, label: t(`edit.font.${value}`) }))" :class="fill" />
+              <SegmentedControl v-model="font" :label="t('edit.font')" :options="FONTS.map((value) => ({ value, label: t(`edit.font.${value}`) }))" fill />
             </SettingsRow>
             <SettingsRow :label="t('edit.align')">
-              <SegmentedControl v-model="align" :label="t('edit.align')" :options="ALIGNS.map((value) => ({ value, label: t(`edit.align.${value}`) }))" :class="fill" />
+              <SegmentedControl v-model="align" :label="t('edit.align')" :options="ALIGNS.map((value) => ({ value, label: t(`edit.align.${value}`) }))" fill />
             </SettingsRow>
             <SettingsRow :label="t('edit.outline')">
               <Switch :model-value="look.outline" :aria-label="t('edit.outline')" @update:model-value="(on: boolean) => updateLook((value) => (value.outline = on))" />
@@ -674,7 +673,7 @@ onBeforeUnmount(saveFields);
               <ColorPicker v-model="wordsColor" :label="t('edit.color')" :colors="[...COLORS]" :labels="colorLabels" :columns="5" data-testid="words-color" />
             </SettingsRow>
             <SettingsRow :label="t('edit.size')">
-              <SegmentedControl v-model="wordsSize" :label="`${t('edit.words')}: ${t('edit.size')}`" :options="sizeOptions('words')" :class="fill" />
+              <SegmentedControl v-model="wordsSize" :label="`${t('edit.words')}: ${t('edit.size')}`" :options="sizeOptions('words')" fill />
             </SettingsRow>
           </SettingsSection>
           <SettingsSection :title="t('edit.number')">
@@ -682,7 +681,7 @@ onBeforeUnmount(saveFields);
               <ColorPicker v-model="numberColor" :label="t('edit.color')" :colors="[...COLORS]" :labels="colorLabels" :columns="5" data-testid="number-color" />
             </SettingsRow>
             <SettingsRow :label="t('edit.size')">
-              <SegmentedControl v-model="numberSize" :label="`${t('edit.number')}: ${t('edit.size')}`" :options="sizeOptions('number')" :class="fill" />
+              <SegmentedControl v-model="numberSize" :label="`${t('edit.number')}: ${t('edit.size')}`" :options="sizeOptions('number')" fill />
             </SettingsRow>
           </SettingsSection>
           <OverlayTextSettings :value="boxed" @change="(change) => updateLook((value) => Object.assign(value, change))" />

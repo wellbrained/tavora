@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.67",
+    "date": "2026-11-26",
+    "notes": [
+      "The lock on a picture is a proper on/off button, and buttons, fields and lists line up at the same heights."
+    ]
+  },
+  {
     "version": "0.3.66",
     "date": "2026-11-25",
     "notes": [

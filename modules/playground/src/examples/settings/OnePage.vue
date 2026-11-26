@@ -46,7 +46,7 @@ function reset() {
               <Switch :model-value="look.twentyFour" aria-label="24-hour clock" @update:model-value="set('twentyFour', $event)" />
             </SettingsRow>
             <SettingsRow label="Text size" hint="Bigger is easier to read from afar.">
-              <SegmentedControl :model-value="look.size" label="Text size" :options="SIZES" class="w-full min-w-0 [&>*]:flex-1 [&>*]:px-0" @update:model-value="set('size', $event)" />
+              <SegmentedControl :model-value="look.size" label="Text size" :options="SIZES" fill @update:model-value="set('size', $event)" />
             </SettingsRow>
             <SettingsRow label="Text colour" hint="Pick one that stands out.">
               <ColorPicker :model-value="look.color" :colors="COLORS" label="Text colour" :columns="7" allow-custom @update:model-value="set('color', $event)" />

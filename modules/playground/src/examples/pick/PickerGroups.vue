@@ -33,7 +33,7 @@ const current = computed(() => BUILDS.find((option) => option.value === build.va
     </template>
     <template #filters>
       <div class="flex flex-wrap gap-1.5">
-        <Toggle v-for="tag in TAGS" :key="tag" v-model="on[tag]" :label="`Only ${tag}`" class="h-7 w-auto rounded-full px-2.5 text-xs">{{ tag }}</Toggle>
+        <Toggle v-for="tag in TAGS" :key="tag" v-model="on[tag]" size="sm" :label="`Only ${tag}`" class="rounded-full text-xs">{{ tag }}</Toggle>
       </div>
     </template>
     <template #option="{ option }">

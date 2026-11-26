@@ -138,14 +138,14 @@ async function ask() {
         @click="openLibrary"
       />
     </div>
-    <Notice v-for="module in failed" :key="module.id" variant="error" class="w-full max-w-124" :data-testid="`made-for-error-${module.id}`">{{ errors[module.id] }}</Notice>
+    <Notice v-for="module in failed" :key="module.id" variant="destructive" class="w-full max-w-124" :data-testid="`made-for-error-${module.id}`">{{ errors[module.id] }}</Notice>
     <template v-if="isGame && made && !made.length">
       <p v-if="asked" class="text-muted-foreground text-xs" role="status" data-testid="ask-module-thanks">{{ t("workspace.askThanks") }}</p>
       <template v-else>
         <Button variant="link" size="sm" class="text-muted-foreground h-auto py-0 text-xs" :disabled="asker.busy.value" data-testid="ask-module" @click="ask">{{
           t("workspace.askModule", { game: workspace.name })
         }}</Button>
-        <Notice v-if="asker.error.value" variant="error" class="w-full max-w-124" data-testid="ask-module-error">{{ asker.error.value }}</Notice>
+        <Notice v-if="asker.error.value" variant="destructive" class="w-full max-w-124" data-testid="ask-module-error">{{ asker.error.value }}</Notice>
       </template>
     </template>
   </section>

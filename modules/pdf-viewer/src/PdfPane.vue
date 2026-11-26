@@ -478,7 +478,7 @@ const setPageRef = (number: number) => (element: unknown) => {
 
 <template>
   <div ref="root" class="flex h-full min-h-0 flex-col outline-none" tabindex="-1" data-testid="pdf-pane" @keydown="onKey">
-    <Notice v-if="status === 'gone' || status === 'broken'" variant="error" class="m-3" data-testid="pdf-error">
+    <Notice v-if="status === 'gone' || status === 'broken'" variant="destructive" class="m-3" data-testid="pdf-error">
       {{ status === "gone" ? t("pdf.fileGone") : t("pdf.failed") }}
       <template v-if="status === 'broken'" #action>
         <Button size="sm" variant="secondary" @click="load">{{ t("pdf.retry") }}</Button>

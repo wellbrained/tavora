@@ -41,7 +41,7 @@ const lengths = computed(() => HISTORY_LENGTHS.map((option) => ({ value: String(
           v-model="historyLength"
           :label="t('options.historyLength')"
           :options="lengths"
-          class="w-full min-w-0 [&>*]:flex-1 [&>*]:px-0"
+          fill
         />
       </SettingsRow>
     </SettingsSection>

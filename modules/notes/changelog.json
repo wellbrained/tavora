@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.63",
+    "date": "2026-11-26",
+    "notes": [
+      "The format buttons and the pin show clearly when they're on, and buttons, fields and lists line up at the same heights."
+    ]
+  },
+  {
     "version": "0.6.62",
     "date": "2026-11-25",
     "notes": [

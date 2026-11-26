@@ -153,7 +153,7 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
     </div>
     <DialogFooter v-if="!games">
       <DialogButton type="button" close @click="dialog = null">{{ t("common.cancel") }}</DialogButton>
-      <DialogButton type="submit" form="steam-lookup-form" :icon="Search" :loading="looking" data-testid="steam-lookup" :disabled="looking || !profile.trim()">
+      <DialogButton type="submit" form="steam-lookup-form" :icon="Search" :busy="looking" data-testid="steam-lookup" :disabled="looking || !profile.trim()">
         {{ looking ? t("steamImport.looking") : t("steamImport.lookUp") }}
       </DialogButton>
     </DialogFooter>

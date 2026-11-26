@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.96",
+    "date": "2026-11-26",
+    "notes": [
+      "New examples: sizes on every control, toggle looks and sizes, a segmented control across the width and an empty panel."
+    ]
+  },
+  {
     "version": "0.1.95",
     "date": "2026-11-25",
     "notes": [

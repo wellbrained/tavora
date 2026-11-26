@@ -61,7 +61,7 @@ function reset() {
         </template>
         <SettingsSection title="Text">
           <SettingsRow label="Title">
-            <SegmentedControl :model-value="look.size" label="Title size" :options="SIZES" class="w-full min-w-0 [&>*]:flex-1 [&>*]:px-0" @update:model-value="set('size', $event)" />
+            <SegmentedControl :model-value="look.size" label="Title size" :options="SIZES" fill @update:model-value="set('size', $event)" />
             <Toggle :model-value="look.bold" label="Bold" class="font-bold" @update:model-value="set('bold', $event)">B</Toggle>
             <Toggle :model-value="look.italic" label="Italic" class="font-serif italic" @update:model-value="set('italic', $event)">I</Toggle>
           </SettingsRow>

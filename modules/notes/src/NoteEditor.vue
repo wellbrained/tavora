@@ -17,7 +17,6 @@ import {
   ListChecks,
   ListOrdered,
   Pin,
-  PinOff,
   Quote,
   SquareCode,
   Strikethrough,
@@ -25,6 +24,7 @@ import {
 } from "@lucide/vue";
 import { cn, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import { isComposing } from "@tavora/official-ui/lib/keys";
 import {
   DropdownMenu,
@@ -566,20 +566,18 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
         </DropdownMenu>
         <template v-for="(group, index) in shownGroups" :key="index">
           <span class="bg-border mx-1 h-4 w-px flex-none" aria-hidden="true" />
-          <Button
+          <Toggle
             v-for="tool in group"
             :key="tool.label"
             variant="ghost"
-            size="icon-sm"
-            :class="cn('flex-none', tool.active && 'bg-accent text-foreground')"
-            :aria-label="tool.label"
-            :aria-pressed="tool.active"
-            :title="tool.label"
+            size="sm"
+            :model-value="tool.active"
+            :label="tool.label"
             @mousedown.prevent
-            @click="tool.run()"
+            @update:model-value="tool.run()"
           >
             <component :is="tool.icon" />
-          </Button>
+          </Toggle>
         </template>
         <DropdownMenu v-if="moreTools.length">
           <DropdownMenuTrigger as-child>
@@ -629,20 +627,17 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
           <Eraser />
         </Button>
       </template>
-      <Button
+      <Toggle
         v-else
         variant="ghost"
-        size="icon-sm"
-        class="flex-none"
+        size="sm"
         data-testid="toggle-pin"
-        :aria-label="entry?.pinned ? t('editor.unpin') : t('editor.pin')"
-        :aria-pressed="entry?.pinned ?? false"
-        :title="entry?.pinned ? t('editor.unpin') : t('editor.pin')"
-        @click="emit('togglePin')"
+        :model-value="entry?.pinned ?? false"
+        :label="t('editor.pin')"
+        @update:model-value="emit('togglePin')"
       >
-        <PinOff v-if="entry?.pinned" />
-        <Pin v-else />
-      </Button>
+        <Pin />
+      </Toggle>
     </header>
     <div v-if="store.deleted.value" class="bg-muted flex flex-none items-center gap-2 border-b px-3 py-1.5 text-sm" role="status" data-testid="deleted-banner">
       <span class="text-muted-foreground min-w-0 flex-1 truncate">{{ t("editor.deleted") }}</span>

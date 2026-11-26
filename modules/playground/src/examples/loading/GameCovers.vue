@@ -26,7 +26,7 @@ const GAMES = [
   <div class="flex flex-col items-start gap-3">
     <div class="grid w-full max-w-md grid-cols-3 gap-2">
       <div v-for="(game, index) in GAMES" :key="game.name" class="flex min-w-0 flex-col gap-1.5">
-        <GameCover :src="index === 0 ? art : null" :pending="index === 0 && art === null" :busy="game.busy" :data-testid="`game-cover-${index}`">
+        <GameCover :src="index === 0 ? art : null" :loading="index === 0 && art === null" :busy="game.busy" :data-testid="`game-cover-${index}`">
           <template #fallback><span class="bg-secondary text-secondary-foreground grid size-full place-items-center text-lg font-semibold">{{ game.name.slice(0, 2).toUpperCase() }}</span></template>
         </GameCover>
         <span class="truncate text-sm font-medium">{{ game.name }}</span>

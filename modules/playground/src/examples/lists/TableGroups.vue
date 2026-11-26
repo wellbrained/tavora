@@ -14,7 +14,7 @@ import { t } from "../../i18n";
     </TableHeader>
     <TableBody>
       <TableGroup :colspan="3">{{ t("demo.table.defence") }}</TableGroup>
-      <TableRow tone="positive">
+      <TableRow tone="success">
         <TableHead scope="row" class="text-foreground text-sm font-normal">{{ t("demo.table.life") }}</TableHead>
         <TableCell align="end" numeric>1,180</TableCell>
         <TableCell align="end" numeric>1,240</TableCell>
@@ -24,7 +24,7 @@ import { t } from "../../i18n";
         <TableCell align="end" numeric>3,880</TableCell>
         <TableCell align="end" numeric>3,880</TableCell>
       </TableRow>
-      <TableRow tone="negative">
+      <TableRow tone="destructive">
         <TableHead scope="row" class="text-foreground text-sm font-normal">{{ t("demo.table.evasion") }}</TableHead>
         <TableCell align="end" numeric>1,020</TableCell>
         <TableCell align="end" numeric>912</TableCell>

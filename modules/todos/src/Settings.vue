@@ -79,7 +79,6 @@ const COLOR_NAMES = ["white", "yellow", "orange", "red", "pink", "violet", "blue
 const colorLabels = computed(() => COLOR_NAMES.map((name) => t(`color.${name}` as "color.red")));
 const SIZE_OPTIONS = (Object.keys(LIVE_SIZES) as LiveSize[]).map((size) => ({ value: size, label: size.toUpperCase(), testid: `size-${size}` }));
 /** Segments that share the control column evenly. */
-const fill = "w-full min-w-0 [&>*]:flex-1 [&>*]:px-0";
 
 function set<K extends keyof LiveLook>(key: K, value: LiveLook[K] | undefined) {
   if (value !== undefined) look.value = { ...look.value, [key]: value };
@@ -125,7 +124,7 @@ watch([() => props.state, plate], draw, { deep: true });
           </Select>
         </SettingsRow>
         <SettingsRow :label="t('live.size')">
-          <SegmentedControl :model-value="shownSize(panelLook.size)" :label="t('live.size')" :options="SIZE_OPTIONS.map((option) => ({ ...option, testid: `panel-${option.testid}` }))" :class="fill" @update:model-value="setPanel('size', $event)" />
+          <SegmentedControl :model-value="shownSize(panelLook.size)" :label="t('live.size')" :options="SIZE_OPTIONS.map((option) => ({ ...option, testid: `panel-${option.testid}` }))" fill @update:model-value="setPanel('size', $event)" />
         </SettingsRow>
       </SettingsSection>
     </SettingsPage>
@@ -150,7 +149,7 @@ watch([() => props.state, plate], draw, { deep: true });
           </Select>
         </SettingsRow>
         <SettingsRow :label="t('live.size')">
-          <SegmentedControl :model-value="shownSize(look.size)" :label="t('live.size')" :options="SIZE_OPTIONS.map((option) => ({ ...option, testid: `live-${option.testid}` }))" :class="fill" @update:model-value="set('size', $event)" />
+          <SegmentedControl :model-value="shownSize(look.size)" :label="t('live.size')" :options="SIZE_OPTIONS.map((option) => ({ ...option, testid: `live-${option.testid}` }))" fill @update:model-value="set('size', $event)" />
           <Toggle :model-value="look.bold" :label="t('live.bold')" class="font-bold" data-testid="live-bold" @update:model-value="set('bold', $event)">B</Toggle>
         </SettingsRow>
         <SettingsRow :label="t('live.color')">
@@ -199,7 +198,7 @@ watch([() => props.state, plate], draw, { deep: true });
               { value: 'hide', label: t('live.finished.hide'), testid: 'live-finished-hide' },
               { value: 'show', label: t('live.finished.show'), testid: 'live-finished-show' },
             ]"
-            :class="fill"
+            fill
             @update:model-value="set('showFinished', $event === 'show')"
           />
         </SettingsRow>

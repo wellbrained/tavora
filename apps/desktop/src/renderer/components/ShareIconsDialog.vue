@@ -192,7 +192,7 @@ async function share() {
       </span>
       <DialogButton type="button" close :disabled="busy" @click="dialog = null">{{ empty ? t("common.close") : t("common.cancel") }}</DialogButton>
       <DialogButton v-if="!empty && !signedIn" type="button" data-testid="share-icons-sign-in-button" @click="signIn">{{ t("account.signIn") }}</DialogButton>
-      <DialogButton v-else-if="!empty" type="button" :loading="busy" data-testid="share-icons-submit" :disabled="busy || looking || count === 0" @click="share">
+      <DialogButton v-else-if="!empty" type="button" :busy="busy" data-testid="share-icons-submit" :disabled="busy || looking || count === 0" @click="share">
         {{ t("shareIcons.submit", { count: Math.max(count, 1) }) }}
       </DialogButton>
     </DialogFooter>

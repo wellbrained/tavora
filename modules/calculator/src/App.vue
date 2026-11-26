@@ -14,6 +14,7 @@ import { connectModule, copyText as copyToClipboard, errorMessage, SegmentedCont
 import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { handleUndoKey, Toaster, undoable, type Undoable } from "@tavora/official-ui/components/ui/toast";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
 import type { TavoraSDK } from "@tavora/sdk";
@@ -372,18 +373,16 @@ onBeforeUnmount(() => {
     <div class="flex flex-none items-center gap-2 px-3 pt-2">
       <SegmentedControl v-model="mode" :label="t('mode.label')" :options="modes" />
       <span class="flex-1" />
-      <Button
+      <Toggle
         variant="ghost"
-        size="icon-sm"
-        :class="settings.history && 'bg-accent text-accent-foreground'"
-        :aria-pressed="settings.history"
-        :aria-label="t('history.show')"
-        :title="t('history.show')"
+        size="sm"
+        :model-value="settings.history"
+        :label="t('history.show')"
         data-testid="toggle-history"
-        @click="choose({ history: !settings.history })"
+        @update:model-value="choose({ history: $event })"
       >
         <History />
-      </Button>
+      </Toggle>
       <Button variant="ghost" size="icon-sm" :aria-label="t('options.title')" :title="t('options.title')" data-testid="options" @click="openSettings">
         <SettingsIcon />
       </Button>

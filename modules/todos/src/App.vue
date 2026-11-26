@@ -376,7 +376,7 @@ function dropTask() {
     </header>
 
     <div ref="listEl" class="min-h-0 flex-1 overflow-y-auto p-2" @dragend="dragEnd">
-      <EmptyState v-if="!list.groups.length" class="border-0" :title="t('app.empty')" data-testid="empty" data-focus-empty>
+      <EmptyState v-if="!list.groups.length" variant="bare" :title="t('app.empty')" data-testid="empty" data-focus-empty>
         <template #action><AddInput class="w-full max-w-80" outlined :placeholder="t('app.addTodo')" :maxlength="MAX.title" data-testid="first-task" @add="firstTask" /></template>
       </EmptyState>
 

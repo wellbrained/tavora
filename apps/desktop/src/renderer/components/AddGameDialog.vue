@@ -218,7 +218,7 @@ function onDialogKey(event: KeyboardEvent) {
       </div>
 
       <div ref="list" class="min-h-0 flex-1 overflow-y-auto py-2">
-        <Notice v-if="adder.error.value" variant="error" class="mx-4 mb-2" data-testid="add-game-error">{{ adder.error.value }}</Notice>
+        <Notice v-if="adder.error.value" variant="destructive" class="mx-4 mb-2" data-testid="add-game-error">{{ adder.error.value }}</Notice>
         <template v-if="mode === 'game'">
         <p v-if="!installedLoaded" class="text-muted-foreground flex items-center gap-2 px-5 pb-1 text-xs font-medium" role="status" data-testid="add-game-loading">
           <Loader class="size-3.5 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />{{ t("addGame.loadingPc") }}

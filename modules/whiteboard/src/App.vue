@@ -396,7 +396,7 @@ async function addPicture(event: Event) {
 
 <template>
   <div v-if="error" class="p-4" data-testid="connect-error">
-    <Notice variant="error">
+    <Notice variant="destructive">
       {{ t("connectError", { error }) }}
       <template #action>
         <Button type="button" size="sm" variant="secondary" @click="reload">{{ t("retry") }}</Button>
@@ -492,7 +492,7 @@ async function addPicture(event: Event) {
         @toolbar="placeToolbar"
         @palette="placePalette"
       />
-      <EmptyState v-if="boardState.empty" :title="t('empty.hint')" class="text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0" data-testid="empty-hint" />
+      <EmptyState v-if="boardState.empty" variant="bare" :title="t('empty.hint')" class="text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 bg-transparent p-0" data-testid="empty-hint" />
     </main>
     <Toaster />
   </div>

@@ -26,7 +26,7 @@ async function run() {
       <DialogButton
         type="button"
         :variant="request.danger ? 'destructive' : 'default'"
-        :loading="task.busy.value"
+        :busy="task.busy.value"
         data-testid="confirm-submit"
         :disabled="task.busy.value"
         @click="run"

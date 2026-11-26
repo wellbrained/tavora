@@ -138,7 +138,7 @@ function option(key: string) {
       <p :id="`${id}-lately`" class="text-muted-foreground px-2 pt-1 pb-1 text-xs font-medium">{{ t("addGame.lately") }}</p>
       <div class="grid grid-cols-6 gap-1">
         <div v-for="row in covers" :key="row.key" v-bind="option(row.key)" class="flex min-w-0 flex-col gap-1.5 rounded-lg p-2" :data-testid="`cover-${row.gameId ?? row.key}`">
-          <GameCover :src="coverOf(row) ?? null" :pending="coverOf(row) === undefined" :busy="adding === row.key">
+          <GameCover :src="coverOf(row) ?? null" :loading="coverOf(row) === undefined" :busy="adding === row.key">
             <template #fallback>
               <span class="grid size-full place-items-center" :style="toneOf(row)">
                 <GameTile :id="row.gameId ?? row.key" :name="row.name" :icon="row.icon" :size="56" />

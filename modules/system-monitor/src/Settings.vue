@@ -199,7 +199,7 @@ function resetAddress(): void {
           />
           <Button v-if="address !== SYSTEM_PING_TARGET" variant="secondary" size="sm" class="flex-none" data-testid="settings-address-reset" @click="resetAddress">{{ t("target.reset") }}</Button>
         </SettingsRow>
-        <Notice v-if="error" variant="error" class="mt-3" data-testid="settings-error">{{ error }}</Notice>
+        <Notice v-if="error" variant="destructive" class="mt-3" data-testid="settings-error">{{ error }}</Notice>
       </SettingsSection>
       <Notice v-else variant="info" class="mt-6" data-testid="settings-connection-old">{{ t("target.old") }}</Notice>
 

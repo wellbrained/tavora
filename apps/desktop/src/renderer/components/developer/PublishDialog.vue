@@ -264,7 +264,7 @@ function browse() {
 
       <DialogFooter>
         <DialogButton close :disabled="view.status === 'publishing'" data-testid="publish-cancel" @click="close">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :loading="view.status === 'publishing'" :disabled="busy || view.status !== 'ready' || view.problems.length > 0" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
+        <DialogButton :busy="view.status === 'publishing'" :disabled="busy || view.status !== 'ready' || view.problems.length > 0" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
           {{ view.status === "publishing" ? t("publish.publishing") : t("publish.publish") }}
         </DialogButton>
       </DialogFooter>
