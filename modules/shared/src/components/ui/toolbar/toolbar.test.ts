@@ -243,6 +243,83 @@ describe("Toolbar", () => {
   })
 })
 
+describe("Toolbar Tab stops with fields", () => {
+  const search = (id: string) => h(SearchInput, { modelValue: "", "onUpdate:modelValue": () => {}, "aria-label": id, "data-testid": id })
+  // Tab moves along the page's tab stops in DOM order; where it lands on the toolbar's own element, that hands the focus on.
+  const tabbable = () => [...document.querySelectorAll<HTMLElement>("input, button, [tabindex]")].filter((element) => element.tabIndex >= 0)
+  async function tab(from: HTMLElement | null, back = false) {
+    const stops = tabbable()
+    if (from) {
+      const down = new KeyboardEvent("keydown", { key: "Tab", shiftKey: back, bubbles: true, cancelable: true })
+      // A handler that takes the key over has put the focus where it wants it.
+      if (!from.dispatchEvent(down)) return document.activeElement
+    }
+    const at = from ? stops.indexOf(from) : -1
+    const next = stops[back ? (at < 0 ? stops.length : at) - 1 : at + 1]
+    next?.focus()
+    await nextTick()
+    await wait()
+    return document.activeElement
+  }
+  async function page(content: () => VNodeChild) {
+    const root = document.createElement("div")
+    document.body.append(root)
+    app = createApp({ render: () => h("div", [h("button", { "data-testid": "before" }, "before"), h(Toolbar, { label: "Tools" }, { default: content }), h("button", { "data-testid": "after" }, "after")]) })
+    app.mount(root)
+    await nextTick()
+    await wait()
+    const get = (id: string) => root.querySelector(`[data-testid=${id}]`) as HTMLElement
+    return { get }
+  }
+
+  it("lands on a field before the first tool, then the tool, then out", async () => {
+    const { get } = await page(() => [search("find"), h(Button, { "data-testid": "a" }, () => "a"), h(Button, { "data-testid": "b" }, () => "b")])
+    get("before").focus()
+    expect(await tab(get("before"))).toBe(get("find"))
+    expect(await tab(get("find"))).toBe(get("a"))
+    expect(await tab(get("a"))).toBe(get("after"))
+  })
+
+  it("goes back to a tool used before and on to the field before it", async () => {
+    const { get } = await page(() => [search("find"), h(Button, { "data-testid": "a" }, () => "a"), h(Button, { "data-testid": "b" }, () => "b")])
+    get("b").focus()
+    await wait()
+    get("after").focus()
+    expect(await tab(get("after"), true)).toBe(get("b"))
+    expect(await tab(get("b"), true)).toBe(get("find"))
+  })
+
+  it("keeps a field after the last tool a stop of its own", async () => {
+    const { get } = await page(() => [h(Button, { "data-testid": "a" }, () => "a"), h(Button, { "data-testid": "b" }, () => "b"), search("find")])
+    expect(await tab(get("before"))).toBe(get("a"))
+    expect(await tab(get("a"))).toBe(get("find"))
+    expect(await tab(get("find"))).toBe(get("after"))
+  })
+
+  it("keeps a field between tools a stop of its own", async () => {
+    const { get } = await page(() => [h(Button, { "data-testid": "a" }, () => "a"), search("find"), h(Button, { "data-testid": "b" }, () => "b")])
+    expect(await tab(get("before"))).toBe(get("a"))
+    expect(await tab(get("a"))).toBe(get("find"))
+  })
+
+  it("lands on a leading field first even once a later tool was used", async () => {
+    const { get } = await page(() => [search("find"), h(Button, { "data-testid": "a" }, () => "a"), h(Button, { "data-testid": "b" }, () => "b")])
+    get("a").focus()
+    get("a").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }))
+    await wait()
+    expect(document.activeElement).toBe(get("b"))
+    get("before").focus()
+    expect(await tab(get("before"))).toBe(get("find"))
+    expect(await tab(get("find"))).toBe(get("b"))
+  })
+
+  it("lands on a leading field that is a select-like button", async () => {
+    const { get } = await page(() => [h("button", { role: "combobox", "aria-label": "World", "data-testid": "world" }, "World"), h(Button, { "data-testid": "a" }, () => "a")])
+    expect(await tab(get("before"))).toBe(get("world"))
+    expect(await tab(get("world"))).toBe(get("a"))
+  })
+})
+
 describe("Toolbar looks", () => {
   async function mountLook(props: Record<string, unknown>, below?: () => VNodeChild) {
     const root = document.createElement("div")
