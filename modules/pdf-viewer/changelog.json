@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.67",
+    "date": "2026-11-26",
+    "notes": [
+      "Tabs have more room above and below the text."
+    ]
+  },
+  {
     "version": "0.1.66",
     "date": "2026-11-26",
     "notes": [
