@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.25.50",
+    date: "2026-11-26",
+    title: "Toolbars that match",
+    notes: [
+      "The toolbars at the top of Notes, To-Dos, Clock & Counter, PDF Viewer and Whiteboard look the same, and the arrow keys move along them.",
+      "The toolbar next to a selected frame on the canvas and the link and picture bars in Notes take your style's look.",
+    ],
+    prs: [
+      { number: 1021, title: "Kit Toolbar: bar and floating looks, app and built-in modules on it" },
+    ],
+    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
+  },
+  {
     version: "0.25.49",
     date: "2026-11-26",
     title: "Cards and checkbox rows in the shared controls",
