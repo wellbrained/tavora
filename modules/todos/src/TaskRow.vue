@@ -227,7 +227,7 @@ function choose(action: RowAction) {
           v-if="children.total"
           variant="ghost"
           size="icon-xs"
-          class="text-muted-foreground hover:text-foreground size-5 rounded-sm hover:bg-transparent"
+          class="text-muted-foreground hover:text-foreground hover:bg-transparent"
           :aria-expanded="!folded"
           :aria-label="folded ? t('task.unfold', { title: task.title }) : t('task.fold', { title: task.title })"
           data-testid="task-fold"
@@ -239,7 +239,7 @@ function choose(action: RowAction) {
       <span class="flex h-8 flex-none items-center px-0.5">
         <!-- Round, so it reads as a to-do rather than a setting. -->
         <Checkbox
-          class="data-[state=checked]:bg-primary hover:border-primary size-5 cursor-pointer rounded-full border-[1.5px] border-[color-mix(in_oklab,var(--primary)_45%,var(--muted-foreground))]"
+          class="data-[state=checked]:before:-inset-[1.5px] hover:border-primary size-5 cursor-pointer rounded-full border-[1.5px] border-[color-mix(in_oklab,var(--primary)_45%,var(--muted-foreground))]"
           :model-value="task.done"
           :aria-label="task.done ? t('task.notDone', { title: task.title }) : t('task.done', { title: task.title })"
           data-testid="task-done"
@@ -338,7 +338,7 @@ function choose(action: RowAction) {
               size="icon-sm"
               :class="
                 cn(
-                  'text-muted-foreground hover:text-foreground size-7 opacity-40 group-hover/task:opacity-100 hover:bg-transparent focus-visible:opacity-100',
+                  'text-muted-foreground hover:text-foreground opacity-40 group-hover/task:opacity-100 hover:bg-transparent focus-visible:opacity-100',
                   (menuOpen || editing) && 'opacity-100',
                 )
               "

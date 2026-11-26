@@ -326,7 +326,7 @@ function dropMark(position: number): "before" | "after" | null {
       <Button
         variant="ghost"
         size="icon-xs"
-        class="text-muted-foreground hover:text-foreground size-6 hover:bg-transparent"
+        class="text-muted-foreground hover:text-foreground hover:bg-transparent"
         :aria-expanded="!collapsed"
         :aria-label="collapsed ? t('group.show', { name: group.name }) : t('group.hide', { name: group.name })"
         data-testid="group-collapse"
@@ -369,7 +369,7 @@ function dropMark(position: number): "before" | "after" | null {
       <Button
         variant="ghost"
         size="icon-sm"
-        :class="cn('text-muted-foreground hover:text-foreground size-7 opacity-40 group-hover/header:opacity-100 hover:bg-transparent focus-visible:opacity-100', menuOpen && 'opacity-100')"
+        :class="cn('text-muted-foreground hover:text-foreground opacity-40 group-hover/header:opacity-100 hover:bg-transparent focus-visible:opacity-100', menuOpen && 'opacity-100')"
         :aria-label="t('moreFor', { name: group.name })"
         :title="t('more')"
         aria-haspopup="menu"
