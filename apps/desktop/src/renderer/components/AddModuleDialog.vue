@@ -254,8 +254,9 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
              like the ones above (same hover, lit the same while its page is open), with three module icons fanned out. -->
         <div class="border-t pt-3 sm:mt-1">
           <ListRow
+            navigation
             :selected="view === 'catalog'"
-            :class="cn('text-muted-foreground hover:text-foreground h-auto gap-3 rounded-lg px-3 py-2', view === 'catalog' && 'text-foreground')"
+            :class="cn('text-muted-foreground hover:text-foreground h-auto gap-3 rounded-lg px-3 py-2 max-sm:h-9 max-sm:[&_[data-slot=list-row-description]]:hidden', view === 'catalog' && 'text-foreground')"
             :title="t('addModule.about.catalog')"
             data-testid="module-tab-browse"
             @click="view = 'catalog'"
@@ -280,7 +281,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
             </span>
             </template>
             <span class="font-medium">{{ t("addModule.tab.browse") }}</span>
-            <template #description><span class="hidden sm:block">{{ t("addModule.catalogTile") }}</span></template>
+            <template #description>{{ t("addModule.catalogTile") }}</template>
           </ListRow>
         </div>
         <!-- Module settings, as Settings' Updates & About: rarely needed, so it sits at the foot. -->

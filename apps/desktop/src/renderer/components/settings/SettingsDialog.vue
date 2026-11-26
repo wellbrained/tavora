@@ -254,6 +254,7 @@ function onSearchKey(event: KeyboardEvent) {
         <!-- Updates & About, with the version: rarely needed, so it sits at the foot. As wide as a plate, border included;
              px-4 + its 1px border = a plate row (1px border + p-1 + px-3), so icon, text and version line up with the plates. -->
         <ListRow
+          navigation
           :selected="!query && entry === 'about'"
           :class="cn('text-muted-foreground hover:text-foreground mt-auto h-9 flex-none gap-3 rounded-xl border border-transparent px-4', !query && entry === 'about' && 'text-foreground')"
           :aria-label="`${t('settings.section.about')}, Tavora ${version}`"

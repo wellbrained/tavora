@@ -3,6 +3,7 @@
 // front (`leading`), the label, a second line (`description`) and something at the end (`trailing`, such as a kind, a
 // count or a temperature). The label is cut off with "…"; `wrap` lets label and second line wrap instead.
 // `selected` marks the current row (a soft primary tint; `aria-current`, or `aria-selected` in a `role="option"` row).
+// A row that leads to a page or view takes `navigation`: selected, it says `aria-current="page"`, as NavList does.
 // `highlighted` is the keyboard highlight of a list that keeps the focus itself (a listbox): it only changes the look.
 // An `a` that is off loses its `href`, so it can't be opened in a new tab either.
 // `as="div"` is a row that looks the same but does nothing, such as the channel you are already in.
@@ -18,6 +19,8 @@ const props = withDefaults(
   defineProps<{
     as?: "button" | "a" | "div"
     selected?: boolean
+    /** The row leads to a page or view, so a selected one says `aria-current="page"`. */
+    navigation?: boolean
     highlighted?: boolean
     /** Wraps the label and the second line instead of cutting them off. */
     wrap?: boolean
@@ -28,7 +31,7 @@ const props = withDefaults(
     size?: ControlSize
     class?: HTMLAttributes["class"]
   }>(),
-  { as: "button", selected: false, highlighted: false, wrap: false, disabled: false, size: "default" },
+  { as: "button", selected: false, navigation: false, highlighted: false, wrap: false, disabled: false, size: "default" },
 )
 
 defineOptions({ inheritAttrs: false })
@@ -48,7 +51,7 @@ const HOVER_FILL = "bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))]"
  * Called from the template, so a `role` that changes later is read again (attributes aren't tracked by a computed).
  */
 function selection() {
-  return attrs.role === "option" ? { "aria-selected": props.selected ? "true" : "false" } : props.selected ? { "aria-current": "true" } : {}
+  return attrs.role === "option" ? { "aria-selected": props.selected ? "true" : "false" } : props.selected ? { "aria-current": props.navigation ? "page" : "true" } : {}
 }
 </script>
 

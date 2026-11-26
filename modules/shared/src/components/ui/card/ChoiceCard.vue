@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// One option of a `RadioGroup`, drawn as a card: an optional picture (`media`), a title, a line under it and anything else
-// in the default slot. The picked card shows it by its edge and fill; there is no radio mark. It is a radio, so the
+// One option of a `RadioGroup`, drawn as a card: an optional picture (`media`), a title with an optional icon in front
+// (`icon`, or the `icon` slot), a line under it and anything else in the default slot. The picked card shows it by its edge and fill; there is no radio mark. It is a radio, so the
 // arrow keys move between the cards and Space picks. Put several in a `RadioGroup`, which lays them out (give it
 // `class="grid-cols-2"` or similar). To pick several, use `CheckCard`.
-import type { HTMLAttributes } from "vue"
+import type { Component, HTMLAttributes } from "vue"
 import { RadioGroupItem } from "reka-ui"
 import { cn } from "../../../lib/utils"
 import { DIP_PRESS } from "../button"
@@ -12,6 +12,8 @@ import { CARD_BASE, CARD_CHECKED, CARD_HOVER, CARD_INTERACTIVE, CARD_PADDING, ty
 const props = withDefaults(defineProps<{
   value: string
   title: string
+  /** An icon in front of the title, such as a Lucide one. */
+  icon?: Component
   description?: string
   size?: CardSize
   disabled?: boolean
@@ -25,7 +27,7 @@ const props = withDefaults(defineProps<{
     :value="value"
     :disabled="disabled"
     :class="cn(
-      'tavora-quiet-travel',
+      'group/choice-card tavora-quiet-travel',
       CARD_BASE,
       CARD_PADDING[size],
       CARD_INTERACTIVE,
@@ -35,7 +37,12 @@ const props = withDefaults(defineProps<{
     )"
   >
     <span v-if="$slots.media" data-slot="choice-card-media" class="bg-muted relative block aspect-[16/9] w-full overflow-hidden rounded-md" aria-hidden="true"><slot name="media" /></span>
-    <span data-slot="choice-card-title" class="text-sm leading-5 font-medium">{{ title }}</span>
+    <span class="flex min-w-0 items-center gap-1.5">
+      <span v-if="icon || $slots.icon" data-slot="choice-card-icon" class="text-muted-foreground group-data-[state=checked]/choice-card:text-primary inline-flex shrink-0 transition-colors duration-(--duration-press) ease-(--ease-out-strong) [&_svg:not([class*=size-])]:size-4" aria-hidden="true">
+        <slot name="icon"><component :is="icon" /></slot>
+      </span>
+      <span data-slot="choice-card-title" class="min-w-0 text-sm leading-5 font-medium">{{ title }}</span>
+    </span>
     <span v-if="description" data-slot="choice-card-description" class="text-muted-foreground text-xs">{{ description }}</span>
     <slot />
   </RadioGroupItem>

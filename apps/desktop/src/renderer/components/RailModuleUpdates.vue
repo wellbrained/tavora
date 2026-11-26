@@ -8,7 +8,7 @@ import { dialog, state } from "../host";
 import { t } from "../i18n";
 import RailFooterTile from "./RailFooterTile.vue";
 import RailTooltip from "./RailTooltip.vue";
-import RailButton from "./RailButton.vue";
+import { Button } from "@tavora/official-ui/components/ui/button";
 
 defineProps<{ expanded: boolean }>();
 
@@ -17,7 +17,8 @@ const count = computed(() => state.value!.modules.filter((module) => module.upda
 
 <template>
   <RailTooltip v-if="count" :text="t('workspace.updates', { count })" :hint="t('workspace.updates.title')" :disabled="expanded">
-    <RailButton
+    <Button
+      variant="bare"
       :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-rail-hover')"
       data-rail-item
       data-testid="module-updates-button"
@@ -28,6 +29,6 @@ const count = computed(() => state.value!.modules.filter((module) => module.upda
         <CloudDownload class="size-5" />
       </RailFooterTile>
       <span v-if="expanded" class="truncate text-sm font-medium">{{ t("workspace.updates", { count }) }}</span>
-    </RailButton>
+    </Button>
   </RailTooltip>
 </template>

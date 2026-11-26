@@ -54,6 +54,11 @@ describe("ListRow", () => {
     expect(root(host, "list-row-trailing").className).toContain("text-primary")
   })
 
+  it("says the selected row is the current page when it navigates", () => {
+    const host = render(() => h(ListRow, { selected: true, navigation: true }, () => "About"))
+    expect(root(host, "list-row").getAttribute("aria-current")).toBe("page")
+  })
+
   it("in an option row says it with aria-selected instead", () => {
     const host = render(() => h("div", { role: "listbox" }, [h(ListRow, { role: "option", selected: true }, () => "A"), h(ListRow, { role: "option" }, () => "B")]))
     const [a, b] = [...host.querySelectorAll("[data-slot=list-row]")]

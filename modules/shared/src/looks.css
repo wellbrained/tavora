@@ -316,7 +316,7 @@
     [data-slot="nav-group"] > h3,
     [data-slot="badge"],
     [data-slot="kbd"],
-    .tavora-button:not([data-variant="link"], [aria-haspopup="listbox"], [role="combobox"], .text-base, .text-lg, .text-xl, .text-2xl, .text-3xl, :has(.truncate))
+    .tavora-button:not([data-variant="link"], [data-variant="bare"], [aria-haspopup="listbox"], [role="combobox"], .text-base, .text-lg, .text-xl, .text-2xl, .text-3xl, :has(.truncate))
   ) {
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -333,7 +333,7 @@
     [data-slot="nav-group"] > h3,
     [data-slot="badge"],
     [data-slot="kbd"],
-    .tavora-button:not([data-variant="link"], [aria-haspopup="listbox"], [role="combobox"], .text-base, .text-lg, .text-xl, .text-2xl, .text-3xl, :has(.truncate))
+    .tavora-button:not([data-variant="link"], [data-variant="bare"], [aria-haspopup="listbox"], [role="combobox"], .text-base, .text-lg, .text-xl, .text-2xl, .text-3xl, :has(.truncate))
   ) {
   font-family: var(--font-mono);
   letter-spacing: 0.06em;

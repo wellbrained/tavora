@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.102",
+    "date": "2026-11-26",
+    "notes": [
+      "New examples: a bare button and choice cards with icons."
+    ]
+  },
+  {
     "version": "0.1.101",
     "date": "2026-11-26",
     "notes": [

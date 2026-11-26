@@ -58,7 +58,7 @@ defineOptions({ inheritAttrs: false })
  */
 /** The lighter icon side, unless the caller set its own padding. */
 const iconPadding = computed(() => {
-  if (setsOwnPadding(clsx(props.class))) return undefined
+  if (props.variant === "bare" || setsOwnPadding(clsx(props.class))) return undefined
   const size = props.size ?? "default"
   if (!staged.value) return BUTTON_ICON_PADDING[size]
   return leadIcon.value ? ACTION_ICON_PADDING[size] : undefined

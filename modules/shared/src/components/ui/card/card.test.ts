@@ -101,6 +101,24 @@ describe("ChoiceCard", () => {
     expect(cards[1]!.querySelector("[data-slot=choice-card-media] #pic")).not.toBeNull()
   })
 
+  it("shows an icon before the title, from the prop or the slot, and none without", async () => {
+    const root = await mount(() =>
+      h(RadioGroup, { modelValue: "a", "aria-label": "Mode" }, () => [
+        h(ChoiceCard, { value: "a", title: "A", icon: () => h("svg", { id: "from-prop" }) }),
+        h(ChoiceCard, { value: "b", title: "B" }, { icon: () => h("svg", { id: "from-slot" }) }),
+        h(ChoiceCard, { value: "c", title: "C" }),
+      ]),
+    )
+    const cards = root.querySelectorAll("[data-slot=choice-card]")
+    for (const [i, id] of ["from-prop", "from-slot"].entries()) {
+      const icon = cards[i]!.querySelector("[data-slot=choice-card-icon]")!
+      expect(icon.querySelector(`#${id}`)).not.toBeNull()
+      expect(icon.getAttribute("aria-hidden")).toBe("true")
+      expect(icon.nextElementSibling?.getAttribute("data-slot")).toBe("choice-card-title")
+    }
+    expect(cards[2]!.querySelector("[data-slot=choice-card-icon]")).toBeNull()
+  })
+
   it("picks on click", async () => {
     const { mode, render } = group()
     const root = await mount(render)

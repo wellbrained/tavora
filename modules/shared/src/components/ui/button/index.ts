@@ -1,5 +1,6 @@
 import type { VariantProps } from "class-variance-authority"
 import { cva } from "class-variance-authority"
+import { clsx } from "clsx"
 
 export { default as Button } from "./Button.vue"
 export { ACTION_TIMING, type ButtonAction, type ButtonActionState } from "./action"
@@ -22,8 +23,18 @@ export const DIP_PRESS = "[@media(hover:hover)_and_(pointer:fine)_and_(prefers-r
 const PRESS =
   "[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:translate-y-px not-aria-disabled:active:shadow-[inset_0_1px_3px_color-mix(in_srgb,black_25%,transparent)]"
 
-export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,background-color,border-color,box-shadow,opacity,scale,translate] duration-(--duration-press) ease-(--ease-out-strong) disabled:pointer-events-none disabled:opacity-(--disabled-opacity) aria-disabled:opacity-(--disabled-opacity) [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+// The box every variant but `bare` starts from.
+const FRAMED =
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,background-color,border-color,box-shadow,opacity,scale,translate] duration-(--duration-press) ease-(--ease-out-strong) disabled:pointer-events-none disabled:opacity-(--disabled-opacity) aria-disabled:opacity-(--disabled-opacity) [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"
+
+// `bare` draws nothing of its own: no frame, fill, padding, size, corners or text style, so the caller draws its own tile
+// with a few classes. What stays is what makes it a button: the keyboard outline, the press dip, the off look and icon
+// sizing. A hover only comes from the caller.
+const BARE =
+  "inline-flex items-center transition-[color,background-color,border-color,box-shadow,opacity,scale,translate] duration-(--duration-press) ease-(--ease-out-strong) disabled:pointer-events-none disabled:opacity-(--disabled-opacity) aria-disabled:opacity-(--disabled-opacity) [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+
+const variants = cva(
+  "",
   {
     variants: {
       variant: {
@@ -46,6 +57,7 @@ export const buttonVariants = cva(
         ghost:
           "hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        bare: BARE,
       },
       // Heights follow the style's control height (32 px in Classic and without a host); a caller's own height wins.
       size: {
@@ -87,7 +99,12 @@ export const buttonVariants = cva(
     },
   },
 )
-export type ButtonVariants = VariantProps<typeof buttonVariants>
+export type ButtonVariants = VariantProps<typeof variants>
+
+/** The Button's classes. Every variant but `bare` is a framed box with a size; `bare` takes neither. */
+export function buttonVariants(props: ButtonVariants = {}): string {
+  return props.variant === "bare" ? variants({ ...props, size: null }) : clsx(FRAMED, variants(props))
+}
 
 // A button with an icon and text has 2px less room on the icon side, so it looks balanced (on lg the sides are 16px
 // and 18px). The icon is taken to lead; one after the text says so with `data-icon="end"`. Left out when the caller

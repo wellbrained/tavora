@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.78",
+    "date": "2026-11-26",
+    "notes": [
+      "The shared controls gained a bare button and icons on choice cards."
+    ]
+  },
+  {
     "version": "0.1.77",
     "date": "2026-11-26",
     "notes": [

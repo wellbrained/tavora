@@ -14,7 +14,6 @@ import { act, state, useFloating } from "../host";
 import { t } from "../i18n";
 import RailFooterTile from "./RailFooterTile.vue";
 import RailTooltip from "./RailTooltip.vue";
-import RailButton from "./RailButton.vue";
 
 defineProps<{ expanded: boolean }>();
 
@@ -80,8 +79,9 @@ const more = computed(() => !allNotes.value && (found.value?.notes.length ?? 0) 
   <Popover v-if="found" v-model:open="open">
     <RailTooltip :text="label" :disabled="expanded || open">
       <PopoverTrigger as-child>
-        <RailButton
-          class="update-marker text-primary hover:bg-accent mx-2 flex items-center gap-2.5 rounded-lg px-1 transition-colors group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] focus-visible:-outline-offset-2"
+        <Button
+          variant="bare"
+          class="update-marker text-primary hover:bg-accent hover:text-inherit mx-2 flex items-center gap-2.5 rounded-lg px-1 transition-colors group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] focus-visible:-outline-offset-2"
           data-rail-item
           data-testid="rail-update"
           :data-status="found.status"
@@ -92,7 +92,7 @@ const more = computed(() => !allNotes.value && (found.value?.notes.length ?? 0) 
             <ArrowDownToLine v-else class="size-5" />
           </RailFooterTile>
           <span v-if="expanded" class="truncate text-sm font-medium">{{ label }}</span>
-        </RailButton>
+        </Button>
       </PopoverTrigger>
     </RailTooltip>
     <PopoverContent side="right" align="end" :side-offset="10" class="w-[23rem] p-0" :aria-label="title" data-testid="update-popover" @escape-key-down="closedByKey = true" @close-auto-focus="closeAutoFocus">
