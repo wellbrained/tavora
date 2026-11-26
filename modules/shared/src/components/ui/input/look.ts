@@ -6,6 +6,12 @@ export const inputLook = [
   "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
 ] as const
 
+/**
+ * A field that reads as text until it is used (a title edited in place): no edge, fill or shadow until the pointer is over
+ * it (an edge) or it has the focus (the kit's ring). looks.css leaves these out of a style's field fill.
+ */
+export const BARE_FIELD = "border-transparent bg-transparent dark:bg-transparent shadow-none hover:border-input focus-visible:border-ring disabled:hover:border-transparent"
+
 /** The field on the kit's size scale (`inputLook` is `default`): sm H − 4 with 13px text, lg H + 8 with more room inside. */
 export const INPUT_SIZE = {
   sm: "h-[calc(var(--style-control-height,32px)-4px)] px-2.5 text-sm",

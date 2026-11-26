@@ -46,7 +46,8 @@ const rowFocus = inject(ROW_FOCUS, null);
 
 const menuOpen = ref(false);
 const title = ref("");
-const titleInput = ref<HTMLTextAreaElement | null>(null);
+const titleField = ref<InstanceType<typeof Textarea> | null>(null);
+const titleInput = () => titleField.value?.$el as HTMLTextAreaElement | undefined;
 /** Set while a level change moves this row, so the focus it loses does not close the editor. */
 let moving = false;
 
@@ -70,7 +71,7 @@ async function startEdit() {
   panel.draft.value = null;
   panel.editing.value = editKey.value;
   await nextTick();
-  const input = titleInput.value;
+  const input = titleInput();
   input?.focus();
   input?.setSelectionRange(input.value.length, input.value.length);
 }
@@ -88,23 +89,24 @@ function close(keep: boolean) {
 function onFocusOut(event: FocusEvent) {
   if (moving) return;
   const next = event.relatedTarget as Node | null;
-  if (next && titleInput.value?.closest("[data-task-row]")?.contains(next)) return;
+  if (next && titleInput()?.closest("[data-task-row]")?.contains(next)) return;
   close(true);
 }
 
 async function changeLevel(outdent: boolean) {
   const taskId = id.value;
   if (outdent ? !props.task.parentId : !canIndent(props.group, props.index)) return;
-  const caret = titleInput.value?.selectionStart ?? null;
+  const caret = titleInput()?.selectionStart ?? null;
   save();
   moving = true;
   change((data) => (outdent ? outdentTask(data, taskId) : indentTask(data, taskId)));
   // Moving the row in the page takes the focus away; give it back where it was.
   await nextTick();
   moving = false;
-  if (!editing.value || !titleInput.value) return;
-  titleInput.value.focus();
-  if (caret !== null) titleInput.value.setSelectionRange(caret, caret);
+  const input = titleInput();
+  if (!editing.value || !input) return;
+  input.focus();
+  if (caret !== null) input.setSelectionRange(caret, caret);
 }
 
 function onTitleKey(event: KeyboardEvent) {
@@ -196,7 +198,7 @@ function choose(action: RowAction) {
     :class="
       cn(
         'group/task relative rounded-md',
-        editing ? 'bg-background ring-ring/60 ring-1' : 'hover:bg-accent/60',
+        editing ? 'bg-background' : 'hover:bg-accent/60',
         drop === 'before' && 'drop-before',
         drop === 'after' && 'drop-after',
       )
@@ -251,12 +253,14 @@ function choose(action: RowAction) {
         <PopoverAnchor as-child>
           <div class="flex min-w-0 flex-1 flex-col">
             <!-- The title and its editor have the same box, font and wrapping, so switching between them moves nothing. -->
-            <textarea
+            <!-- The field's 1px border is taken off the padding, so the text stays where the title was. -->
+            <Textarea
               v-if="editing"
-              ref="titleInput"
+              ref="titleField"
               v-model="title"
-              rows="1"
-              class="block field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent px-1 py-1.5 font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words outline-none"
+              variant="bare"
+              autosize
+              class="block overflow-hidden rounded-sm px-[3px] py-[5px] font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words"
               :aria-label="t('task.title')"
               data-testid="task-title-input"
               :maxlength="MAX.title"

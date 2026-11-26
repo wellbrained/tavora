@@ -194,8 +194,11 @@
   & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
     border-radius: var(--radius-sm);
     border-width: var(--style-border-width, 1px);
-    background: color-mix(in srgb, black 5%, var(--background));
-    box-shadow: var(--style-sink);
+    /* A bare field (an in-place title) takes the corners, not the sunk fill. */
+    &:not(:where([data-variant="bare"])) {
+      background: color-mix(in srgb, black 5%, var(--background));
+      box-shadow: var(--style-sink);
+    }
   }
   & [data-slot="checkbox"] {
     border-radius: var(--radius-sm);
@@ -226,9 +229,12 @@
     border-radius: calc(var(--radius) + 4px);
   }
   & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
-    background: color-mix(in srgb, var(--foreground) 5%, var(--background));
-    border-color: transparent;
     box-shadow: none;
+    /* A bare field has no fill, and keeps its own edge on hover. */
+    &:not(:where([data-variant="bare"])) {
+      background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+      border-color: transparent;
+    }
     /* A field with a problem keeps its red edge; focus keeps the ring. */
     &:focus-visible,
     &:has(:focus-visible) {
@@ -581,7 +587,7 @@
 /* Liquid Glass, dark: fields and pickers stand out from the card; toggles, segmented controls and tiles get a faint edge
    instead of the theme's hard border. */
 :root.dark[data-look-inputs="capsule"] {
-  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]),
+  & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]):not(:where([data-variant="bare"])),
   & .tavora-button[aria-haspopup="listbox"] {
     background: color-mix(in srgb, var(--foreground) 8%, var(--background));
   }

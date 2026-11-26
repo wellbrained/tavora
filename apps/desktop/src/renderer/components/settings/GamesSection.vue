@@ -116,7 +116,7 @@ watch(gameEndOpen, trackGameEnd);
       @open="emit('show', 'trash')"
     >
       <template v-if="library.trash.length" #badges>
-        <Badge variant="secondary" class="py-0 tabular-nums">{{ library.trash.length }}</Badge>
+        <Badge variant="secondary" size="sm" numeric>{{ library.trash.length }}</Badge>
       </template>
     </SettingRow>
     <SettingRow

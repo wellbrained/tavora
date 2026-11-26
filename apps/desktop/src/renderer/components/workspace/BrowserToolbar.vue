@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, ExternalLink, Minimize2, Plus, RotateCw, ShieldC
 import { computed, onMounted, ref, watch } from "vue";
 import type { BrowserCommand, BrowserState } from "../../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { act, addressFocus, showToast } from "../../host";
@@ -14,7 +15,8 @@ import { keyshortcuts, MAC } from "../../shortcuts";
 
 const props = defineProps<{ instanceId: string; browser: BrowserState }>();
 
-const input = ref<HTMLInputElement | null>(null);
+const field = ref<InstanceType<typeof Input> | null>(null);
+const input = () => field.value?.$el as HTMLInputElement | undefined;
 const editing = ref(false);
 const draft = ref("");
 const shown = computed(() => (editing.value ? draft.value : props.browser.url));
@@ -26,21 +28,21 @@ function command(command: BrowserCommand) {
 function focusAddress() {
   draft.value = props.browser.url;
   editing.value = true;
-  input.value?.focus();
-  input.value?.select();
+  input()?.focus();
+  input()?.select();
 }
 
 function submit() {
   const address = draft.value.trim();
   if (!address) return;
   editing.value = false;
-  input.value?.blur();
+  input()?.blur();
   void act({ type: "browser-navigate", instanceId: props.instanceId, address });
 }
 
 function cancel() {
   editing.value = false;
-  input.value?.blur();
+  input()?.blur();
 }
 
 // Ctrl+L in the page (or the host) lands here, and so does a new tab, whose
@@ -108,23 +110,21 @@ function toggleAdblock() {
         data-testid="browser-not-secure"
       >{{ t("browser.notSecure") }}</span>
       <label class="sr-only" :for="`address-${instanceId}`">{{ t("browser.address") }}</label>
-      <input
+      <!-- Bare, with a fill of its own: part of the browser's bar until used. -->
+      <Input
         :id="`address-${instanceId}`"
-        ref="input"
-        :value="shown"
-        :class="
-          cn(
-            'bg-muted/60 focus-visible:ring-ring/50 placeholder:text-muted-foreground h-7 w-full min-w-0 rounded-md border border-transparent px-2.5 text-sm outline-none focus-visible:ring-2',
-            browser.url && !browser.secure && !editing && 'pl-[5.25rem]',
-          )
-        "
+        ref="field"
+        :model-value="shown"
+        variant="bare"
+        size="sm"
+        :class="cn('bg-muted/60 dark:bg-muted/60 text-sm', browser.url && !browser.secure && !editing && 'pl-[5.25rem]')"
         :placeholder="t('browser.addressPlaceholder')"
         spellcheck="false"
         autocomplete="off"
         :data-testid="`browser-address-${instanceId}`"
         :title="browser.host"
         @focus="!editing && focusAddress()"
-        @input="draft = ($event.target as HTMLInputElement).value"
+        @update:model-value="draft = String($event)"
         @blur="editing = false"
         @keydown.esc.prevent="cancel"
       />

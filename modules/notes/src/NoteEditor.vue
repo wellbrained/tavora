@@ -24,6 +24,7 @@ import {
 } from "@lucide/vue";
 import { cn, errorMessage } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import { isComposing } from "@tavora/official-ui/lib/keys";
 import {
@@ -87,7 +88,7 @@ let boundId: string | null = null;
 let unbind: (() => void)[] = [];
 /** The title field's text; empty means the first line is the title. */
 const titleDraft = ref("");
-const titleInput = ref<HTMLInputElement | null>(null);
+const titleInput = ref<InstanceType<typeof Input> | null>(null);
 let titleFocused = false;
 /** Which parts of the note have changes that were not handed to the document store yet. */
 let contentDirty = false;
@@ -646,12 +647,12 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
     </div>
     <div class="min-h-0 flex-1 overflow-y-auto" :style="lookVars" @scroll.passive="(linkPopover = null), updateImageBar()">
       <div class="mx-auto max-w-[760px] px-4 py-3">
-        <input
+        <Input
           v-if="noteId !== SCRATCHPAD_ID"
           ref="titleInput"
           v-model="titleDraft"
-          type="text"
-          class="note-title placeholder:text-muted-foreground mb-3 w-full min-w-0 border-b border-transparent bg-transparent pb-1 text-xl font-semibold outline-none"
+          variant="bare"
+          class="-mx-1 mb-3 h-auto w-[calc(100%+0.5rem)] px-1 py-0.5 text-xl font-semibold disabled:opacity-100"
           data-testid="note-title-input"
           :maxlength="MAX_FIXED_TITLE"
           :placeholder="derivedTitle"
@@ -685,9 +686,6 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 }
 .note-content > * + * {
   margin-top: 8px;
-}
-.note-title:focus {
-  border-bottom-color: var(--primary);
 }
 .note-content h1 {
   color: var(--primary);

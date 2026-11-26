@@ -9,8 +9,8 @@ import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
-import { Label } from "@tavora/official-ui/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioGroup } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioField } from "@tavora/official-ui/components/ui/radio-field";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import type { HostAction, PublishProblem } from "../../../shared/host-api";
 import { account, act, dialog, publish, settingsOpen, showToast } from "../../host";
@@ -233,11 +233,8 @@ function browse() {
         <!-- What stops it, each with its fix. -->
         <section v-if="versionProblem" class="flex flex-col gap-3 rounded-lg border p-3" data-testid="publish-problem-version">
           <p class="flex gap-2 text-sm"><CircleAlert class="text-warning mt-0.5 size-4 flex-none" /> {{ versionProblem.listed ? t("publish.versionTaken", { version: versionProblem.listed }) : t("publish.versionPrerelease", { version: module?.version ?? "" }) }}</p>
-          <RadioGroup v-model="version" class="gap-2 pl-6">
-            <Label v-for="kind in ['patch', 'minor', 'major'] as const" :key="kind" class="font-normal">
-              <RadioGroupItem :value="versionProblem.next[kind]" :data-testid="`publish-next-${kind}`" />
-              {{ t(`publish.version.${kind}`, { version: versionProblem.next[kind] }) }}
-            </Label>
+          <RadioGroup v-model="version" class="gap-0.5 pl-4">
+            <RadioField v-for="kind in ['patch', 'minor', 'major'] as const" :key="kind" :value="versionProblem.next[kind]" :label="t(`publish.version.${kind}`, { version: versionProblem.next[kind] })" :data-testid="`publish-next-${kind}`" />
           </RadioGroup>
           <form class="flex flex-col gap-2 pl-6" @submit.prevent="saveVersion">
             <Textarea v-model="notesText" rows="3" :aria-label="t('publish.notesLabel', { version })" :placeholder="t('publish.notesPlaceholder')" data-testid="publish-notes-input" />

@@ -172,14 +172,14 @@ const showVariation = computed(() => {
     <SettingRow :label="t('settings.style.label')" :description="t('settings.style.description')" setting="style" :highlighted="highlight === 'style'">
       <!-- Like the theme: closed it shows the style in use, open it lists every style with a picture drawn from its looks. -->
       <Select :model-value="appearance.styleId" @update:model-value="(id) => pickStyle(String(id))">
-        <SelectTrigger class="h-auto! w-72 py-1.5 pl-1.5 text-left" :aria-label="t('settings.style.label')" data-testid="style-select">
-          <span class="flex min-w-0 items-center gap-2.5">
+        <SelectTrigger size="auto" class="w-72" :aria-label="t('settings.style.label')" data-testid="style-select">
+          <template #value>
             <StylePreview v-if="activeStyle" :look="activeStyle" :variation="active ? previewOf(active) : undefined" size="sm" />
             <span class="flex min-w-0 flex-col">
               <span class="truncate font-medium">{{ activeStyle ? styleText(activeStyle, "name") : "" }}</span>
               <span v-if="activeStyle" class="text-muted-foreground truncate text-xs" :title="styleText(activeStyle, 'description')">{{ styleText(activeStyle, "description") }}</span>
             </span>
-          </span>
+          </template>
         </SelectTrigger>
         <SelectContent class="w-[26rem]" align="end" data-testid="styles">
           <SelectItem
@@ -187,7 +187,7 @@ const showVariation = computed(() => {
             :key="item.id"
             :value="item.id"
             :description="styleText(item, 'description') || undefined"
-            class="items-center! gap-3 pr-2 [&>span:first-child]:hidden"
+            class="items-center! gap-3 pr-2"
             :data-testid="`style-${item.id}`"
           >
             <template #thumb><StylePreview :look="item" :variation="styleVariation(item)" size="md" /></template>
@@ -211,14 +211,14 @@ const showVariation = computed(() => {
     >
       <!-- One choice: closed it shows the theme in use, open it lists every theme with a preview in its own colours. -->
       <Select :model-value="appearance.themeId" @update:model-value="(id) => pickId(String(id))">
-        <SelectTrigger class="h-auto! w-72 py-1.5 pl-1.5 text-left" :aria-label="t('settings.theme.label')" data-testid="theme-select">
-          <span class="flex min-w-0 items-center gap-2.5">
+        <SelectTrigger size="auto" class="w-72" :aria-label="t('settings.theme.label')" data-testid="theme-select">
+          <template #value>
             <ThemePreview v-if="active" :variation="previewOf(active)" size="sm" />
             <span class="flex min-w-0 flex-col">
               <span class="truncate font-medium">{{ active?.name }}</span>
               <span v-if="active?.description" class="text-muted-foreground truncate text-xs" :title="active.description">{{ active.description }}</span>
             </span>
-          </span>
+          </template>
         </SelectTrigger>
         <!-- The kit's list hides its scrollbar; this list is long, so it shows one. -->
         <SelectContent class="theme-list max-h-[min(70vh,36rem)] w-[26rem]" align="end" data-testid="themes">
@@ -229,7 +229,7 @@ const showVariation = computed(() => {
             :key="theme.id"
             :value="theme.id"
             :description="theme.description ?? undefined"
-            class="items-center! gap-3 pr-2 [&>span:first-child]:hidden"
+            class="items-center! gap-3 pr-2"
             :data-testid="`theme-${theme.id}`"
           >
             <!-- The theme in use is marked with a tag after its name, not the list's check; the text sits centred on the preview. -->

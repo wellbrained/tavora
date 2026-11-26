@@ -92,7 +92,6 @@
     },
     "modules/notes/src/NoteEditor.vue": {
       "focus-ring": {
-        "class=\"note-title placeholder:text-muted-foreground mb-3 w-full min-w-0 border-b border-transparent bg-transparent pb-1 text-xl font-semibold outline-none\"": 1,
         "outline: none;": 1
       },
       "radius": {
@@ -112,11 +111,6 @@
       },
       "shadow": {
         "return drop.value?.id === entry.id && (drop.value.after ? \"shadow-[0_2px_0_0_var(--primary)]\" : \"shadow-[0_-2px_0_0_var(--primary)]\");": 2
-      }
-    },
-    "modules/notes/src/NoteRow.vue": {
-      "focus-ring": {
-        "class=\"bg-background border-ring placeholder:text-muted-foreground h-6 w-full min-w-0 rounded-sm border px-1 text-sm font-medium outline-none\"": 1
       }
     },
     "modules/pdf-viewer/src/PdfPage.vue": {
@@ -239,15 +233,7 @@
         "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";": 1
       }
     },
-    "modules/todos/src/AddInput.vue": {
-      "focus-ring": {
-        "'placeholder:text-muted-foreground focus-visible:border-ring h-8 w-full min-w-0 rounded-md border bg-transparent pr-2 text-sm outline-none',": 1
-      }
-    },
     "modules/todos/src/GroupSection.vue": {
-      "focus-ring": {
-        "class=\"focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-semibold outline-none\"": 1
-      },
       "motion": {
         "class=\"absolute bottom-[-1px] left-0 h-px bg-[var(--tint,var(--primary))] transition-[width] duration-300 motion-reduce:transition-none\"": 2
       }
@@ -264,15 +250,11 @@
       }
     },
     "modules/todos/src/TaskRow.vue": {
-      "focus-ring": {
-        "class=\"block field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent px-1 py-1.5 font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words outline-none\"": 1
-      },
       "font-size": {
         "<p class=\"text-muted-foreground mt-1.5 px-0.5 text-[11px]\">{{ t(\"task.descriptionHint\") }}</p>": 1
       },
       "kit-control": {
-        "<button v-else type=\"button\" class=\"block w-full cursor-text rounded-sm px-1 py-1.5 text-left font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words\"": 1,
-        "<textarea v-if=\"editing\" ref=\"titleInput\"": 1
+        "<button v-else type=\"button\" class=\"block w-full cursor-text rounded-sm px-1 py-1.5 text-left font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words\"": 1
       }
     },
     "modules/todos/src/live.ts": {

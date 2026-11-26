@@ -4,6 +4,7 @@
 import { Ellipsis, NotebookPen, Pencil, Pin, PinOff, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,7 +40,7 @@ const renaming = ref(false);
 const draft = ref("");
 /** What the input started with, so an untouched Enter does not turn the first line into a fixed title. */
 let initial = "";
-const input = ref<HTMLInputElement | null>(null);
+const field = ref<InstanceType<typeof Input> | null>(null);
 
 // The list stops dragging this row while its title is edited, so text can be selected.
 watch(renaming, (on) => emit("renaming", on));
@@ -50,8 +51,9 @@ async function startRename() {
   draft.value = initial;
   renaming.value = true;
   await nextTick();
-  input.value?.focus();
-  input.value?.select();
+  const input = field.value?.$el as HTMLInputElement | undefined;
+  input?.focus();
+  input?.select();
 }
 
 function finishRename(save: boolean) {
@@ -97,15 +99,15 @@ defineExpose({ startRename });
     @contextmenu.prevent="menuOpen = true"
   >
     <div v-if="renaming" class="flex min-w-0 flex-1 flex-col items-start gap-0.5 px-3 py-2">
-      <input
-        ref="input"
+      <Input
+        ref="field"
         v-model="draft"
-        type="text"
+        size="sm"
         :maxlength="MAX_FIXED_TITLE"
         :placeholder="title"
         :aria-label="t('row.renameLabel')"
         data-testid="rename-input"
-        class="bg-background border-ring placeholder:text-muted-foreground h-6 w-full min-w-0 rounded-sm border px-1 text-sm font-medium outline-none"
+        class="bg-background dark:bg-background border-ring h-6 rounded-sm px-1 text-sm font-medium"
         @keydown.enter="onRenameEnter"
         @keydown.esc="onRenameEscape"
         @dragstart.stop.prevent

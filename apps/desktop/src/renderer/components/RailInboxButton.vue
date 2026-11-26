@@ -25,7 +25,7 @@ defineProps<{ expanded: boolean }>();
     >
       <RailFooterTile>
         <Mail class="size-5" />
-        <Badge v-if="inbox.unread && !expanded" class="absolute top-0.5 right-0.5 min-w-4 rounded-full border-0 px-1 py-0 text-[10px] leading-4 font-semibold" data-testid="inbox-badge">{{ inbox.unread }}</Badge>
+        <Badge v-if="inbox.unread && !expanded" size="sm" numeric class="absolute top-0.5 right-0.5 min-w-4 rounded-full border-0 text-[10px] font-semibold" data-testid="inbox-badge">{{ inbox.unread }}</Badge>
       </RailFooterTile>
       <span v-if="expanded" class="text-sm font-medium">{{ t("inbox.title") }}</span>
       <!-- Open, the count is a plain number at the end of the row. -->

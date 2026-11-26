@@ -5,7 +5,8 @@ import { computed, ref } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Label } from "@tavora/official-ui/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioGroup } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioField } from "@tavora/official-ui/components/ui/radio-field";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { useTask } from "@tavora/official-ui/use-task";
 import { CONVERSATION_REPORT_REASONS, MAX_NOTE_LENGTH, type ConversationReportReason } from "../../../shared/conversations";
@@ -48,11 +49,8 @@ async function send() {
   <ModalDialog :title="t('inbox.report.title')" :description="t('inbox.report.hint')" :icon="Flag" testid="report-conversation" :status="task.state.value.status" @close="emit('close')">
     <form class="contents" @submit.prevent="send">
       <div class="grid gap-4">
-      <RadioGroup v-model="reason" class="gap-2" :aria-label="t('inbox.report.title')">
-        <Label v-for="option in CONVERSATION_REPORT_REASONS" :key="option" class="font-normal">
-          <RadioGroupItem :value="option" :data-testid="`report-conversation-${option}`" />
-          {{ option === "other" ? t("inbox.report.reasonElse") : t(`inbox.report.reason.${option}`) }}
-        </Label>
+      <RadioGroup v-model="reason" class="-mx-2 gap-0.5" :aria-label="t('inbox.report.title')">
+        <RadioField v-for="option in CONVERSATION_REPORT_REASONS" :key="option" :value="option" :label="option === 'other' ? t('inbox.report.reasonElse') : t(`inbox.report.reason.${option}`)" :data-testid="`report-conversation-${option}`" />
       </RadioGroup>
       <div class="grid gap-1.5">
         <Textarea v-model="note" class="min-h-20 text-sm" :placeholder="t('report.note')" :aria-label="t('report.note')" :disabled="busy" data-testid="report-conversation-note" />

@@ -8,6 +8,10 @@ import { badgeVariants } from "."
 
 const props = withDefaults(defineProps<PrimitiveProps & {
   variant?: BadgeVariants["variant"]
+  /** `sm`: tight padding. */
+  size?: "default" | "sm"
+  /** Even-width digits, for counts, levels and times. */
+  numeric?: boolean
   class?: HTMLAttributes["class"]
 }>(), {
   as: "span",
@@ -19,7 +23,7 @@ const props = withDefaults(defineProps<PrimitiveProps & {
     data-slot="badge"
     :as="as"
     :as-child="asChild"
-    :class="cn(badgeVariants({ variant }), props.class)"
+    :class="cn(badgeVariants({ variant, size, numeric }), props.class)"
   >
     <slot />
   </Primitive>

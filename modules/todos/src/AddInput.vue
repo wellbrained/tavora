@@ -5,6 +5,7 @@
 // on an empty line, Esc or clicking elsewhere closes it; what was typed is kept on a click elsewhere.
 import { Plus } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import { isComposing } from "@tavora/official-ui/lib/keys";
 import { nextTick, onMounted, ref } from "vue";
 
@@ -25,7 +26,8 @@ const props = defineProps<{
 const emit = defineEmits<{ add: [text: string, level: number]; close: [] }>();
 const level = defineModel<number>("level", { default: 0 });
 const value = ref("");
-const input = ref<HTMLInputElement | null>(null);
+const field = ref<InstanceType<typeof Input> | null>(null);
+const input = () => field.value?.$el as HTMLInputElement | undefined;
 /** Set while an added to-do is drawn above, so a focus lost meanwhile does not close the draft. */
 let adding = false;
 
@@ -42,7 +44,7 @@ async function submit() {
   value.value = "";
   await nextTick();
   adding = false;
-  if (props.draft) input.value?.focus();
+  if (props.draft) input()?.focus();
 }
 
 function onKey(event: KeyboardEvent) {
@@ -71,9 +73,9 @@ function onFocusOut() {
   emit("close");
 }
 
-onMounted(() => props.draft && input.value?.focus());
+onMounted(() => props.draft && input()?.focus());
 
-defineExpose({ focus: () => input.value?.focus() });
+defineExpose({ focus: () => input()?.focus() });
 </script>
 
 <template>
@@ -84,19 +86,14 @@ defineExpose({ focus: () => input.value?.focus() });
   >
     <span class="relative flex w-full items-center">
       <Plus :class="cn('text-muted-foreground pointer-events-none absolute size-4', alignToTasks ? 'left-[50px]' : 'left-2')" aria-hidden="true" />
-      <input
-        ref="input"
+      <Input
+        ref="field"
         v-model="value"
+        :variant="outlined ? 'default' : 'bare'"
         :placeholder="placeholder"
         :aria-label="label ?? placeholder"
         :maxlength="maxlength"
-        :class="
-          cn(
-            'placeholder:text-muted-foreground focus-visible:border-ring h-8 w-full min-w-0 rounded-md border bg-transparent pr-2 text-sm outline-none',
-            alignToTasks ? 'pl-[79px]' : 'pl-8',
-            outlined ? 'border-input bg-card' : 'hover:bg-accent/60 focus-visible:bg-background border-transparent',
-          )
-        "
+        :class="cn('pr-2 text-sm', alignToTasks ? 'pl-[79px]' : 'pl-8', outlined && 'bg-card dark:bg-card')"
         @keydown="onKey"
         @focusout="onFocusOut"
       />

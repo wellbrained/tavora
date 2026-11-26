@@ -9,7 +9,8 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Label } from "@tavora/official-ui/components/ui/label";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
-import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioGroup } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioField } from "@tavora/official-ui/components/ui/radio-field";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { useTask } from "@tavora/official-ui/use-task";
 import { MAX_MESSAGE_LENGTH, messageProblem, REQUEST_TYPES, type ContactDraft, type RequestType } from "../../../shared/conversations";
@@ -115,11 +116,8 @@ function signIn() {
       <div class="grid gap-4">
       <div class="grid gap-2">
         <Label class="text-muted-foreground font-normal">{{ t("contact.type") }}</Label>
-        <RadioGroup v-model="kind" class="gap-2" :aria-label="t('contact.type')" data-testid="contact-type">
-          <Label v-for="option in REQUEST_TYPES" :key="option" class="font-normal">
-            <RadioGroupItem :value="option" :data-testid="`contact-type-${option}`" />
-            {{ t(`contact.type.${option}`) }}
-          </Label>
+        <RadioGroup v-model="kind" class="-mx-2 gap-0.5" :aria-label="t('contact.type')" data-testid="contact-type">
+          <RadioField v-for="option in REQUEST_TYPES" :key="option" :value="option" :label="t(`contact.type.${option}`)" :data-testid="`contact-type-${option}`" />
         </RadioGroup>
       </div>
       <div class="grid gap-1.5">

@@ -3,8 +3,8 @@
 import { CircleCheck } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
-import { Label } from "@tavora/official-ui/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioGroup } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioField } from "@tavora/official-ui/components/ui/radio-field";
 import { useTask } from "@tavora/official-ui/use-task";
 import { OUTCOMES, type Outcome } from "../../../shared/conversations";
 import { act } from "../../host";
@@ -39,11 +39,8 @@ async function close() {
   <ModalDialog :title="t('inbox.close.title')" :description="t('inbox.close.outcome')" :icon="CircleCheck" testid="close-conversation" :status="task.state.value.status" @close="emit('close')">
     <form class="contents" @submit.prevent="close">
       <div class="grid gap-4">
-      <RadioGroup v-model="outcome" class="gap-2" :aria-label="t('inbox.close.outcome')">
-        <Label v-for="option in OUTCOMES" :key="option" class="font-normal">
-          <RadioGroupItem :value="option" :data-testid="`close-outcome-${option}`" />
-          {{ t(`inbox.outcome.${option}`) }}
-        </Label>
+      <RadioGroup v-model="outcome" class="-mx-2 gap-0.5" :aria-label="t('inbox.close.outcome')">
+        <RadioField v-for="option in OUTCOMES" :key="option" :value="option" :label="t(`inbox.outcome.${option}`)" :data-testid="`close-outcome-${option}`" />
       </RadioGroup>
       <p v-if="error" class="text-destructive text-sm" role="alert">{{ error }}</p>
       </div>

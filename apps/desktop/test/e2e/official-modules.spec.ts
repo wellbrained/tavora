@@ -22,11 +22,13 @@ async function addInto(app: ElectronApplication, moduleId: string, formExpr: str
   await inModule(
     app,
     moduleId,
-    `(() => {
+    `(async () => {
       const form = ${formExpr};
       const input = form.querySelector("input");
       input.value = ${JSON.stringify(text)};
       input.dispatchEvent(new Event("input", { bubbles: true }));
+      // The kit's Input passes the text on a tick later.
+      await new Promise((resolve) => setTimeout(resolve));
       form.requestSubmit();
     })()`,
     index,

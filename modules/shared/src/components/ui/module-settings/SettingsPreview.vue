@@ -10,7 +10,9 @@ import { uiText } from "../text";
 
 type Backdrop = "game" | "light" | "dark";
 
-const props = withDefaults(defineProps<{ label: string; kind?: "overlay" | "panel" }>(), { kind: "overlay" });
+// `align="start"` is for a preview taller than the usual box or one that changes height: the box grows with it and the
+// preview starts under the backdrop switch.
+const props = withDefaults(defineProps<{ label: string; kind?: "overlay" | "panel"; align?: "center" | "start" }>(), { kind: "overlay", align: "center" });
 const backdrop = useLocalStorage<Backdrop>(`tavora-settings-backdrop-${props.kind}`, props.kind === "overlay" ? "game" : "dark");
 const options = computed(() => [
   { value: "game" as const, label: uiText.value.backdropGame },
@@ -25,7 +27,7 @@ const scenes: Record<Backdrop, string> = {
 </script>
 
 <template>
-  <div :class="cn('relative mt-4 flex h-36 items-center justify-center overflow-hidden rounded-lg border p-3', scenes[backdrop])" data-slot="settings-preview" :data-backdrop="backdrop">
+  <div :class="cn('relative mt-4 flex h-36 items-center justify-center overflow-hidden rounded-lg border p-3', props.align === 'start' && 'h-auto min-h-36 items-start pt-10', scenes[backdrop])" data-slot="settings-preview" :data-backdrop="backdrop">
     <div role="img" :aria-label="label" class="contents"><slot /></div>
     <RadioGroupRoot v-model="backdrop" orientation="horizontal" :aria-label="uiText.backdrop" class="absolute top-2 right-2 flex gap-0.5 rounded-lg bg-black/60 p-0.5">
       <RadioGroupItem

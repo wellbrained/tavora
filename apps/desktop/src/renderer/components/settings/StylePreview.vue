@@ -32,7 +32,6 @@ const word = (text: string) => (caps.value ? text.toUpperCase() : text);
 </script>
 
 <template>
-  <!-- A div, not a span: the Style list hides a row's first span (where the tick would be). -->
   <div
     :class="['style-preview relative block flex-none overflow-hidden rounded-md border', md ? 'h-[76px] w-[132px]' : 'h-10 w-16']"
     :style="colours"

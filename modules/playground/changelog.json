@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.103",
+    "date": "2026-11-26",
+    "notes": [
+      "New examples: edit in place, picture in a field, radio field, badge numbers and a growing preview."
+    ]
+  },
+  {
     "version": "0.1.102",
     "date": "2026-11-26",
     "notes": [

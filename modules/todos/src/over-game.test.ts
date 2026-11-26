@@ -123,6 +123,8 @@ describe("over the game", () => {
     const add = $("[data-testid=plate-add] input") as HTMLInputElement;
     add.value = "Tame a wolf";
     add.dispatchEvent(new Event("input"));
+    // The kit's Input passes the text on a tick later.
+    await nextTick();
     $("[data-testid=plate-add]")!.dispatchEvent(new Event("submit", { cancelable: true }));
     await settle();
     expect(stored(host).groups[0]!.tasks.map((item) => item.title)).toEqual(["Find the crypt", "Light both torches", "Tame a wolf"]);

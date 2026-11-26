@@ -8,7 +8,8 @@ import { computed, ref } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Label } from "@tavora/official-ui/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioGroup } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioField } from "@tavora/official-ui/components/ui/radio-field";
 import { act, closeDialog, dialog, openSettings, settingsOpen, showToast, state } from "../../host";
 import { t } from "../../i18n";
 import ModalDialog from "../ModalDialog.vue";
@@ -72,15 +73,9 @@ async function submit() {
       </div>
       <div class="grid gap-2">
         <span id="copy-example-where" class="text-muted-foreground text-sm">{{ t("examples.whereLabel") }}</span>
-        <RadioGroup v-if="folders.length" v-model="where" class="gap-2" aria-labelledby="copy-example-where">
-          <Label v-for="folder in folders" :key="folder" class="min-w-0 font-normal" :title="folder">
-            <RadioGroupItem :value="folder" data-testid="copy-example-folder" />
-            <span class="truncate font-mono text-sm">{{ shortPath(folder) }}</span>
-          </Label>
-          <Label class="font-normal">
-            <RadioGroupItem :value="ELSEWHERE" data-testid="copy-example-elsewhere" />
-            {{ t("examples.elsewhere") }}
-          </Label>
+        <RadioGroup v-if="folders.length" v-model="where" class="-mx-2 gap-0.5" aria-labelledby="copy-example-where">
+          <RadioField v-for="folder in folders" :key="folder" :value="folder" :label="shortPath(folder)" class="font-mono" :title="folder" data-testid="copy-example-folder" />
+          <RadioField :value="ELSEWHERE" :label="t('examples.elsewhere')" data-testid="copy-example-elsewhere" />
         </RadioGroup>
         <p v-else class="text-sm">{{ t("examples.pickNext") }}</p>
       </div>

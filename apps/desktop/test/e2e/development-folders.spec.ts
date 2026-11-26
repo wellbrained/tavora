@@ -172,7 +172,7 @@ test("an example is copied into a project folder as a new project of its own", a
     await page.getByTestId(`copy-example-${VANILLA}`).click();
     const dialog = page.getByTestId("copy-example-dialog");
     await expect(page.getByTestId("copy-example-name")).toHaveValue("My Module");
-    await expect(dialog.getByTestId("copy-example-folder")).toHaveAttribute("data-state", "checked");
+    await expect(dialog.getByTestId("copy-example-folder").getByRole("radio")).toHaveAttribute("data-state", "checked");
     await page.getByTestId("copy-example-name").fill("Boss Timer");
     await page.getByTestId("copy-example-submit").click();
     await expect(dialog).toHaveCount(0);

@@ -18,9 +18,21 @@ export const badgeVariants = cva(
         warning: "bg-warning/15 text-warning border-transparent",
         info: "bg-info/15 text-info border-transparent",
       },
+      /** `sm`: tight padding, for a count beside a label or in a corner. */
+      size: {
+        default: "",
+        sm: "px-1 py-0 leading-4",
+      },
+      /** Digits of one width, so a changing number doesn't make the badge jump. */
+      numeric: {
+        true: "tabular-nums",
+        false: "",
+      },
     },
     defaultVariants: {
       variant: "default",
+      size: "default",
+      numeric: false,
     },
   },
 )

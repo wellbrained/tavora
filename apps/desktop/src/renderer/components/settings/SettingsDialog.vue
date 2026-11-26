@@ -316,7 +316,7 @@ function onSearchKey(event: KeyboardEvent) {
                 <TabsList class="h-10 w-full justify-start gap-2" :aria-label="t('settings.nav.development')">
                   <TabsTrigger v-for="tab in DEVELOPER_TABS" :key="tab" :value="tab" class="px-3" :data-testid="`settings-tab-${tab}`">
                     {{ sectionLabel(tab) }}
-                    <Badge v-if="tab === 'development' && releasePendingCount" variant="secondary" class="text-primary py-0 tabular-nums">{{ releasePendingCount }}</Badge>
+                    <Badge v-if="tab === 'development' && releasePendingCount" variant="secondary" size="sm" numeric class="text-primary">{{ releasePendingCount }}</Badge>
                   </TabsTrigger>
                 </TabsList>
               </Tabs>

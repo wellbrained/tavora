@@ -6,7 +6,7 @@ import { useSoftDisabled } from "../../../lib/soft-disabled"
 import { controlSize, type ControlSize } from "../../../lib/control-size"
 import { cn } from "../../../lib/utils"
 import { useFieldControl } from "../field/use-field-control"
-import { INPUT_SIZE, inputLook } from "./look"
+import { BARE_FIELD, INPUT_SIZE, inputLook } from "./look"
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{
@@ -21,6 +21,8 @@ const props = defineProps<{
   disabledReason?: string
   /** The kit's size scale: as tall as a Button of the same size. */
   size?: ControlSize
+  /** `bare`: no edge until hovered or focused, for a title edited in place or a quick-add line. */
+  variant?: "default" | "bare"
 }>()
 
 const emits = defineEmits<{
@@ -42,9 +44,10 @@ const field = useFieldControl({ element: () => element.value, value: () => model
     ref="element"
     v-model="modelValue"
     data-slot="input"
+    :data-variant="props.variant === 'bare' ? 'bare' : undefined"
     v-bind="{ ...soft.attrs(), ...field.attrs() }"
     :disabled="soft.disabled()"
     :readonly="soft.soft() || undefined"
-    :class="cn(...inputLook, INPUT_SIZE[controlSize(props.size)], props.class)"
+    :class="cn(...inputLook, INPUT_SIZE[controlSize(props.size)], props.variant === 'bare' && BARE_FIELD, props.class)"
   >
 </template>

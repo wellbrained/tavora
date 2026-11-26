@@ -4,8 +4,8 @@ import { Flag } from "@lucide/vue";
 // only while the report is open, and the developer is told only that the module was reported.
 import { computed, ref } from "vue";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
-import { Label } from "@tavora/official-ui/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioGroup } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioField } from "@tavora/official-ui/components/ui/radio-field";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { useTask } from "@tavora/official-ui/use-task";
 import { MAX_NOTE_LENGTH, MODULE_REPORT_REASONS, type ModuleReportReason } from "../../../shared/conversations";
@@ -59,11 +59,8 @@ function signIn() {
     </template>
     <form v-else class="contents" @submit.prevent="send">
       <div class="grid gap-4">
-      <RadioGroup v-model="reason" class="gap-2" :aria-label="t('report.reason')" data-testid="report-reason">
-        <Label v-for="option in MODULE_REPORT_REASONS" :key="option" class="font-normal">
-          <RadioGroupItem :value="option" :data-testid="`report-reason-${option}`" />
-          {{ option === "other" ? t("report.reasonElse") : t(`report.reason.${option}`) }}
-        </Label>
+      <RadioGroup v-model="reason" class="-mx-2 gap-0.5" :aria-label="t('report.reason')" data-testid="report-reason">
+        <RadioField v-for="option in MODULE_REPORT_REASONS" :key="option" :value="option" :label="option === 'other' ? t('report.reasonElse') : t(`report.reason.${option}`)" :data-testid="`report-reason-${option}`" />
       </RadioGroup>
       <div class="grid gap-1.5">
         <Textarea v-model="note" class="min-h-20 text-sm" :placeholder="t('report.note')" :aria-label="t('report.note')" :disabled="busy" data-testid="report-note" />

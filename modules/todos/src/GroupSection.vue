@@ -7,6 +7,7 @@ import type { MenuEntry } from "@tavora/sdk";
 import { ChevronRight, Ellipsis } from "@lucide/vue";
 import { cn, useFocusRecovery } from "@tavora/official-ui";
 import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
+import { Input } from "@tavora/official-ui/components/ui/input";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Card } from "@tavora/official-ui/components/ui/card";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
@@ -77,7 +78,7 @@ const tint = computed(() => shownColor(props.group.color));
 const colorName = (color: GroupColor) => (color ? t(`color.${color}`) : t("group.color.none"));
 
 const renaming = ref(false);
-const nameInput = ref<HTMLInputElement | null>(null);
+const nameInput = ref<InstanceType<typeof Input> | null>(null);
 const remaining = computed(() => openCount(props.group));
 const doneCount = computed(() => props.group.tasks.length - remaining.value);
 const change = (fn: Parameters<TodoStore["apply"]>[0]) => void props.store.apply(fn);
@@ -129,7 +130,7 @@ const maxAddLevel = computed(() => {
 async function startRename() {
   renaming.value = true;
   await nextTick();
-  nameInput.value?.select();
+  (nameInput.value?.$el as HTMLInputElement | undefined)?.select();
 }
 
 function finishRename(event: Event) {
@@ -334,14 +335,16 @@ function dropMark(position: number): "before" | "after" | null {
       >
         <ChevronRight :class="cn('size-4 transition-transform', !collapsed && 'rotate-90')" />
       </Button>
-      <input
+      <Input
         v-if="renaming"
         ref="nameInput"
-        :value="group.name"
+        :model-value="group.name"
+        variant="bare"
+        size="sm"
         :maxlength="MAX.groupName"
         :aria-label="t('group.name')"
         data-testid="group-name-input"
-        class="focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-semibold outline-none"
+        class="w-auto flex-1 px-1 text-sm font-semibold"
         @blur="finishRename"
         @keydown.enter="!isComposing($event) && ($event.target as HTMLInputElement).blur()"
         @keydown.escape="!isComposing($event) && (renaming = false)"
