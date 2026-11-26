@@ -3,10 +3,10 @@
 // next to it), the label and name under it, the graph, and one small line with the peak on the left and a detail on the
 // right. Plain text, so a snapshot touches only what changed.
 import { StatTile } from "@tavora/official-ui/components/ui/stat-tile";
-import type { Component } from "vue";
+import { computed, type Component } from "vue";
 import UsageGraph from "./UsageGraph.vue";
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   title: string;
   name: string;
   /** The number, already written ("42"); empty before the first numbers. */
@@ -31,6 +31,9 @@ withDefaults(defineProps<{
   graphLabel: string;
   testid: string;
 }>(), { hasTemperature: true });
+
+/** "CPU · AMD Ryzen 7", or just the title before the name is known. */
+const label = computed(() => (props.name ? `${props.title} · ${props.name}` : props.title));
 </script>
 
 <template>
@@ -41,7 +44,7 @@ withDefaults(defineProps<{
     class="bg-card text-card-foreground rounded-lg p-2.5"
     :value="usage"
     unit="%"
-    :label="`${title} · ${name}`.replace(/ · $/, '')"
+    :label="label"
     :second-value="hasTemperature ? temperature || '' : undefined"
     second-unit="°C"
     :second-hint="temperatureHint"

@@ -165,6 +165,11 @@ describe("StatTile for a live reading", () => {
     expect(missing.getAttribute("tabindex")).toBe("0")
   })
 
+  it("puts the value's classes on the value, so a colour can follow its state", async () => {
+    const host = await mount(() => h(StatTile, { value: "Smooth", label: "Status", valueClass: "text-success" }))
+    expect(host.querySelector("[data-slot=stat-value] .text-success")?.textContent?.trim()).toBe("Smooth")
+  })
+
   it("has no second value unless one is given", async () => {
     const host = await mount(() => h(StatTile, { value: 61, label: "Memory" }))
     expect(host.querySelector("[data-slot=stat-second-value]")).toBeNull()
@@ -181,6 +186,6 @@ describe("StatTile for a live reading", () => {
     expect(tile.textContent).not.toContain("ignored")
     // The value stays first, then the label, the graph and the footer.
     const order = [...tile.children].map((child) => child.getAttribute("data-slot") ?? child.tagName)
-    expect(order.filter((slot) => slot !== "SPAN")).toEqual(["stat-tile-icon", "DT", "stat-value", "stat-tile-graph", "stat-tile-footer"])
+    expect(order.filter((slot) => slot !== "SPAN")).toEqual(["DT", "stat-tile-icon", "stat-value", "stat-tile-graph", "stat-tile-footer"])
   })
 })

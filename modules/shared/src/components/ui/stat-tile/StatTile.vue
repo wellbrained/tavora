@@ -122,8 +122,8 @@ const trendColour = computed(() => (props.trend === "better" ? "text-success" : 
 
 <template>
   <component :is="strip ? 'div' : 'dl'" data-slot="stat-tile" :data-variant="variant" :data-size="size" :data-trend="trend" :class="[tile, !strip && 'm-0']" :tabindex="hoverable ? 0 : undefined">
-    <dd v-if="$slots.icon" data-slot="stat-tile-icon" class="text-muted-foreground m-0 absolute top-2 right-2 inline-flex [&_svg:not([class*=size-])]:size-4"><slot name="icon" /></dd>
     <dt :class="['text-muted-foreground order-2 max-w-full truncate text-xs', $slots.icon && 'px-5']">{{ label }}</dt>
+    <dd v-if="$slots.icon" data-slot="stat-tile-icon" class="text-muted-foreground m-0 absolute top-2 right-2 inline-flex [&_svg:not([class*=size-])]:size-4"><slot name="icon" /></dd>
     <dd
       ref="valueBox"
       data-slot="stat-value"
