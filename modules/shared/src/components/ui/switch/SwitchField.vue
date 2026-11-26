@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<{
   placement?: "start" | "end"
   /** The row's least height, from the kit's scale; for `placement="end"`. */
   size?: ControlSize
-  /** Classes for the label text, such as one that hides it in a narrow panel; for `placement="end"`. */
+  /** Classes for the label and its description together, such as one that hides them in a narrow panel; for `placement="end"`. */
   labelClass?: HTMLAttributes["class"]
   /** Attributes for the switch itself, such as `data-testid`; the others go on the whole field. */
   switchAttrs?: Record<string, unknown>
@@ -55,15 +55,15 @@ const reasonAttrs = () => (isSoftDisabled({ disabled: props.disabled, reason: pr
       props.class,
     )"
   >
-    <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-      <span :id="`${switchId()}-label`" data-slot="switch-field-label" :class="cn('truncate', labelClass)">{{ label }}</span>
+    <span :class="cn('flex min-w-0 flex-1 flex-col gap-0.5', labelClass)">
+      <span :id="`${switchId()}-label`" data-slot="switch-field-label" class="truncate">{{ label }}</span>
       <span v-if="description" :id="`${switchId()}-description`" class="text-muted-foreground text-xs">{{ description }}</span>
     </span>
     <Switch
       v-bind="switchAttrs"
       :id="switchId()"
       v-model="model"
-      :class="description && 'mt-0.5'"
+      :class="[description && 'mt-0.5', 'disabled:opacity-100 aria-disabled:opacity-100']"
       :disabled="disabled"
       :disabled-reason="disabledReason"
       :aria-controls="controls"
