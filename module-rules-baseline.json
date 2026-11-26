@@ -209,14 +209,6 @@
         "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";": 1
       }
     },
-    "modules/system-monitor/src/MetricCard.vue": {
-      "all-caps": {
-        "<span class=\"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\">{{ title }}</span>": 1
-      },
-      "font-size": {
-        "<span class=\"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\">{{ title }}</span>": 1
-      }
-    },
     "modules/system-monitor/src/SystemSection.vue": {
       "all-caps": {
         "const LABEL = \"text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase\";": 1
