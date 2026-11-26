@@ -1,7 +1,9 @@
 <script setup lang="ts">
-// A card for CPU or the graphics card: label and name on top, the usage big and centred, the graph, and one small
-// line with the peak on the left and a detail on the right. Plain text, so a snapshot touches only what changed.
-import { cn } from "@tavora/official-ui";
+// A card for CPU, the graphics card or memory, on the kit's StatTile: the usage big and centred (with the temperature
+// next to it), the label and name under it, the graph, and one small line with the peak on the left and a detail on the
+// right. Plain text, so a snapshot touches only what changed.
+import { StatTile } from "@tavora/official-ui/components/ui/stat-tile";
+import type { Component } from "vue";
 import UsageGraph from "./UsageGraph.vue";
 
 withDefaults(defineProps<{
@@ -15,6 +17,8 @@ withDefaults(defineProps<{
   temperatureClass?: string;
   /** False for a block that has no temperature (memory): the usage is then centred alone. */
   hasTemperature?: boolean;
+  /** A small picture in the corner (when the card has no action there). */
+  icon?: Component;
   /** Hover text for the dash shown while there is no temperature. */
   temperatureHint?: string;
   /** Already written ("max 90 %"); empty when not shown. */
@@ -30,25 +34,30 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <section class="bg-card text-card-foreground flex flex-col gap-1.5 rounded-lg border p-2.5" :data-testid="testid" :title="hint || undefined" :tabindex="hint ? 0 : undefined">
-    <header class="flex items-baseline gap-2">
-      <span class="text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase">{{ title }}</span>
-      <span class="min-w-0 flex-1 truncate text-xs">{{ name }}</span>
-      <!-- A small button at the top right (the Memory card's apps), kept from making the header taller. -->
-      <slot name="action" />
-    </header>
-    <!-- The usage and the temperature are one pair, centred together; until Tavora reports one, a muted dash holds its place so the usage does not move later. -->
-    <div class="flex items-baseline justify-center gap-3 whitespace-nowrap" data-testid="usage">
-      <span class="text-[2.125rem] leading-none font-semibold tabular-nums">{{ usage }}<span v-if="usage" class="text-muted-foreground ml-0.5 text-base font-normal">%</span></span>
-      <template v-if="hasTemperature">
-      <span v-if="temperature" :class="cn('text-[2.125rem] leading-none font-semibold tabular-nums', temperatureClass)" data-testid="temperature">{{ temperature }}<span class="text-muted-foreground ml-0.5 text-base font-normal">°C</span></span>
-      <span v-else class="text-muted-foreground text-[2.125rem] leading-none font-semibold tabular-nums" :title="temperatureHint" :tabindex="temperatureHint ? 0 : undefined" data-testid="temperature-none">–<span class="ml-0.5 text-base font-normal">°C</span></span>
-      </template>
-    </div>
-    <UsageGraph :values="values" :label="graphLabel" />
-    <footer class="text-muted-foreground flex items-baseline justify-between gap-2 text-xs tabular-nums">
-      <span class="min-w-0 truncate" data-testid="peak">{{ peak }}</span>
-      <span class="truncate" data-testid="detail">{{ detail }}</span>
-    </footer>
-  </section>
+  <StatTile
+    variant="outlined"
+    size="xl"
+    align="center"
+    class="bg-card text-card-foreground rounded-lg p-2.5"
+    :value="usage"
+    unit="%"
+    :label="`${title} · ${name}`.replace(/ · $/, '')"
+    :second-value="hasTemperature ? temperature || '' : undefined"
+    second-unit="°C"
+    :second-hint="temperatureHint"
+    :second-class="temperature ? temperatureClass : undefined"
+    :data-testid="testid"
+    :title="hint || undefined"
+    :tabindex="hint ? 0 : undefined"
+  >
+    <!-- The corner: a small button when the card has one (the Memory card's apps), else a picture of what it measures. -->
+    <template #icon><slot name="action"><component :is="icon" v-if="icon" aria-hidden="true" /></slot></template>
+    <template #graph><UsageGraph :values="values" :label="graphLabel" /></template>
+    <template #footer>
+      <span class="flex items-baseline justify-between gap-2 tabular-nums">
+        <span class="min-w-0 truncate" data-testid="peak">{{ peak }}</span>
+        <span class="truncate" data-testid="detail">{{ detail }}</span>
+      </span>
+    </template>
+  </StatTile>
 </template>

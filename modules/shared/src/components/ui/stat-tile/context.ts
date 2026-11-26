@@ -2,6 +2,9 @@ import type { InjectionKey, Ref } from "vue"
 
 export type StatTileVariant = "filled" | "outlined"
 
+/** How big a tile's value is: md 20 px, lg 26 px, xl 34 px. */
+export type StatTileSize = "md" | "lg" | "xl"
+
 /** What a StatStrip tells its tiles: their look, and that they sit in its `<dl>`. */
 export const STAT_STRIP: InjectionKey<{ variant: Ref<StatTileVariant> }> = Symbol("stat-strip")
 

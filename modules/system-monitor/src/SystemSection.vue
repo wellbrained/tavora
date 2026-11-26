@@ -2,7 +2,7 @@
 // The System section: a card for each block the panel shows (CPU, graphics card, memory, one for each drive), in
 // a grid that follows the panel's width (container queries in CSS, no script): 1 column under 420 px, 2 up to 720 px,
 // 3 above. A Connection section can sit next to it later; it gets its own component like this one.
-import { List } from "@lucide/vue";
+import { Cpu, Gpu, List } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
@@ -129,6 +129,7 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
     <MetricCard
       v-if="blocks.cpu"
       testid="block-cpu"
+      :icon="Cpu"
       :title="t('cpu.title')"
       :name="info?.cpu.model ?? ''"
       :usage="cpu.usage"
@@ -143,6 +144,7 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
     <MetricCard
       v-if="blocks.gpu && gpuInfo"
       testid="block-gpu"
+      :icon="Gpu"
       :title="t('gpu.title')"
       :name="gpuInfo.name"
       :usage="gpu.usage"
@@ -170,7 +172,7 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
       :graph-label="t('ram.title')"
     >
       <template #action>
-        <Button variant="ghost" size="icon-xs" class="-my-1.5 -mr-1 self-center" :title="t('apps.show')" :aria-label="t('apps.show')" data-testid="show-apps" @click="emit('showApps')">
+        <Button variant="ghost" size="icon-xs" class="-m-1" :title="t('apps.show')" :aria-label="t('apps.show')" data-testid="show-apps" @click="emit('showApps')">
           <List />
         </Button>
       </template>

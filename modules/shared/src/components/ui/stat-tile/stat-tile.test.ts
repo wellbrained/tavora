@@ -141,3 +141,46 @@ describe("StatTile", () => {
     expect(value().className).toContain("whitespace-nowrap")
   })
 })
+
+describe("StatTile for a live reading", () => {
+  it("makes the value larger and centres the tile", async () => {
+    const host = await mount(() => h(StatTile, { value: 34, label: "CPU", unit: "%", size: "xl", align: "center" }))
+    const tile = host.querySelector("[data-slot=stat-tile]")!
+    expect(tile.className).toContain("items-center")
+    expect(tile.getAttribute("data-size")).toBe("xl")
+    expect(host.querySelector("[data-slot=stat-value]")!.className).toContain("text-[2.125rem]")
+  })
+
+  it("shows a second value beside the first, and a dash with its hint until it arrives", async () => {
+    const host = await mount(() => h(StatTile, { value: 25, unit: "%", label: "GPU", secondValue: 67, secondUnit: "°C", secondClass: "text-warning" }))
+    const second = host.querySelector("[data-slot=stat-second-value]")!
+    expect(second.textContent?.trim()).toBe("67°C")
+    expect(second.className).toContain("text-warning")
+    app?.unmount()
+    document.body.innerHTML = ""
+    const dash = await mount(() => h(StatTile, { value: 25, label: "GPU", secondValue: "", secondUnit: "°C", secondHint: "Only some cards report it." }))
+    const missing = dash.querySelector("[data-slot=stat-second-value]")!
+    expect(missing.textContent).toContain("–")
+    expect(missing.getAttribute("title")).toBe("Only some cards report it.")
+    expect(missing.getAttribute("tabindex")).toBe("0")
+  })
+
+  it("has no second value unless one is given", async () => {
+    const host = await mount(() => h(StatTile, { value: 61, label: "Memory" }))
+    expect(host.querySelector("[data-slot=stat-second-value]")).toBeNull()
+  })
+
+  it("holds an icon in the corner, a graph under the label and a footer instead of the hint", async () => {
+    const host = await mount(() =>
+      h(StatTile, { value: 34, label: "CPU", hint: "ignored" }, { icon: () => h("i", { id: "icon" }), graph: () => h("canvas", { id: "graph" }), footer: () => h("span", { id: "foot" }, "16 threads") }),
+    )
+    const tile = host.querySelector("[data-slot=stat-tile]")!
+    expect(tile.querySelector("[data-slot=stat-tile-icon] #icon")).not.toBeNull()
+    expect(tile.querySelector("[data-slot=stat-tile-graph] #graph")).not.toBeNull()
+    expect(tile.querySelector("[data-slot=stat-tile-footer] #foot")).not.toBeNull()
+    expect(tile.textContent).not.toContain("ignored")
+    // The value stays first, then the label, the graph and the footer.
+    const order = [...tile.children].map((child) => child.getAttribute("data-slot") ?? child.tagName)
+    expect(order.filter((slot) => slot !== "SPAN")).toEqual(["stat-tile-icon", "DT", "stat-value", "stat-tile-graph", "stat-tile-footer"])
+  })
+})
