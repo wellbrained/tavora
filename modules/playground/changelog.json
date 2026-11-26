@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.106",
+    "date": "2026-11-26",
+    "notes": [
+      "New example: live readings with a graph."
+    ]
+  },
+  {
     "version": "0.1.105",
     "date": "2026-11-26",
     "notes": [
