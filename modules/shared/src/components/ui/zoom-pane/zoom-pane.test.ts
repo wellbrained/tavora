@@ -931,6 +931,7 @@ describe("bare and loading", () => {
     expect(pane.classList.contains("rounded-md")).toBe(false)
     expect(pane.classList.contains("bg-background")).toBe(false)
     expect(pane.className).toContain("focus-visible:after:inset-ring-3")
+    expect(pane.className).toContain("focus-visible:outline-solid")
   })
 
   it("hides its zoom controls while loading and shows them once the content is there", async () => {

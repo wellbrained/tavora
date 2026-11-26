@@ -542,9 +542,10 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
     tabindex="0"
     :class="cn(
       'relative touch-none overflow-hidden outline-none select-none',
-      // Bare: the ring is drawn over the content, which would cover an inset shadow on the pane itself.
+      // Bare: the ring is drawn over the content, which would cover an inset shadow on the pane itself. The pane's own
+      // see-through outline is what high-contrast mode colours in, and what a focus check finds on the control.
       bare
-        ? 'after:pointer-events-none after:absolute after:inset-0 after:z-(--layer-overlay) focus-visible:after:inset-ring-3 focus-visible:after:inset-ring-ring/50'
+        ? 'after:pointer-events-none after:absolute after:inset-0 after:z-(--layer-overlay) focus-visible:after:inset-ring-3 focus-visible:after:inset-ring-ring/50 focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-transparent focus-visible:outline-solid'
         : 'bg-background rounded-md border focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3',
       dragging ? 'cursor-grabbing' : 'cursor-grab',
       props.class,
