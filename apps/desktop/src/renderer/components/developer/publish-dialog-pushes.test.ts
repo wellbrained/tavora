@@ -31,7 +31,7 @@ vi.mock("@tavora/official-ui/components/ui/radio-group", async () => {
   };
 });
 
-import { publish } from "../../host";
+import { account, act, publish } from "../../host";
 import PublishDialog from "./PublishDialog.vue";
 
 const settle = async () => {
@@ -98,5 +98,28 @@ describe("PublishDialog", () => {
     set(view({ problems: problem(), ownPrefix: "alex" }));
     await settle();
     expect((root.querySelector('[data-testid="publish-id-input"]') as HTMLInputElement).value).toBe("alex.my-notes");
+  });
+
+  it("uses a prefix the account holds at once, and says why Publish is off", async () => {
+    (account as { value: unknown }).value = { prefixes: { held: [{ prefix: "alex", claimedAt: 1, published: false }], max: 3 }, prefixCheck: null };
+    set(view({ module: { id: "local.notes", name: "Notes", version: "1.0.0", icon: null }, problems: [{ kind: "prefix", prefix: "local", state: "reserved" }], ownPrefix: "alex" }));
+    await mount();
+    const text = (id: string) => root.querySelector(`[data-testid="${id}"]`)?.textContent ?? "";
+    expect(text("publish-problem-prefix")).toContain("local.notes uses the reserved prefix local");
+    expect(text("publish-id-state")).toBe("alex is yours.");
+    expect(text("publish-id-button")).toBe("Use it");
+    expect(root.querySelector('[data-testid="publish-upload"]')?.getAttribute("disabled-reason")).toBe("Give the module an id with your prefix first.");
+    (root.querySelector('[data-testid="publish-id-button"]') as HTMLElement).click();
+    root.querySelector("form")?.dispatchEvent(new Event("submit", { cancelable: true }));
+    await settle();
+    expect(act).toHaveBeenCalledWith({ type: "publish-set-id", id: "alex.notes" });
+    (account as { value: unknown }).value = null;
+  });
+
+  it("checks a prefix the account doesn't hold yet", async () => {
+    set(view({ module: { id: "local.notes", name: "Notes", version: "1.0.0", icon: null }, problems: [{ kind: "prefix", prefix: "local", state: "reserved" }], ownPrefix: "alex" }));
+    await mount();
+    expect(root.querySelector('[data-testid="publish-id-button"]')?.textContent).toBe("Check");
+    expect(root.querySelector('[data-testid="publish-id-state"]')).toBeNull();
   });
 });

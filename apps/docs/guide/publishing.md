@@ -42,7 +42,7 @@ If something blocks the upload, the screen says what and offers the fix:
 
 - **The catalog has this version already:** pick the next one (Fixes, New features or Big changes), add its patch notes, and press **Save to project**. Tavora writes both into `tavora.module.json` and `changelog.json`.
 - **The version is a test version** (a pre-release such as `0.2.0-beta.1`): pick a plain one the same way. Module versions are always `major.minor.patch`.
-- **The id doesn't start with one of your prefixes:** type a new id and press **Use it**. A prefix you don't hold yet is claimed when you publish.
+- **The id doesn't start with one of your prefixes:** type a new id. For a prefix you hold, press **Use it**; Tavora saves the id in `tavora.module.json`, then **Publish** works. For a prefix you don't hold yet, press **Check** first, then **Claim it**. **Publish** stays off, and says why when you point at it, until the review has nothing left to fix.
 - **Nothing is built yet:** run the `build` script, then press **Check again**.
 
 Press **Publish** on the review screen to sign the zip with your key and upload it with your sign-in. That press is your yes; nothing else asks. Your secret key never leaves Tavora, and the key alone can't publish: the service also checks that the account signed in is the one the key is linked to.

@@ -2,7 +2,7 @@
 // The review screen before a dev module goes to the catalog (module-publish.ts): what Tavora packed from
 // the project folder, what it asks for, how old the build is and what the catalog lists. What stops it is
 // listed with its fix right here: the next version and its patch notes, an id with the developer's own
-// prefix (Check, then Claim it), or a build. Publish uploads exactly what this shows; the click is the
+// prefix (Use it, or Check and Claim it), or a build. Publish uploads exactly what this shows; the click is the
 // approval, so nothing asks again.
 import { ArrowUpRight, CircleAlert, Loader, TriangleAlert, Upload } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
@@ -92,7 +92,9 @@ async function saveVersion() {
   }
 }
 
-// A new id, with the developer's own prefix: Check, then Claim it (or Use it, for a prefix held already).
+// A new id, with the developer's own prefix. A prefix the account holds is known at once: Use it. Any other is
+// Checked first, then Claimed. Use it writes the id into the module's manifest, so it is its own press, never a side
+// effect of Publish.
 const newId = ref("");
 watch(
   () => JSON.stringify([prefixProblem.value?.prefix, module.value?.id, view.value?.ownPrefix]),
@@ -105,12 +107,16 @@ watch(
 );
 const idPrefix = computed(() => newId.value.trim().split(".")[0] ?? "");
 const idState = computed(() => {
+  if (idPrefix.value === prefixProblem.value?.prefix) return null;
+  if (account.value?.prefixes?.held.some((item) => item.prefix === idPrefix.value)) return "held" as const;
   const checked = account.value?.prefixCheck;
-  return checked && checked.prefix === idPrefix.value && idPrefix.value !== prefixProblem.value?.prefix ? checked.state : null;
+  return checked && checked.prefix === idPrefix.value ? checked.state : null;
 });
+// An id is a prefix, a dot and a name; the main process checks the rest.
+const idComplete = computed(() => /^[^.\s]+\.\S+$/.test(newId.value.trim()));
 async function pressId() {
   const id = newId.value.trim();
-  if (!id) return;
+  if (!idComplete.value) return;
   if (idState.value === "free") {
     if (await run({ type: "account-prefix-claim", prefix: idPrefix.value })) await run({ type: "publish-set-id", id });
   } else if (idState.value === "held") {
@@ -119,6 +125,15 @@ async function pressId() {
     await run({ type: "account-prefix-check", prefix: idPrefix.value });
   }
 }
+// Why Publish is off, in the order the problems are shown; null while it works.
+const publishReason = computed(() => {
+  if (!view.value || view.value.status === "publishing" || view.value.status === "checking") return undefined;
+  if (versionProblem.value) return t("publish.needVersion");
+  if (prefixProblem.value) return t("publish.needPrefix");
+  if (notBuilt.value) return t("publish.needBuild");
+  if (view.value.problems.length) return t("publish.needFix");
+  return undefined;
+});
 const idButton = computed(() => (idState.value === "free" ? t("prefix.claim") : idState.value === "held" ? t("publish.useId") : idState.value === null ? t("prefix.check") : t("prefix.checkAgain")));
 
 async function claimNew() {
@@ -235,13 +250,13 @@ function browse() {
 
         <section v-if="prefixProblem" class="flex flex-col gap-2 rounded-lg border p-3" data-testid="publish-problem-prefix">
           <p class="flex gap-2 text-sm">
-            <CircleAlert class="text-warning mt-0.5 size-4 flex-none" /> {{ t(`prefix.state.${prefixProblem.state}`, { prefix: prefixProblem.prefix }) }}
+            <CircleAlert class="text-warning mt-0.5 size-4 flex-none" /> {{ t(`publish.prefix.${prefixProblem.state}`, { id: module?.id ?? "", prefix: prefixProblem.prefix }) }}
           </p>
           <form class="flex flex-col gap-1 pl-6" @submit.prevent="pressId">
             <label class="text-muted-foreground text-sm" for="publish-new-id">{{ t("publish.prefixProblem") }}</label>
             <div class="flex gap-2">
               <Input id="publish-new-id" v-model="newId" class="font-mono" maxlength="128" autocomplete="off" spellcheck="false" data-testid="publish-id-input" />
-              <Button type="submit" :variant="idState === 'free' || idState === 'held' ? 'default' : 'secondary'" :disabled="busy || !newId.trim()" data-testid="publish-id-button">{{ idButton }}</Button>
+              <Button type="submit" :variant="idState === 'free' || idState === 'held' ? 'default' : 'secondary'" :disabled="busy || !idComplete" data-testid="publish-id-button">{{ idButton }}</Button>
             </div>
             <span v-if="idState" class="text-muted-foreground text-sm" role="status" data-testid="publish-id-state">{{ t(`prefix.state.${idState}`, { prefix: idPrefix }) }}</span>
           </form>
@@ -264,7 +279,7 @@ function browse() {
 
       <DialogFooter>
         <DialogButton close :disabled="view.status === 'publishing'" data-testid="publish-cancel" @click="close">{{ t("common.cancel") }}</DialogButton>
-        <DialogButton :busy="view.status === 'publishing'" :disabled="busy || view.status !== 'ready' || view.problems.length > 0" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
+        <DialogButton :busy="view.status === 'publishing'" :disabled="busy || view.status !== 'ready' || view.problems.length > 0" :disabled-reason="publishReason" data-testid="publish-upload" @click="run({ type: 'publish-upload' })">
           {{ view.status === "publishing" ? t("publish.publishing") : t("publish.publish") }}
         </DialogButton>
       </DialogFooter>
