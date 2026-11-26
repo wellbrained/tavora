@@ -25,7 +25,8 @@ defineExpose({ input, focus: () => input.value?.focus() })
 
 function onFrameDown(event: MouseEvent) {
   const target = event.target as Element
-  if (target === input.value || target.closest("[data-slot=palette-search-trailing]")) return
+  // A switch or a link at the end works as itself; a key hint there is part of the frame.
+  if (target === input.value || target.closest("[data-slot=palette-search-trailing] :is(button, a, input, [role=radio], [tabindex])")) return
   event.preventDefault()
   input.value?.focus()
 }

@@ -9,7 +9,8 @@
 // `size="lg"` is the palette look (an "Add a recipe" picker in a dialog): the big frameless search with a line under it,
 // taller rows with bigger icons, a line between groups, and with `hints` the keys in a foot. Rows are PaletteItems, as
 // in the app's own palettes; an option's `icon` goes in front, `busy` shows a spinner while its pick is being done.
-// Slots, all optional: `option` (a row's content), `leading` (a picture in front of a row), `group` (a heading) and
+// Slots, all optional: `option` (a row's label: it sits where the label goes, the second line and end text are left
+// out when it is used), `leading` (a picture in front of a row), `group` (a heading) and
 // `empty` (when nothing is left).
 import { Search } from "@lucide/vue"
 import { computed, nextTick, ref, useId, useTemplateRef, watch, type HTMLAttributes } from "vue"
@@ -194,6 +195,8 @@ useKeepFocus(fieldInput, () => !!props.search && props.autofocus)
           :icon="option.icon"
           :active="option.value === active"
           :busy="option.busy"
+          :label="option.label"
+          :match="filter ? query : ''"
           :disabled="!!option.disabled"
           :chosen="model === undefined ? undefined : option.value === model"
           :data-testid="part(`option-${option.value}`)"
@@ -202,9 +205,7 @@ useKeepFocus(fieldInput, () => !!props.search && props.autofocus)
           @click="pick(option)"
         >
           <template v-if="$slots.leading" #leading><slot name="leading" :option="option" /></template>
-          <slot name="option" :option="option" :parts="bold(option)" :active="option.value === active">
-            <template v-for="(piece, n) in bold(option)" :key="n"><b v-if="piece.match" class="font-semibold">{{ piece.text }}</b><template v-else>{{ piece.text }}</template></template>
-          </slot>
+          <template v-if="$slots.option" #default><slot name="option" :option="option" :parts="bold(option)" :active="option.value === active" /></template>
           <template v-if="!$slots.option && option.description" #description>{{ option.description }}</template>
           <template v-if="!$slots.option && (typeof option.disabled === 'string' || option.meta)" #trailing>
             <span class="tabular-nums">{{ typeof option.disabled === "string" ? option.disabled : option.meta }}</span>

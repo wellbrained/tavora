@@ -55,11 +55,14 @@ describe("PaletteSearch", () => {
 
   it("puts the caret in the field on a press of its frame, not of what sits at its end", async () => {
     const root = await mount(() =>
-      h(PaletteSearch, { "aria-label": "Search" }, { trailing: () => h("button", { "data-testid": "switch" }, "Personal") }),
+      h(PaletteSearch, { "aria-label": "Search" }, { trailing: () => [h("kbd", { "data-testid": "cap" }, "K"), h("button", { "data-testid": "switch" }, "Personal")] }),
     )
     const frame = root.querySelector<HTMLElement>("[data-slot=palette-search]")!
     const field = root.querySelector("input")!
     frame.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }))
+    expect(document.activeElement).toBe(field)
+    field.blur()
+    root.querySelector("[data-testid=cap]")!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }))
     expect(document.activeElement).toBe(field)
     field.blur()
     const press = new MouseEvent("mousedown", { bubbles: true, cancelable: true })

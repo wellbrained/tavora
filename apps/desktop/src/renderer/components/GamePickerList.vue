@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // The games in the Add a game picker. With nothing typed: the covers of the games played lately, then the rest of this
 // PC's games. Typed: one list, this PC's games first, then the built-in and online ones under More games, and the typed
-// name as the user's own game under Not on the list. Rows are the kit's palette rows (PaletteItem). Presentational: the owner keeps the lines (in the order to show them), the highlight (a
-// key) and what a pick does. A hover highlights, a click picks the item clicked; focus stays in the search, so Enter
-// keeps working. Shared with the first-run welcome.
+// name as the user's own game under Not on the list. Rows are the kit's palette rows (PaletteItem); the covers are
+// tiles of their own look in a grid, still options of the same list. Presentational: the owner keeps the lines (in
+// the order to show them), the highlight (a key) and what a pick does. A hover highlights, a click picks the item
+// clicked; focus stays in the search, so Enter keeps working. Shared with the first-run welcome.
 import { computed, watch } from "vue";
 import { GameCover } from "@tavora/official-ui/components/ui/game-cover";
 import { PaletteGroup, PaletteItem, PaletteList } from "@tavora/official-ui/components/ui/palette";

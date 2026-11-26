@@ -19,7 +19,7 @@ const headingId = useId()
     data-slot="palette-group"
     :class="cn('flex flex-col not-first:mt-1 not-first:border-t not-first:pt-1', props.class)"
   >
-    <div v-if="label || $slots.label" :id="headingId" role="presentation" data-slot="palette-group-label" class="text-muted-foreground flex h-7 flex-none items-center gap-2 px-3 text-xs font-medium">
+    <div v-if="label || $slots.label" :id="headingId" aria-hidden="true" data-slot="palette-group-label" class="text-muted-foreground flex h-7 flex-none items-center gap-2 px-3 text-xs font-medium">
       <slot name="label">{{ label }}</slot>
     </div>
     <slot />

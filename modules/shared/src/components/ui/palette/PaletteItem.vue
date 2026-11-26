@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // One row of a palette's list (or a Listbox): a ListRow that is a listbox option. Room for an icon in front (`icon`,
 // muted and sized for the row; the `leading` slot for a picture or a game's tile), the label, a second line
-// (`description`) and a hint at the end (`trailing`: a kind, "Appearance", "2 modules"). `active` is the lit row the arrow keys and Enter work on (it says
-// `aria-selected`, as a combobox list does); `busy` while the pick is being done: a spinner in place of the hint, the
-// row stays lit and pulses. `disabled` rows stay in the list, dimmed. `chosen` marks the row that is picked now (a
-// Listbox's v-model). With `label` the row writes its own label and bolds where `match` (the search) is found in it.
-// The owner keeps the highlight and the clicks: hover and click handlers go on the row as attributes.
+// (`description`) and a hint at the end (`trailing`: a kind, "Appearance", "2 modules"). `active` is the lit row the
+// arrow keys and Enter work on (it says `aria-selected`, as a combobox list does); `busy` while the pick is being done:
+// a spinner in place of the hint, the row stays lit and pulses. `disabled` rows stay in the list, dimmed. `chosen`
+// marks the row that is picked now (a Listbox's v-model). With `label` the row writes its own label and bolds where
+// `match` (the search) is found in it. The owner keeps the highlight and the clicks: hover and click handlers go on the
+// row as attributes.
 import { Loader } from "@lucide/vue"
 import { computed, type Component, type HTMLAttributes } from "vue"
 import { cn } from "../../../lib/utils"
