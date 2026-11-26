@@ -97,7 +97,7 @@ const COLUMNS: { id: AppsSort; label: "apps.app" | "apps.ram" | "apps.share" | "
 
 <template>
   <Dialog :open="true" @update:open="(value: boolean) => !value && emit('close')">
-    <DialogContent class="top-[6vh] flex max-h-[88vh] translate-y-0 flex-col gap-4 sm:max-w-[500px]" data-testid="apps-dialog">
+    <DialogContent size="lg" anchor="top" class="flex flex-col gap-4" data-testid="apps-dialog">
       <DialogHeader :icon="MemoryStick" :title="t('apps.title')" :description="t('apps.about')" />
       <Input v-model="query" type="search" :placeholder="t('apps.search')" :aria-label="t('apps.search')" data-testid="apps-search" />
 

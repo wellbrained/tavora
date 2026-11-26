@@ -16,6 +16,7 @@ import { cn } from "../../../lib/utils"
 import DialogCloseX from "./DialogCloseX.vue"
 import { useDialogDismissal, withoutDismissListener, type DismissEmits, type DismissOptions } from "./dismissal"
 import { provideDialogInstant } from "./instant"
+import { dialogSizeClass, type DialogSize } from "./size"
 
 defineOptions({
   inheritAttrs: false,
@@ -24,14 +25,17 @@ defineOptions({
 const props = withDefaults(defineProps<DialogContentProps & DismissOptions & {
   class?: HTMLAttributes["class"]
   instant?: boolean
+  /** How wide: sm 360, md 420 (the default), lg 560, xl 760. */
+  size?: DialogSize
 }>(), {
+  size: "md",
   instant: false,
   dismissible: true,
   busy: false,
 })
 const emits = defineEmits<DialogContentEmits & DismissEmits>()
 
-const delegatedProps = reactiveOmit(props, "class", "instant", "dismissible", "busy")
+const delegatedProps = reactiveOmit(props, "class", "instant", "dismissible", "busy", "size")
 const instant = provideDialogInstant(() => props.instant)
 // On top of the page while open: page keys such as Ctrl+Z stand down and the page around it is inert (layers.ts).
 const attrs = useAttrs()
@@ -61,7 +65,8 @@ function onPointerDownOutside(event: CustomEvent<{ originalEvent: PointerEvent }
         :data-instant="instant ? '' : undefined"
         :class="
           cn(
-            'tavora-dialog relative z-(--layer-floating) grid w-full max-w-lg my-8 gap-4 border border-border bg-background p-6 shadow-elevation-3 sm:rounded-lg md:w-full',
+            'tavora-dialog relative z-(--layer-floating) grid w-full my-8 gap-4 border border-border bg-background p-6 shadow-elevation-3 sm:rounded-lg md:w-full',
+            dialogSizeClass[props.size],
             props.class,
           )
         "

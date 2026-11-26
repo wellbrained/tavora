@@ -25,7 +25,7 @@ function submit() {
 
 <template>
   <Dialog :open="true" @update:open="(open: boolean) => !open && emit('cancel')">
-    <DialogContent class="top-[12vh] translate-y-0 sm:max-w-[420px]" data-testid="link-dialog">
+    <DialogContent anchor="top" data-testid="link-dialog">
       <DialogHeader :icon="Link" :title="initial ? t('link.edit') : t('link.add')" :description="t('link.help')" />
       <form class="contents" @submit.prevent="submit">
         <div class="flex flex-col gap-2">

@@ -135,7 +135,7 @@ watch(
 </script>
 
 <template>
-  <ModalDialog :title="step === 'key' && keys?.recoveryKey ? t('devStart.recovery.title') : t(TITLES[step ?? 'done'])" class="sm:max-w-[480px]" :icon="Code" testid="developer-start" @close="close">
+  <ModalDialog :title="step === 'key' && keys?.recoveryKey ? t('devStart.recovery.title') : t(TITLES[step ?? 'done'])" size="lg" :icon="Code" testid="developer-start" @close="close">
     <p v-if="step" class="text-muted-foreground -mt-2 text-xs" data-testid="developer-start-step">{{ t("devStart.step", { step: number, count: COUNT }) }}</p>
 
     <template v-if="step === 'sign-in'">

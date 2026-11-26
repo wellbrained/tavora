@@ -73,7 +73,7 @@ function signIn() {
 </script>
 
 <template>
-  <ModalDialog :title="t('contact.title', { name })" :icon="MessageCircle" class="sm:max-w-[480px]" testid="contact-dialog" :status="status" @close="emit('close')">
+  <ModalDialog :title="t('contact.title', { name })" :icon="MessageCircle" size="lg" testid="contact-dialog" :status="status" @close="emit('close')">
     <div v-if="!draft && loader.error.value" class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm" data-testid="contact-load-failed">
       <p class="text-destructive min-w-0 flex-1" role="alert">{{ loader.error.value }}</p>
       <Button variant="secondary" size="sm" data-testid="contact-retry" @click="loadDraft">{{ t("catalog.retry") }}</Button>

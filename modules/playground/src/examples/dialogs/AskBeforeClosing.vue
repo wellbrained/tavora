@@ -35,7 +35,7 @@ async function save() {
   <Button variant="secondary" data-testid="ask-before-closing" @click="open">Write a note…</Button>
   <Dialog v-model:open="writing">
     <DialogContent
-      class="top-[12vh] translate-y-0 sm:max-w-[420px]"
+      anchor="top"
       :dismissible="!text.trim()"
       :busy="saver.busy.value"
       :data-status="saver.state.value.status"
