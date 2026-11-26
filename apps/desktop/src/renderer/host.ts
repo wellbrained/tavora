@@ -283,6 +283,8 @@ export interface MenuItem {
   disabled?: boolean;
   /** Marks the current choice in a list of choices; a list where any item sets this shows a check column. */
   checked?: boolean;
+  /** With `checked`: one of a list where exactly one is current (the kit's radio look). Without it, `checked` is a tick that several can have. */
+  radio?: boolean;
   /** Opens a nested list. */
   submenu?: () => MenuItem[];
   /** A section's heading, not something to pick. */

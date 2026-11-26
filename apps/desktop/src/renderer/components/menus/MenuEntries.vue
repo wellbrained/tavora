@@ -56,7 +56,7 @@ const parts = computed(() =>
 const hasChecks = computed(() => props.items.some((item) => item.checked !== undefined));
 
 /** A plain choice: current or not, no section break, nothing nested. A run of them is one radio group of the kit. */
-const isChoice = (item: MenuItem) => item.checked !== undefined && !item.submenu && !item.heading && !item.separator && !item.danger;
+const isChoice = (item: MenuItem) => item.radio === true && item.checked !== undefined && !item.submenu && !item.heading && !item.separator && !item.danger;
 type Row = { key: string; item: MenuItem; index: number } | { key: string; choices: { item: MenuItem; index: number }[]; current: string };
 const rows = computed<Row[]>(() => {
   const out: Row[] = [];
@@ -123,7 +123,7 @@ function run(item: MenuItem) {
       :disabled="item.disabled"
       :variant="item.danger ? 'destructive' : 'default'"
       :aria-checked="item.checked === undefined ? undefined : item.checked"
-      :role="item.checked === undefined ? undefined : 'menuitemradio'"
+      :role="item.checked === undefined ? undefined : item.radio ? 'menuitemradio' : 'menuitemcheckbox'"
       :data-checked="item.checked || undefined"
       @select="run(item)"
     >

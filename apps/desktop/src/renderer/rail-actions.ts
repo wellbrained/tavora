@@ -173,6 +173,7 @@ function ownItems(workspace: WorkspaceView): MenuItem[] {
                 label: t("menu.icon.original"),
                 testid: "menu-icon-original",
                 checked: workspace.iconChoice === "original",
+                radio: true,
                 run: () => act({ type: "use-original-icon", workspaceId: workspace.id }),
               } satisfies MenuItem,
             ]
@@ -181,6 +182,7 @@ function ownItems(workspace: WorkspaceView): MenuItem[] {
           label: t("menu.icon.letters"),
           testid: "menu-icon-label",
           checked: workspace.iconChoice === "letters",
+          radio: true,
           run: () =>
             prompt({
               title: t("menu.icon.letters.title"),
@@ -195,6 +197,7 @@ function ownItems(workspace: WorkspaceView): MenuItem[] {
           label: t("menu.icon.own"),
           testid: "menu-icon-image",
           checked: workspace.iconChoice === "image",
+          radio: true,
           run: () => act({ type: "choose-workspace-image", workspaceId: workspace.id }),
         },
       ],
