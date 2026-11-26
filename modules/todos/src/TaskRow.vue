@@ -225,7 +225,7 @@ function choose(action: RowAction) {
       >
         <GripVertical class="size-3.5" />
       </span>
-      <span v-if="!compact" class="relative z-10 flex h-8 w-4 flex-none items-center justify-center">
+      <span v-if="!compact" class="relative z-(--layer-lift) flex h-8 w-4 flex-none items-center justify-center">
         <Button
           v-if="children.total"
           variant="ghost"
