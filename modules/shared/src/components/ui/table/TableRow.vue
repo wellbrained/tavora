@@ -11,6 +11,8 @@ import type { TableRowTone } from "./context"
 const props = defineProps<{ class?: HTMLAttributes["class"]; current?: boolean; selected?: boolean; tone?: TableRowTone; marked?: boolean }>()
 
 const toneClass: Record<TableRowTone, string> = {
+  success: "[&_[data-numeric]]:text-success",
+  destructive: "[&_[data-numeric]]:text-destructive",
   positive: "[&_[data-numeric]]:text-success",
   negative: "[&_[data-numeric]]:text-destructive",
   warning: "[&_[data-numeric]]:text-warning",
@@ -32,7 +34,7 @@ const classes = computed(() =>
   <tr
     data-slot="table-row"
     :data-state="selected ? 'selected' : undefined"
-    :data-tone="tone"
+    :data-tone="tone === 'positive' ? 'success' : tone === 'negative' ? 'destructive' : tone"
     :data-marked="marked || undefined"
     :aria-current="current ? 'true' : undefined"
     :class="classes"

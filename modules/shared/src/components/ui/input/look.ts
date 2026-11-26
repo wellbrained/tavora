@@ -5,3 +5,10 @@ export const inputLook = [
   "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3",
   "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
 ] as const
+
+/** The field on the kit's size scale (`inputLook` is `default`): sm H − 4 with 13px text, lg H + 8 with more room inside. */
+export const INPUT_SIZE = {
+  sm: "h-[calc(var(--style-control-height,32px)-4px)] px-2.5 text-sm",
+  default: "",
+  lg: "h-[calc(var(--style-control-height,32px)+8px)] px-4",
+} as const

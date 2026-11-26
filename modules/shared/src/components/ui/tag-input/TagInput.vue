@@ -34,7 +34,8 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   /** Shown in the field when `max` is reached. */
   fullText?: string
-  size?: "default" | "lg"
+  /** The kit's size scale; the chips follow it. */
+  size?: "sm" | "default" | "lg"
   disabled?: boolean
   class?: HTMLAttributes["class"]
 }>(), {
@@ -174,7 +175,7 @@ function onChipRemove(index: number) {
         size === 'lg' ? 'text-sm' : 'text-xs',
         'border-input dark:bg-input/10 flex w-full min-w-0 flex-wrap items-center gap-1 rounded-md border bg-transparent shadow-xs transition-[color,box-shadow]',
         'focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-3',
-        size === 'lg' ? 'min-h-[calc(var(--style-control-height,32px)+8px)] px-1.5 py-1.5' : 'min-h-[var(--style-control-height,32px)] px-1 py-1',
+        size === 'lg' ? 'min-h-[calc(var(--style-control-height,32px)+8px)] px-1.5 py-1.5' : size === 'sm' ? 'min-h-[calc(var(--style-control-height,32px)-4px)] px-1 py-0.5' : 'min-h-[var(--style-control-height,32px)] px-1 py-1',
         disabled && 'cursor-not-allowed opacity-(--disabled-opacity)',
         props.class,
       )"

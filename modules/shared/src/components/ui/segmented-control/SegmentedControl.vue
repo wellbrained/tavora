@@ -1,6 +1,7 @@
 <script setup lang="ts" generic="T extends string">
 import { useTemplateRef, type HTMLAttributes } from "vue";
 import { RadioGroupItem, RadioGroupRoot } from "reka-ui";
+import type { ControlSize } from "../../../lib/control-size";
 import { cn } from "../../../lib/utils";
 import { useSlidingIndicator } from "../sliding-indicator";
 import { isSoftOption, optionHint, type SegmentedOption } from "./options";
@@ -18,7 +19,19 @@ import ToolbarItem from "../toolbar/ToolbarItem.vue";
 // In a kit Toolbar its options join the toolbar's arrow keys: there the arrows only move the focus, and Space or Enter
 // picks, so moving along the toolbar never changes the choice.
 // `class` is merged, so a caller can place the control (`absolute top-2 left-2`) over the root's own `relative`.
-const props = defineProps<{ options: SegmentedOption<T>[]; label: string; disabled?: boolean; class?: HTMLAttributes["class"] }>();
+const props = withDefaults(
+  defineProps<{
+    options: SegmentedOption<T>[];
+    label: string;
+    disabled?: boolean;
+    /** The kit's size scale: the control is as tall as a Button of the same size. */
+    size?: ControlSize;
+    /** Fills the width it is given: the options share it equally, and a long label (German, say) still takes the room it needs. */
+    fill?: boolean;
+    class?: HTMLAttributes["class"];
+  }>(),
+  { size: "default", fill: false },
+);
 const model = defineModel<T>({ required: true });
 const emit = defineEmits<{
   /** The reader picked an option, also the one that is shown already (`v-model` only says a change). For a value that is stored as a newer version's and shown as this option. */
@@ -34,13 +47,21 @@ const { joined } = useToolbarJoin(() => {
   return at instanceof Element ? at : (at as { $el?: Element } | null)?.$el;
 });
 
-const rootClass = () => cn("bg-background group/segmented relative inline-flex flex-none gap-0.5 rounded-lg border p-0.5", props.class);
+// The options sit inside the control's 1px edge and 2px padding, so each is 6px under the size's height.
+const ITEM_SIZE: Record<ControlSize, string> = {
+  sm: "h-[calc(var(--style-control-height,32px)-10px)] px-2.5",
+  default: "h-[calc(var(--style-control-height,32px)-6px)] px-3",
+  lg: "h-[calc(var(--style-control-height,32px)+2px)] px-4",
+};
+const rootClass = () => cn("bg-background group/segmented relative inline-flex flex-none gap-0.5 rounded-lg border p-0.5", props.fill && "flex w-full min-w-0", props.class);
 const itemClass = (option: SegmentedOption<T>) =>
   cn(
-    "text-muted-foreground hover:text-foreground focus-visible:outline-ring data-[state=checked]:text-primary relative h-7 rounded-sm border border-transparent px-3 text-sm font-medium whitespace-nowrap transition-[color] group-data-[indicator=jump]/segmented:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-(--disabled-opacity)",
+    "text-muted-foreground hover:text-foreground focus-visible:outline-ring data-[state=checked]:text-primary relative rounded-sm border border-transparent text-sm font-medium whitespace-nowrap transition-[color] group-data-[indicator=jump]/segmented:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-(--disabled-opacity)",
     "aria-disabled:hover:text-muted-foreground aria-disabled:cursor-default aria-disabled:opacity-(--disabled-opacity)",
-    option.icon && "inline-flex items-center justify-center gap-1.5 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+    ITEM_SIZE[props.size],
+    (option.icon || props.fill) && "inline-flex items-center justify-center gap-1.5 [&_svg]:pointer-events-none [&_svg]:shrink-0",
     option.icon && option.iconOnly && "px-2",
+    props.fill && "flex-1 px-1.5",
   );
 /** Plainly off (no tooltip to read): skipped by the arrows and not clickable. */
 const hardOff = (option: SegmentedOption<T>) => !!props.disabled || (!!option.disabled && !isSoftOption(option, props.disabled));

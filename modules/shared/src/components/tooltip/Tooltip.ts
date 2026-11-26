@@ -77,8 +77,8 @@ export default defineComponent({
     description: String,
     /** A keyboard shortcut beside the title, such as "Ctrl+D". */
     shortcut: String,
-    /** Tints the title for a warning or a problem; the card itself stays the same. */
-    tone: String as PropType<'warning' | 'danger'>,
+    /** Tints the title for a warning or a problem; the card itself stays the same. `danger` is the old name of `destructive`, read for one round. */
+    tone: String as PropType<'warning' | 'destructive' | 'danger'>,
     id: String,
     /** Smaller type and padding, for a one-line label. */
     compact: Boolean,
@@ -205,7 +205,7 @@ export default defineComponent({
     }
     return () => h(Teleport, { to: 'body' }, props.open || closing.value ? [h('section', mergeProps(attrs, {
       // A closing card is only a picture fading out: no longer the tooltip for anyone (id, role, a screen reader).
-      ...(props.open ? { id: props.id, role: 'tooltip', 'data-slot': 'tooltip' } : { 'data-slot': 'tooltip-closing', 'aria-hidden': 'true' }), ref: card, 'data-side': position.value.side, 'data-tone': props.tone, // A closing card is no longer ready: its fade-out then wins over the fade-in (tooltip.css).
+      ...(props.open ? { id: props.id, role: 'tooltip', 'data-slot': 'tooltip' } : { 'data-slot': 'tooltip-closing', 'aria-hidden': 'true' }), ref: card, 'data-side': position.value.side, 'data-tone': props.tone === 'danger' ? 'destructive' : props.tone, // A closing card is no longer ready: its fade-out then wins over the fade-in (tooltip.css).
       'data-ready': ready.value && !closing.value ? 'true' : undefined, 'data-instant': instant.value ? 'true' : undefined, 'data-closing': !props.open && closing.value ? 'true' : undefined,
       'data-bare': props.bare ? 'true' : undefined,
       class: props.compact ? 'tavora-tooltip compact' : 'tavora-tooltip',

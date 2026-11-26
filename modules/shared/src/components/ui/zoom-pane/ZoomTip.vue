@@ -19,7 +19,8 @@ const props = withDefaults(defineProps<{
   shortcut?: string
   /** Where it goes when there is room. */
   side?: TooltipSide
-  tone?: "warning" | "danger"
+  /** `danger` is the old name of `destructive`, read for one round. */
+  tone?: "warning" | "destructive" | "danger"
   /** Smaller type and padding, for a one-line label. */
   compact?: boolean
 }>(), { side: "bottom" })

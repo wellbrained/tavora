@@ -6,6 +6,7 @@ import { Minus, Plus } from "@lucide/vue"
 import { NumberFieldDecrement, NumberFieldIncrement, NumberFieldInput, NumberFieldRoot } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { ref, useAttrs } from "vue"
+import { CONTROL_HEIGHT, CONTROL_SQUARE, controlSize, type ControlSize } from "../../../lib/control-size"
 import { cn } from "../../../lib/utils"
 import { useFieldControl } from "../field/use-field-control"
 import { uiLocale, uiText } from "../text"
@@ -23,6 +24,8 @@ const props = withDefaults(defineProps<{
   decreaseLabel?: string
   increaseLabel?: string
   disabled?: boolean
+  /** The kit's size scale: as tall as a Button of the same size. */
+  size?: ControlSize
   class?: HTMLAttributes["class"]
 }>(), { step: 1 })
 const model = defineModel<number>({ required: true })
@@ -31,6 +34,7 @@ const field = useFieldControl({ element: () => input.value?.$el, value: () => mo
 // What names, describes or marks the number goes on the box you type in; everything else on the frame around it.
 const ARIA = new Set(["aria-label", "aria-labelledby", "aria-describedby", "aria-invalid"])
 const attrs = useAttrs()
+const stepClass = "text-muted-foreground hover:text-foreground flex flex-none items-center justify-center outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] disabled:pointer-events-none disabled:opacity-(--disabled-opacity)"
 function split() {
   const frame: Record<string, unknown> = {}
   const input: Record<string, unknown> = {}
@@ -52,14 +56,15 @@ function split() {
     :format-options="formatOptions"
     :disabled="disabled"
     :class="cn(
-      'border-input dark:bg-input/10 focus-within:border-ring focus-within:ring-ring/50 inline-flex h-[var(--style-control-height,32px)] w-fit items-center overflow-hidden rounded-md border bg-transparent shadow-xs transition-[color,box-shadow] focus-within:ring-3 data-[disabled]:opacity-(--disabled-opacity)',
+      'border-input dark:bg-input/10 focus-within:border-ring focus-within:ring-ring/50 inline-flex w-fit items-center overflow-hidden rounded-md border bg-transparent shadow-xs transition-[color,box-shadow] focus-within:ring-3 data-[disabled]:opacity-(--disabled-opacity)',
+      CONTROL_HEIGHT[controlSize(size)],
       props.class,
     )"
   >
     <NumberFieldDecrement
       data-slot="number-field-decrement"
       :aria-label="decreaseLabel ?? uiText.decrease"
-      class="text-muted-foreground hover:text-foreground flex size-[var(--style-control-height,32px)] flex-none items-center justify-center outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] disabled:pointer-events-none disabled:opacity-(--disabled-opacity)"
+      :class="cn(stepClass, CONTROL_SQUARE[controlSize(size)])"
     >
       <Minus class="size-3.5" aria-hidden="true" />
     </NumberFieldDecrement>
@@ -73,7 +78,7 @@ function split() {
     <NumberFieldIncrement
       data-slot="number-field-increment"
       :aria-label="increaseLabel ?? uiText.increase"
-      class="text-muted-foreground hover:text-foreground flex size-[var(--style-control-height,32px)] flex-none items-center justify-center outline-none hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] disabled:pointer-events-none disabled:opacity-(--disabled-opacity)"
+      :class="cn(stepClass, CONTROL_SQUARE[controlSize(size)])"
     >
       <Plus class="size-3.5" aria-hidden="true" />
     </NumberFieldIncrement>

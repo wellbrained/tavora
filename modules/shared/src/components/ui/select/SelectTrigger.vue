@@ -13,7 +13,8 @@ defineOptions({ inheritAttrs: false })
 const props = withDefaults(
   defineProps<SelectTriggerProps & {
     class?: HTMLAttributes["class"]
-    size?: "sm" | "default"
+    /** The kit's size scale: as tall as a Button of the same size. */
+    size?: "sm" | "default" | "lg"
     /** Why it is off. While `disabled` the trigger stays hoverable and focusable, and the reason shows in a tooltip beside it. */
     disabledReason?: string
   }>(),
@@ -40,7 +41,7 @@ const soft = useSoftDisabled(
     v-bind="{ ...forwardedProps, ...soft.attrs() }"
     :disabled="soft.disabled()"
     :class="cn(
-      'border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*=\'text-\'])]:text-muted-foreground aria-invalid:border-destructive dark:bg-input/10 dark:hover:bg-input/20 flex w-fit items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-1.5 text-sm whitespace-nowrap transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-(--disabled-opacity) aria-disabled:cursor-not-allowed aria-disabled:opacity-(--disabled-opacity) data-[size=default]:min-h-[var(--style-control-height,32px)] data-[size=sm]:min-h-[calc(var(--style-control-height,32px)-4px)] *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=\'size-\'])]:size-4',
+      'border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*=\'text-\'])]:text-muted-foreground aria-invalid:border-destructive dark:bg-input/10 dark:hover:bg-input/20 flex w-fit items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-1.5 text-sm whitespace-nowrap transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-(--disabled-opacity) aria-disabled:cursor-not-allowed aria-disabled:opacity-(--disabled-opacity) data-[size=default]:min-h-[var(--style-control-height,32px)] data-[size=sm]:min-h-[calc(var(--style-control-height,32px)-4px)] data-[size=lg]:min-h-[calc(var(--style-control-height,32px)+8px)] data-[size=lg]:px-4 *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=\'size-\'])]:size-4',
       'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3',
       props.class,
     )"

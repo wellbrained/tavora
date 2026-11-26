@@ -417,7 +417,7 @@ function endDrag(settled: boolean) {
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-    <Tooltip :open="renameTip && !!renameProblem" :anchor="renameAnchor" :title="renameProblem" tone="danger" compact @dismiss="renameTip = false" />
+    <Tooltip :open="renameTip && !!renameProblem" :anchor="renameAnchor" :title="renameProblem" tone="destructive" compact @dismiss="renameTip = false" />
     <span :id="renameTipId" class="sr-only" role="alert">{{ renameProblem }}</span>
     <div v-if="$slots.add" class="relative z-10 flex flex-none items-center pl-1" data-testid="tab-strip-add">
       <slot name="add" />

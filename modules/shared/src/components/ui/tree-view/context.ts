@@ -1,3 +1,4 @@
+import type { ControlSize } from "../../../lib/control-size"
 import type { InjectionKey, Slot } from "vue"
 import type { TreeNode, TreeRowProps } from "./types"
 
@@ -6,6 +7,8 @@ export type TreeItemEvent = CustomEvent<{ originalEvent: Event }>
 
 export interface TreeContext {
   guides: () => boolean
+  /** The rows' height on the kit's size scale: `default` is the control height, `sm` 4px less for a dense tree. */
+  size: () => ControlSize
   /** Whether the tree picks a row at all (`selection="single"`). */
   picks: () => boolean
   isOpen: (id: string) => boolean

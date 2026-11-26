@@ -517,7 +517,10 @@
   & :is([data-slot="toggle"], [data-slot="toggle-group"]) {
     border-radius: var(--radius-lg);
   }
-  & [data-slot="toggle-group"] > * {
+  & [data-slot="toggle-group"][data-variant="ghost"] > * {
+    border-radius: var(--radius-lg);
+  }
+  & [data-slot="toggle-group"]:not([data-variant="ghost"]) > * {
     border-radius: 0;
     &:first-child { border-radius: var(--radius-lg) 0 0 var(--radius-lg); }
     &:last-child { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
@@ -583,7 +586,7 @@
     background: color-mix(in srgb, var(--foreground) 8%, var(--background));
   }
 }
-:root.dark[data-look-surface="glass"] :is([data-slot="toggle"], [data-slot="toggle-group"], [data-slot="toggle-group"] > *, [data-slot="segmented-control"], [data-slot="action-tile"]) {
+:root.dark[data-look-surface="glass"] :is([data-slot="toggle"]:not([data-variant="ghost"]), [data-slot="toggle-group"]:not([data-variant="ghost"]) > *, [data-slot="segmented-control"], [data-slot="action-tile"]) {
   border-color: color-mix(in srgb, var(--foreground) 9%, transparent);
 }
 :root.dark[data-look-surface="glass"] [data-slot="segmented-control"] {

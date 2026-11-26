@@ -11,6 +11,7 @@ import type { HTMLAttributes } from "vue"
 import { computed, useAttrs } from "vue"
 import { useSoftDisabled } from "../../../lib/soft-disabled"
 import { cn } from "../../../lib/utils"
+import { CONTROL_MIN_HEIGHT, type ControlSize } from "../../../lib/control-size"
 import { DIP_PRESS } from "../button"
 
 const props = withDefaults(
@@ -23,9 +24,11 @@ const props = withDefaults(
     disabled?: boolean
     /** Why it is off. While `disabled` it stays hoverable and focusable, and the reason shows in a tooltip beside it. */
     disabledReason?: string
+    /** Its least height on the kit's size scale (it grows with a second line). */
+    size?: ControlSize
     class?: HTMLAttributes["class"]
   }>(),
-  { as: "button", selected: false, highlighted: false, wrap: false, disabled: false },
+  { as: "button", selected: false, highlighted: false, wrap: false, disabled: false, size: "default" },
 )
 
 defineOptions({ inheritAttrs: false })
@@ -61,7 +64,8 @@ function selection() {
     :data-highlighted="highlighted ? '' : undefined"
     :class="
       cn(
-        'group/list-row flex min-h-[var(--style-control-height,32px)] w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm outline-none transition-[color,background-color,translate] duration-(--duration-press) ease-(--ease-out-strong) focus-visible:inset-ring-2 focus-visible:inset-ring-ring',
+        'group/list-row flex w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm outline-none transition-[color,background-color,translate] duration-(--duration-press) ease-(--ease-out-strong) focus-visible:inset-ring-2 focus-visible:inset-ring-ring',
+        CONTROL_MIN_HEIGHT[size],
         $slots.description && 'py-1.5',
         live && ['cursor-pointer', `hover:${HOVER_FILL}`, DIP_PRESS],
         highlighted && HOVER_FILL,

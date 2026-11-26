@@ -12,18 +12,20 @@ const props = withDefaults(
     /** The art's address; null for none: the fallback shows. */
     src?: string | null
     /** The art is still being looked for: the box stays muted and empty instead of showing the fallback. */
+    loading?: boolean
+    /** @deprecated The old name of `loading`, read for one round. */
     pending?: boolean
     /** Something is happening to the game (it is being added): a spinner over the cover. */
     busy?: boolean
     class?: HTMLAttributes["class"]
   }>(),
-  { src: null, pending: false, busy: false },
+  { src: null, loading: false, pending: false, busy: false },
 )
 </script>
 
 <template>
   <span data-slot="game-cover" :data-busy="busy || undefined" :class="cn('relative block aspect-[2/3] w-full overflow-hidden rounded-md', props.class)" aria-hidden="true">
-    <FadeImage class="size-full rounded-[inherit]" :src="src" :pending="pending" alt="" draggable="false">
+    <FadeImage class="size-full rounded-[inherit]" :src="src" :pending="loading || pending" alt="" draggable="false">
       <template #fallback><slot name="fallback" /></template>
     </FadeImage>
     <span v-if="busy" class="bg-background/60 absolute inset-0 grid place-items-center">

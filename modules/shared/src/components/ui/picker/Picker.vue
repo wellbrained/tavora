@@ -14,6 +14,7 @@ import type { HTMLAttributes } from "vue"
 import { createReusableTemplate } from "@vueuse/core"
 import { computed, ref, useTemplateRef, watch } from "vue"
 import { ListboxContent, ListboxFilter, ListboxGroup, ListboxGroupLabel, ListboxItem, ListboxRoot, PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
+import type { ControlSize } from "../../../lib/control-size"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { inputLook } from "../input/look"
@@ -38,6 +39,8 @@ const props = defineProps<{
   /** Test ids for the menu parts: `<testid>-menu`, `-search`, `-search-clear`, `-filters`, `-option-<value>`, `-none`. */
   testid?: string
   disabled?: boolean
+  /** The button's size on the kit's scale. */
+  size?: ControlSize
   class?: HTMLAttributes["class"]
 }>()
 const model = defineModel<T>({ required: true })
@@ -51,7 +54,7 @@ const open = defineModel<boolean>("open", { default: false })
 
 /** One row of the list, the same with a group around it or without. */
 const [DefineRow, Row] = createReusableTemplate<{ option: PickerOption<T> }>()
-const rowClass = cn("data-[highlighted]:bg-accent flex h-9 w-full cursor-default items-center gap-2 rounded-sm px-3 text-left text-sm outline-none select-none", choiceRow, choiceHighlighted)
+const rowClass = cn("data-[highlighted]:bg-accent flex h-[var(--style-control-height,32px)] w-full cursor-default items-center gap-2 rounded-sm px-3 text-left text-sm outline-none select-none", choiceRow, choiceHighlighted)
 const query = ref("")
 const current = computed(() => props.options.find((option) => option.value === model.value) ?? (slots.current || slots.filters ? undefined : props.options[0]))
 const shown = computed(() => (props.search ? filterOptions(props.options, query.value) : props.options))
@@ -84,6 +87,7 @@ function pick(value: unknown) {
       <Button
         v-bind="$attrs"
         variant="secondary"
+        :size="size"
         press="dip"
         :disabled="disabled"
         :class="cn('max-w-56 min-w-44 justify-between', props.class)"

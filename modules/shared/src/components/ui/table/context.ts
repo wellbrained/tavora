@@ -36,4 +36,5 @@ export function nextSort(current: TableSort | null | undefined, column: string, 
 }
 
 /** What a row's numbers mean: better, worse, needs a look, or less important. */
-export type TableRowTone = "positive" | "negative" | "warning" | "muted"
+/** `positive` and `negative` are the old names of `success` and `destructive`, read for one round. */
+export type TableRowTone = "success" | "destructive" | "warning" | "muted" | "positive" | "negative"

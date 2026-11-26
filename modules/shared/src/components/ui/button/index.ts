@@ -10,7 +10,7 @@ export { ACTION_TIMING, type ButtonAction, type ButtonActionState } from "./acti
 // (a picker, a list row) asks for `dip`; any other that a caller stretches (`w-full`, `block`, `flex`, `flex-1`, `grow`)
 // gets it automatically, so nobody has to remember. Same guard as PRESS: fine pointer, no reduced motion.
 // Written out in full: Tailwind only finds class names that appear in the source as plain strings.
-const SCALE_PRESS =
+export const SCALE_PRESS =
   "[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:scale-[0.97]" +
   " [&.w-full]:[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:scale-100 [&.w-full]:[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:translate-y-px" +
   " [&.block]:[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:scale-100 [&.block]:[@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-aria-disabled:active:translate-y-px" +

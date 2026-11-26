@@ -31,9 +31,11 @@ const props = withDefaults(
     selection?: "single" | "none"
     /** Thin lines under each open branch, down to its last child. */
     guides?: boolean
+    /** Row height on the kit's size scale: `default` (the control height) or `sm` (4px less) for a dense tree. */
+    size?: "sm" | "default"
     class?: HTMLAttributes["class"]
   }>(),
-  { modelValue: undefined, expanded: undefined, defaultExpanded: undefined, selection: "single", guides: true },
+  { modelValue: undefined, expanded: undefined, defaultExpanded: undefined, selection: "single", guides: true, size: "default" },
 )
 const emit = defineEmits<{
   "update:modelValue": [id: string]
@@ -89,6 +91,7 @@ const onChevron = (event: Event) => event.type === "click" && !!(event.target as
 
 provide(TREE, {
   guides: () => props.guides,
+  size: () => props.size,
   picks: () => props.selection === "single",
   isOpen: (id) => open.value.includes(id),
   isPicked: (id) => props.selection === "single" && picked.value === id,

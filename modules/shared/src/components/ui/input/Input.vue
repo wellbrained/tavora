@@ -3,9 +3,10 @@ import type { HTMLAttributes } from "vue"
 import { useVModel } from "@vueuse/core"
 import { ref } from "vue"
 import { useSoftDisabled } from "../../../lib/soft-disabled"
+import { controlSize, type ControlSize } from "../../../lib/control-size"
 import { cn } from "../../../lib/utils"
 import { useFieldControl } from "../field/use-field-control"
-import { inputLook } from "./look"
+import { INPUT_SIZE, inputLook } from "./look"
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{
@@ -18,6 +19,8 @@ const props = defineProps<{
    * copied), and the reason shows in a tooltip beside it.
    */
   disabledReason?: string
+  /** The kit's size scale: as tall as a Button of the same size. */
+  size?: ControlSize
 }>()
 
 const emits = defineEmits<{
@@ -42,6 +45,6 @@ const field = useFieldControl({ element: () => element.value, value: () => model
     v-bind="{ ...soft.attrs(), ...field.attrs() }"
     :disabled="soft.disabled()"
     :readonly="soft.soft() || undefined"
-    :class="cn(...inputLook, props.class)"
+    :class="cn(...inputLook, INPUT_SIZE[controlSize(props.size)], props.class)"
   >
 </template>

@@ -1,6 +1,49 @@
+import { cva, type VariantProps } from "class-variance-authority"
+import { SCALE_PRESS } from "../button"
+
 /**
- * The look of one toggle button, alone or in a group: a square the control height (32px in Classic), accent-tinted while pressed. The colours change on
- * the press token and the button dips a little under a mouse press, like a Button (fine pointer, motion allowed, not off).
+ * The look of one toggle button, alone or in a group. `outline` (the default) has an edge, `ghost` has none until hovered.
+ * Pressed it takes the style's pick: a primary tint in Classic (with a primary edge on `outline`), a solid key in Hardware
+ * and a light capsule in Liquid Glass (looks.css). Sizes are the kit's scale from the control height: sm H − 4, default H,
+ * lg H + 8. An icon alone makes it square (`iconOnly`); with text it is as wide as the text and never narrower than square.
+ * It presses like a Button (97 %, fine pointer, motion allowed) and shows Button's focus ring. A toggle that is off with a
+ * reason (`aria-disabled`) keeps its resting look under the pointer.
  */
-export const toggleClass =
-  "border-input text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring data-[state=on]:border-primary/50 data-[state=on]:bg-primary/15 data-[state=on]:text-primary relative inline-flex size-[var(--style-control-height,32px)] flex-none items-center justify-center border text-sm transition-[color,background-color,border-color,scale] duration-(--duration-press) ease-(--ease-out-strong) [@media(hover:hover)_and_(pointer:fine)_and_(prefers-reduced-motion:no-preference)]:not-disabled:active:scale-90 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-(--disabled-opacity)"
+export const toggleVariants = cva(
+  [
+    "relative inline-flex flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium outline-none",
+    "text-muted-foreground hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] hover:text-foreground",
+    "data-[state=on]:bg-primary/15 data-[state=on]:text-primary data-[state=on]:hover:bg-primary/20 data-[state=on]:hover:text-primary",
+    "aria-disabled:cursor-default aria-disabled:data-[state=off]:hover:bg-transparent aria-disabled:data-[state=off]:hover:text-muted-foreground aria-disabled:data-[state=on]:hover:bg-primary/15",
+    "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+    "transition-[color,background-color,border-color,box-shadow,opacity,scale] duration-(--duration-press) ease-(--ease-out-strong)",
+    "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3",
+    "disabled:pointer-events-none disabled:opacity-(--disabled-opacity) aria-disabled:opacity-(--disabled-opacity)",
+    SCALE_PRESS,
+  ],
+  {
+    variants: {
+      variant: {
+        outline: "border-input data-[state=on]:border-primary/50",
+        ghost: "border-transparent",
+      },
+      size: {
+        sm: "h-[calc(var(--style-control-height,32px)-4px)] min-w-[calc(var(--style-control-height,32px)-4px)] px-2.5 has-[>svg:first-child]:pl-2",
+        default: "h-[var(--style-control-height,32px)] min-w-[var(--style-control-height,32px)] px-3 has-[>svg:first-child]:pl-2.5",
+        lg: "h-[calc(var(--style-control-height,32px)+8px)] min-w-[calc(var(--style-control-height,32px)+8px)] gap-2 px-4 has-[>svg:first-child]:pl-3.5",
+      },
+      iconOnly: {
+        true: "px-0 has-[>svg:first-child]:pl-0",
+        false: "",
+      },
+    },
+    compoundVariants: [
+      { size: "sm", iconOnly: true, class: "w-[calc(var(--style-control-height,32px)-4px)]" },
+      { size: "default", iconOnly: true, class: "w-[var(--style-control-height,32px)]" },
+      { size: "lg", iconOnly: true, class: "w-[calc(var(--style-control-height,32px)+8px)]" },
+    ],
+    defaultVariants: { variant: "outline", size: "default", iconOnly: false },
+  },
+)
+
+export type ToggleVariants = VariantProps<typeof toggleVariants>

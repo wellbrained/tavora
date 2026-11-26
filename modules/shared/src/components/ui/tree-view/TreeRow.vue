@@ -5,6 +5,7 @@
 import { ChevronRight } from "@lucide/vue"
 import { TreeItem } from "reka-ui"
 import { inject, type Directive, type FunctionalComponent } from "vue"
+import { CONTROL_MIN_HEIGHT } from "../../../lib/control-size"
 import { cn } from "../../../lib/utils"
 import { TREE, indent } from "./context"
 import type { TreeNode, TreeRowProps } from "./types"
@@ -41,7 +42,8 @@ const RowSlot: FunctionalComponent<TreeRowProps> = (rowProps) => tree.row()?.(ro
     :style="{ paddingInlineStart: `${indent(level)}px` }"
     :class="
       cn(
-        'text-muted-foreground flex min-h-7 w-full min-w-0 items-center gap-1.5 rounded-md pe-2 text-sm font-medium outline-none select-none transition-colors duration-(--duration-press) ease-(--ease-out-strong) focus-visible:inset-ring-2 focus-visible:inset-ring-ring',
+        'text-muted-foreground flex w-full min-w-0 items-center gap-1.5 rounded-md pe-2 text-sm font-medium outline-none select-none transition-colors duration-(--duration-press) ease-(--ease-out-strong) focus-visible:inset-ring-2 focus-visible:inset-ring-ring',
+        CONTROL_MIN_HEIGHT[tree.size()],
         node.disabled ? 'cursor-default opacity-(--disabled-opacity)' : 'hover:text-foreground cursor-pointer hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))]',
         tree.isPicked(node.id) && 'bg-primary/10 text-foreground hover:bg-primary/15',
       )

@@ -5,6 +5,7 @@
 import { Search, X } from "@lucide/vue"
 import { ref, type HTMLAttributes } from "vue"
 import { isComposing } from "../../../lib/keys"
+import type { ControlSize } from "../../../lib/control-size"
 import { cn } from "../../../lib/utils"
 import { Button } from "../button"
 import { leaveToolbar } from "../toolbar/context"
@@ -19,6 +20,8 @@ const props = withDefaults(defineProps<{
   /** The clear button's name for screen readers; it says "Clear search" in the user's language by default. */
   clearLabel?: string
   disabled?: boolean
+  /** The kit's size scale. */
+  size?: ControlSize
   class?: HTMLAttributes["class"]
 }>(), {})
 const model = defineModel<string>({ default: "" })
@@ -47,6 +50,7 @@ function onKeydown(event: KeyboardEvent) {
       v-bind="$attrs"
       v-model="model"
       type="search"
+      :size="size"
       :disabled="disabled"
       class="pr-9 pl-9 [&::-webkit-search-cancel-button]:appearance-none"
       @keydown="onKeydown"

@@ -15,7 +15,7 @@
 /* The kit's outline Badge (ui/badge/index.ts), in plain CSS so the card needs no Tailwind (React and plain modules show
    it too). Keep the two alike. */
 .tavora-tooltip-badge{display:inline-flex;align-items:center;flex:none;box-sizing:border-box;padding:2px 6px;border:1px solid var(--border,#35302b);border-radius:4px;font-size:12px;font-weight:500;line-height:16px;white-space:nowrap;color:var(--foreground,#f2ece0)}
-.tavora-tooltip[data-tone=warning] .tavora-tooltip-title{color:var(--warning,#e3c75f)}.tavora-tooltip[data-tone=danger] .tavora-tooltip-title{color:var(--destructive,#e5675a)}
+.tavora-tooltip[data-tone=warning] .tavora-tooltip-title{color:var(--warning,#e3c75f)}.tavora-tooltip:is([data-tone=destructive],[data-tone=danger]) .tavora-tooltip-title{color:var(--destructive,#e5675a)}
 
 /* The arrow: a square turned on its corner, half hidden behind the card's edge that faces the anchor. */
 .tavora-tooltip-arrow{position:absolute;width:8px;height:8px;background:var(--tavora-tooltip-surface);border:1px solid var(--tavora-tooltip-line);transform:rotate(45deg)}

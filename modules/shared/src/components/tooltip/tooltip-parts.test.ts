@@ -36,6 +36,13 @@ async function rows(props: { rows: TooltipRow[]; columns?: string[] }) {
 }
 
 describe("Tooltip attributes", () => {
+  it("tints a problem as destructive, and still reads danger", async () => {
+    expect((await card({ title: "Taken", tone: "destructive" })).dataset.tone).toBe("destructive")
+    app?.unmount()
+    document.body.replaceChildren()
+    expect((await card({ title: "Taken", tone: "danger" })).dataset.tone).toBe("destructive")
+  })
+
   it("puts a class and a test id on the card, next to its own class", async () => {
     const el = await card({ title: "Save", class: "max-w-none my-tip", "data-testid": "save-tip" })
     expect(el.dataset.testid).toBe("save-tip")

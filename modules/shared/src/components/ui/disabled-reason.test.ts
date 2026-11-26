@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "./input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select"
 import { Switch, SwitchField } from "./switch"
+import { Toggle, ToggleGroup } from "./toggle"
 
 // A switched-off control that is given a `disabledReason` stays hoverable and focusable, shows the reason in the kit
 // tooltip (which is also its aria-describedby) and takes no click, press or key that would use it.
@@ -82,6 +83,47 @@ describe("disabledReason", () => {
     const button = document.querySelector("button")!
     button.click()
     expect(clicked).not.toHaveBeenCalled()
+  })
+
+  it("Toggle", async () => {
+    const pressed = ref(false)
+    mount(defineComponent({ render: () => h(Toggle, { label: "Pin", disabled: true, disabledReason: REASON, modelValue: pressed.value, "onUpdate:modelValue": (on: boolean) => (pressed.value = on) }, () => "Pin") }))
+    await behavesLikeSoftDisabled((root) => root.querySelector("button")!)
+    const button = document.querySelector("button")!
+    button.click()
+    for (const key of ["Enter", " "]) button.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }))
+    expect(pressed.value).toBe(false)
+    expect(button.getAttribute("aria-pressed")).toBe("false")
+  })
+
+  it("Toggle without a reason is a plain disabled toggle", async () => {
+    mount(defineComponent({ render: () => h(Toggle, { label: "Pin", disabled: true }, () => "Pin") }))
+    await wait(20)
+    expect(document.querySelector("button")!.disabled).toBe(true)
+  })
+
+  it("ToggleGroup option", async () => {
+    const formats = ref<string[]>([])
+    mount(
+      defineComponent({
+        render: () =>
+          h(ToggleGroup, {
+            label: "Style",
+            modelValue: formats.value,
+            "onUpdate:modelValue": (next: string[]) => (formats.value = next),
+            options: [
+              { value: "bold", label: "Bold", text: "B", testid: "bold" },
+              { value: "italic", label: "Italic", text: "I", testid: "italic", disabled: true, disabledReason: REASON },
+            ],
+          }),
+      }),
+    )
+    await behavesLikeSoftDisabled((root) => root.querySelector("[data-testid=italic]")!)
+    ;(document.querySelector("[data-testid=italic]") as HTMLElement).click()
+    expect(formats.value).toEqual([])
+    ;(document.querySelector("[data-testid=bold]") as HTMLElement).click()
+    await wait(20)
+    expect(formats.value).toEqual(["bold"])
   })
 
   it("Button with only a title stays focusable and announced as off, shows its title in the tooltip and does nothing", async () => {
