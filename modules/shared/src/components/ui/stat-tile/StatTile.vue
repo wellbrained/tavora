@@ -9,6 +9,7 @@ import { trendMark, trendWord, type TooltipTrend } from "../../tooltip/rows"
 import CountTo from "../count-to/CountTo.vue"
 import { uiLocale, uiText, writeNumber } from "../text"
 import { STAT_STRIP, type StatTileVariant } from "./context"
+import "../hover-row/hover-row.css"
 
 const props = defineProps<{
   /** A number is written in the language shown (1,240 / 1.240); text such as "3:42" shows as it is. */
@@ -29,6 +30,11 @@ const props = defineProps<{
   format?: (value: number) => string
   /** Outside a StatStrip; inside one the strip sets it. */
   variant?: StatTileVariant
+  /**
+   * Shows a card on hover or keyboard focus (bind `tip.on(card)` on the tile): it lights up like a ghost Button, takes
+   * the focus ring and is in the Tab order, but doesn't do anything on a click (the HoverRow look, inside the tile).
+   */
+  hoverable?: boolean
   class?: HTMLAttributes["class"]
 }>()
 
@@ -74,6 +80,7 @@ const tile = computed(() =>
   cn(
     "relative flex min-w-0 flex-col gap-0.5 overflow-hidden rounded-md px-3 py-2",
     variant.value === "outlined" ? "border-border bg-background border" : "bg-muted/60",
+    props.hoverable && "tavora-hover-row [--hover-row-inset:0]",
     props.class,
   ),
 )
@@ -84,7 +91,7 @@ const trendColour = computed(() => (props.trend === "better" ? "text-success" : 
 </script>
 
 <template>
-  <component :is="strip ? 'div' : 'dl'" data-slot="stat-tile" :data-variant="variant" :data-trend="trend" :class="[tile, !strip && 'm-0']">
+  <component :is="strip ? 'div' : 'dl'" data-slot="stat-tile" :data-variant="variant" :data-trend="trend" :class="[tile, !strip && 'm-0']" :tabindex="hoverable ? 0 : undefined">
     <dt class="text-muted-foreground order-2 truncate text-xs">{{ label }}</dt>
     <dd
       ref="valueBox"

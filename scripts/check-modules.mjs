@@ -31,7 +31,7 @@ export const RULES = {
   "z-index": "No z-index of your own: use the kit's layers, z-(--layer-lift|sticky|overlay|floating), or -1 for a decoration behind its box.",
   shadow: "No shadow of your own: areas separate by a surface step and border-border.",
   "all-caps": "Write it in sentence case; no all caps.",
-  "focus-ring": "Keep the kit's focus ring; never remove it or draw your own.",
+  "focus-ring": "Keep the kit's focus ring; never remove it or draw your own. A row that only shows a card on hover or focus: HoverRow (or StatTile hoverable).",
   "menu-anchor": "Pass the element as anchor: ui.showMenu({ anchor: element }), never the pointer position.",
   "file-save": "Save through files.saveJson or pictures.save (Tavora's save dialog), not a browser download.",
   "window-keys": "Listen for keys with usePaneKeys(root, handler) or on your own element (a ref), not the whole window: the component may be shown twice.",

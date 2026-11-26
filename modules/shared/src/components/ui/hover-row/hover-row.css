@@ -1,0 +1,26 @@
+/* A row or cell that shows a card on hover or keyboard focus but does nothing on a click (HoverRow, StatTile hoverable).
+   The hover fill is a ghost Button's, drawn on a layer of its own that reaches a little past the content
+   (--hover-row-inset), so the row neither moves nor grows. A keyboard focus gives it the kit's ring. */
+.tavora-hover-row {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--radius-md);
+  outline: none;
+  cursor: default;
+}
+.tavora-hover-row::before {
+  content: "";
+  position: absolute;
+  inset: var(--hover-row-inset, -4px -6px);
+  z-index: -1;
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration-press) var(--ease-out-strong);
+  pointer-events: none;
+}
+.tavora-hover-row:hover::before,
+.tavora-hover-row:focus-visible::before {
+  background: color-mix(in srgb, var(--foreground) 10%, var(--accent));
+}
+.tavora-hover-row:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
+}

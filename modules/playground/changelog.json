@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.98",
+    "date": "2026-11-26",
+    "notes": [
+      "A new tooltip example: rows and tiles that show a card when you point at them."
+    ]
+  },
+  {
     "version": "0.1.97",
     "date": "2026-11-26",
     "notes": [

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.69",
+    "date": "2026-11-26",
+    "notes": [
+      "New hover rows in the shared controls."
+    ]
+  },
+  {
     "version": "0.3.68",
     "date": "2026-11-26",
     "notes": [
