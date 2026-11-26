@@ -4,7 +4,7 @@
 import { ArrowLeft } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { CheckboxField } from "@tavora/official-ui/components/ui/checkbox-field";
 import { useTask } from "@tavora/official-ui/use-task";
 import { act, state } from "../../host";
 import { t } from "../../i18n";
@@ -67,11 +67,15 @@ async function create() {
 
     <ul class="grid w-full grid-cols-2 gap-2 text-left max-[760px]:grid-cols-1 max-[760px]:gap-1.5" :aria-label="t('onboarding.personal.panels')">
       <li v-for="module in offered" :key="module.id" class="bg-card rounded-lg border">
-        <label class="flex cursor-pointer items-center gap-3 px-3 py-2.5">
-          <Checkbox :model-value="ticked.has(module.id)" :data-testid="`onboarding-panel-${module.id}`" @update:model-value="(on: boolean | 'indeterminate') => toggle(module.id, on)" />
-          <ModuleIcon :module-id="module.id" size="size-5" />
-          <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ module.name }}</span>
-        </label>
+        <CheckboxField
+          :model-value="ticked.has(module.id)"
+          :label="module.name"
+          class="h-auto gap-3 rounded-lg px-3 py-2.5 font-medium"
+          :data-testid="`onboarding-panel-${module.id}`"
+          @update:model-value="(on: boolean | 'indeterminate') => toggle(module.id, on)"
+        >
+          <template #leading><ModuleIcon :module-id="module.id" size="size-5" /></template>
+        </CheckboxField>
       </li>
     </ul>
     <p v-if="error" class="text-destructive mt-2 text-sm" role="alert" data-testid="onboarding-error">{{ error }}</p>

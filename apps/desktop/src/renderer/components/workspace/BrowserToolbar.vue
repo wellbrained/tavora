@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, ExternalLink, Minimize2, Plus, RotateCw, ShieldC
 import { computed, onMounted, ref, watch } from "vue";
 import type { BrowserCommand, BrowserState } from "../../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { act, addressFocus, showToast } from "../../host";
 import { t } from "../../i18n";
@@ -144,12 +145,12 @@ function toggleAdblock() {
       <VolumeX v-if="browser.muted" />
       <Volume2 v-else />
     </Button>
-    <Button
+    <Toggle
       variant="ghost"
-      size="icon-sm"
-      :class="cn(browser.adblock ? 'text-success' : 'text-muted-foreground', 'relative')"
-      :aria-label="browser.adblock ? t('browser.adblockOn', { site: browser.site ?? t('browser.thisSite') }) : t('browser.adblockOff', { site: browser.site ?? t('browser.thisSite') })"
-      :aria-pressed="browser.adblock"
+      size="sm"
+      class="data-[state=on]:bg-success/15 data-[state=on]:text-success data-[state=on]:hover:bg-success/20 data-[state=on]:hover:text-success relative"
+      :label="browser.adblock ? t('browser.adblockOn', { site: browser.site ?? t('browser.thisSite') }) : t('browser.adblockOff', { site: browser.site ?? t('browser.thisSite') })"
+      :model-value="browser.adblock"
       :title="
         browser.adblock
           ? t('browser.adblockOnTitle', { blocked: browser.blocked, site: browser.site ?? t('browser.thisSite') })
@@ -158,17 +159,16 @@ function toggleAdblock() {
       :disabled="siteButtonsOff"
       data-testid="browser-adblock"
       :data-blocked="browser.blocked"
-      @click="toggleAdblock"
+      @update:model-value="toggleAdblock"
     >
       <ShieldCheck v-if="browser.adblock" />
       <ShieldOff v-else />
-    </Button>
-    <Button
+    </Toggle>
+    <Toggle
       variant="ghost"
-      size="icon-sm"
-      :class="browser.shared ? 'text-primary' : 'text-muted-foreground'"
-      :aria-label="t('browser.sharedLabel', { site: browser.site ?? t('browser.thisSite') })"
-      :aria-pressed="browser.shared"
+      size="sm"
+      :label="t('browser.sharedLabel', { site: browser.site ?? t('browser.thisSite') })"
+      :model-value="browser.shared"
       :title="
         browser.shared
           ? t('browser.sharedOnTitle', { site: browser.site ?? t('browser.thisSite') })
@@ -176,10 +176,10 @@ function toggleAdblock() {
       "
       :disabled="siteButtonsOff"
       data-testid="browser-shared"
-      @click="toggleShared"
+      @update:model-value="toggleShared"
     >
       <Users />
-    </Button>
+    </Toggle>
     <Button variant="ghost" size="icon-sm" :aria-label="t('browser.newTab')" :title="t('browser.newTab')" :aria-keyshortcuts="keyshortcuts('browser.new-tab')" data-testid="browser-new-tab" @click="newTab">
       <Plus />
     </Button>

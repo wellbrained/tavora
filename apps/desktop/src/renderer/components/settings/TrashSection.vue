@@ -5,6 +5,7 @@ import { computed, ref, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { CheckboxField } from "@tavora/official-ui/components/ui/checkbox-field";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { act, confirmAction, state, submitAction } from "../../host";
 import { formatDate, t } from "../../i18n";
@@ -71,14 +72,13 @@ function deleteNow(workspaceId: string, name: string) {
     <p v-if="!library.trash.length" class="text-muted-foreground py-4 text-sm" data-testid="trash-empty">{{ t("settings.trash.empty") }}</p>
     <template v-else>
       <div class="bg-card sticky top-0 z-[5] -mx-5 flex min-h-12 flex-wrap items-center gap-3 border-b px-5 py-2">
-        <label class="flex flex-1 cursor-pointer items-center gap-3">
-          <Checkbox
-            :model-value="trashAll ? true : trashTicked.size > 0 ? 'indeterminate' : false"
-            data-testid="trash-select-all"
-            @update:model-value="tickAllTrash($event === true)"
-          />
-          <span>{{ t("settings.trash.selectAll") }}</span>
-        </label>
+        <CheckboxField
+          :model-value="trashAll ? true : trashTicked.size > 0 ? 'indeterminate' : false"
+          :label="t('settings.trash.selectAll')"
+          class="w-auto flex-1 px-0 text-base"
+          data-testid="trash-select-all"
+          @update:model-value="tickAllTrash($event === true)"
+        />
         <span class="text-muted-foreground text-sm tabular-nums">{{ t("settings.workspaces.selected", { count: trashTicked.size }) }}</span>
         <Button variant="secondary" :disabled="!trashTicked.size" data-testid="trash-restore-selected" @click="restoreTicked">
           <Undo2 />{{ t("settings.trash.restoreSelected") }}

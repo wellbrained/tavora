@@ -8,6 +8,7 @@ import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-co
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Field } from "@tavora/official-ui/components/ui/field";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
 import type { AiProvider, AiUsageAccount } from "../../../shared/host-api";
 import { act, aiUsage, confirmAction, submitAction } from "../../host";
 import { t } from "../../i18n";
@@ -69,14 +70,14 @@ function removeAccount(account: AiUsageAccount) {
 <template>
   <ul class="flex flex-col" data-testid="ai-usage-accounts">
     <li v-for="account in accounts" :key="account.id" class="border-b border-dashed py-2 last:border-b-0" :data-testid="`ai-usage-row-${account.id}`">
-      <div v-if="editing !== account.id" class="flex items-center gap-3">
-        <div class="flex min-w-0 flex-1 flex-col">
-          <span class="truncate font-medium">{{ account.label }} <span class="text-muted-foreground font-normal">· {{ t(`aiUsage.provider.${account.provider}`) }}<template v-if="account.plan"> · {{ account.plan }}</template></span></span>
-          <span class="text-muted-foreground truncate font-mono text-xs" :title="account.directory">{{ account.directory }}</span>
-        </div>
-        <Button variant="ghost" size="sm" data-testid="ai-usage-edit" @click="startEdit(account)"><Pencil />{{ t("aiUsage.settings.edit") }}</Button>
-        <Button variant="danger" size="sm" data-testid="ai-usage-remove" @click="removeAccount(account)"><Trash2 />{{ t("aiUsage.settings.remove") }}</Button>
-      </div>
+      <ListRow v-if="editing !== account.id" as="div" class="h-auto gap-3 rounded-none px-0 py-0 font-medium">
+        {{ account.label }} <span class="text-muted-foreground font-normal">· {{ t(`aiUsage.provider.${account.provider}`) }}<template v-if="account.plan"> · {{ account.plan }}</template></span>
+        <template #description><span class="font-mono" :title="account.directory">{{ account.directory }}</span></template>
+        <template #trailing>
+          <Button variant="ghost" size="sm" data-testid="ai-usage-edit" @click="startEdit(account)"><Pencil />{{ t("aiUsage.settings.edit") }}</Button>
+          <Button variant="danger" size="sm" data-testid="ai-usage-remove" @click="removeAccount(account)"><Trash2 />{{ t("aiUsage.settings.remove") }}</Button>
+        </template>
+      </ListRow>
     </li>
     <li v-if="view && accounts.length === 0 && editing !== 'new'" class="text-muted-foreground py-2 text-sm" data-testid="ai-usage-none">{{ t("aiUsage.settings.empty") }}</li>
   </ul>

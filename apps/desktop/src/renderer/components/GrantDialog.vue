@@ -13,7 +13,7 @@
 // Running while its game runs (a panel type's `withGame`, main/with-game.ts) is asked here too, with the rest.
 import { Cpu, Folder, Gamepad2, Gauge, Globe, Headphones, Monitor, Music, Radio, ShieldCheck, Trophy } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
 import { act, aiUsage, closeDialog, dialog, discord, nextUpdateAsk, openPanels, openSettings, state, stopUpdateAsks, type GrantRequest } from "../host";
 import { t } from "../i18n";
@@ -202,7 +202,7 @@ async function allow() {
       <p v-else class="bg-muted text-muted-foreground rounded-md px-3 py-2 text-sm">{{ t("grant.aiUsageNone") }}</p>
       <p class="text-muted-foreground text-sm">
         {{ t("grant.aiUsageNote") }}
-        <Button type="button" variant="link" class="text-foreground inline h-auto p-0 align-baseline font-[inherit] text-[inherit] whitespace-normal underline underline-offset-2" @click="editAccounts">{{ t("grant.aiUsageAccounts") }}</Button>
+        <TextLink wrap class="text-foreground underline underline-offset-2" @click="editAccounts">{{ t("grant.aiUsageAccounts") }}</TextLink>
       </p>
     </section>
     <section v-if="connectors.includes('system-info')" class="flex flex-col gap-2" :aria-label="t('grant.systemInfo')" data-testid="grant-system-info">

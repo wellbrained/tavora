@@ -10,6 +10,7 @@ import { computed, reactive, watch } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
 import { account, act, aiUsage, confirmAction, discord, hiddenSettingIds, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import ModuleIcon from "../ModuleIcon.vue";
@@ -136,17 +137,23 @@ function leaveBoards(module: ModuleView) {
       <template #lead><span class="module-tile size-9" aria-hidden="true"><Gamepad2 class="size-4" /></span></template>
       <p v-if="!withGame.length" class="text-muted-foreground py-3 text-sm" data-testid="with-game-users-none">{{ t("integrations.withGame.none") }}</p>
       <AnimatedList v-else tag="ul" class="flex flex-col py-2" data-testid="with-game-users">
-        <li v-for="module in withGame" :key="module.id" class="flex items-center gap-3 border-b border-dashed py-2 last:border-b-0" :data-testid="`with-game-user-${module.id}`">
-          <span class="module-tile size-8" aria-hidden="true">
-            <ModuleIcon :module-id="module.id" size="size-4" />
-          </span>
-          <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
-          <Switch
-            :model-value="module.permissions.granted.withGame === true"
-            :aria-label="t('integrations.withGame.label', { name: module.name })"
-            :data-testid="`with-game-switch-${module.id}`"
-            @update:model-value="(on: boolean) => setWithGame(module, on)"
-          />
+        <li v-for="module in withGame" :key="module.id" class="border-b border-dashed last:border-b-0" :data-testid="`with-game-user-${module.id}`">
+          <ListRow as="div" class="h-auto gap-3 rounded-none px-0 py-2 font-medium">
+            <template #leading>
+              <span class="module-tile size-8" aria-hidden="true">
+                <ModuleIcon :module-id="module.id" size="size-4" />
+              </span>
+            </template>
+            {{ module.name }}
+            <template #trailing>
+              <Switch
+                :model-value="module.permissions.granted.withGame === true"
+                :aria-label="t('integrations.withGame.label', { name: module.name })"
+                :data-testid="`with-game-switch-${module.id}`"
+                @update:model-value="(on: boolean) => setWithGame(module, on)"
+              />
+            </template>
+          </ListRow>
         </li>
       </AnimatedList>
     </SettingExpand>
@@ -249,31 +256,37 @@ function leaveBoards(module: ModuleView) {
     >
       <template #lead><span class="module-tile size-9" aria-hidden="true"><Trophy class="size-4" /></span></template>
       <AnimatedList tag="ul" class="flex flex-col py-2" data-testid="leaderboards-users">
-        <li v-for="module in boards" :key="module.id" class="flex items-center gap-3 border-b border-dashed py-2 last:border-b-0" :data-testid="`leaderboards-user-${module.id}`">
-          <span class="module-tile size-8" aria-hidden="true">
-            <ModuleIcon :module-id="module.id" size="size-4" />
-          </span>
-          <span class="min-w-0 flex-1 truncate font-medium">{{ module.name }}</span>
-          <Button
-            v-if="signedIn"
-            variant="outline"
-            size="sm"
-            :aria-label="t('integrations.leaderboards.leaveLabel', { name: module.name })"
-            :data-testid="`leaderboards-leave-${module.id}`"
-            @click="leaveBoards(module)"
-          >
-            {{ t("integrations.leaderboards.leave") }}
-          </Button>
-          <Button
-            v-if="boardsGranted(module)"
-            variant="danger"
-            size="sm"
-            :aria-label="t('integrations.leaderboards.revokeLabel', { name: module.name })"
-            :data-testid="`leaderboards-revoke-${module.id}`"
-            @click="revokeModule(module, 'integrations.leaderboards.revokeUnused')"
-          >
-            {{ t("integrations.grants.revoke") }}
-          </Button>
+        <li v-for="module in boards" :key="module.id" class="border-b border-dashed last:border-b-0" :data-testid="`leaderboards-user-${module.id}`">
+          <ListRow as="div" class="h-auto gap-3 rounded-none px-0 py-2 font-medium">
+            <template #leading>
+              <span class="module-tile size-8" aria-hidden="true">
+                <ModuleIcon :module-id="module.id" size="size-4" />
+              </span>
+            </template>
+            {{ module.name }}
+            <template #trailing>
+              <Button
+                v-if="signedIn"
+                variant="outline"
+                size="sm"
+                :aria-label="t('integrations.leaderboards.leaveLabel', { name: module.name })"
+                :data-testid="`leaderboards-leave-${module.id}`"
+                @click="leaveBoards(module)"
+              >
+                {{ t("integrations.leaderboards.leave") }}
+              </Button>
+              <Button
+                v-if="boardsGranted(module)"
+                variant="danger"
+                size="sm"
+                :aria-label="t('integrations.leaderboards.revokeLabel', { name: module.name })"
+                :data-testid="`leaderboards-revoke-${module.id}`"
+                @click="revokeModule(module, 'integrations.leaderboards.revokeUnused')"
+              >
+                {{ t("integrations.grants.revoke") }}
+              </Button>
+            </template>
+          </ListRow>
         </li>
       </AnimatedList>
     </SettingExpand>

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // Change on the profile banner: a small panel beside it with every banner as a thumbnail, by name. A pick applies at
 // once and stays on this PC. Your picture shows only while there is a picture.
-import { Check, Pencil } from "@lucide/vue";
+import { Pencil } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Popover, PopoverContent, PopoverTrigger } from "@tavora/official-ui/components/ui/popover";
-import { cn } from "@tavora/official-ui/lib/utils";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { StyleTiles } from "@tavora/official-ui/components/ui/style-tiles";
 import type { MessageKey } from "../../../shared/i18n";
 import { PROFILE_BANNERS, type ProfileBanner as BannerId } from "../../../shared/profile-banner";
 import { act } from "../../host";
@@ -23,40 +24,22 @@ function pick(id: BannerId) {
 <template>
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
-      <button
-        type="button"
-        class="focus-visible:outline-ring absolute top-2 right-2 flex items-center gap-1.5 rounded-md bg-black/45 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur-sm transition-colors outline-none hover:bg-black/60 focus-visible:outline-solid focus-visible:outline-2"
-        data-testid="profile-banner-change"
-      >
+      <Button variant="ghost" size="xs" class="absolute top-2 right-2 bg-black/45 text-white/90 backdrop-blur-sm hover:bg-black/60 hover:text-white/90" data-testid="profile-banner-change">
         <Pencil class="size-3" aria-hidden="true" />
         {{ t("profile.banner.change") }}
-      </button>
+      </Button>
     </PopoverTrigger>
     <PopoverContent side="right" align="start" :side-offset="8" class="w-[26rem] p-3" :aria-label="t('profile.banner.title')" data-testid="profile-banners">
       <p class="text-muted-foreground mb-2 px-1 text-xs font-semibold tracking-wider uppercase">{{ t("profile.banner.title") }}</p>
-      <div class="grid grid-cols-3 gap-2" role="radiogroup" :aria-label="t('profile.banner.title')">
-        <button
-          v-for="id in choices"
-          :key="id"
-          type="button"
-          role="radio"
-          :aria-checked="id === banner"
-          :class="
-            cn(
-              'group focus-visible:outline-ring flex flex-col gap-1 rounded-lg p-1 text-left outline-none focus-visible:outline-solid focus-visible:outline-2',
-              id === banner ? 'bg-primary/15' : 'hover:bg-accent',
-            )
-          "
-          :data-testid="`profile-banner-${id}`"
-          @click="pick(id)"
-        >
-          <span :class="cn('relative block h-11 overflow-hidden rounded-md border', id === banner && 'border-primary')">
-            <ProfileBanner :banner="id" :picture-url="pictureUrl" />
-            <Check v-if="id === banner" class="bg-primary-fill text-primary-fill-foreground absolute top-1 right-1 size-4 rounded-full p-0.5 stroke-2" aria-hidden="true" />
-          </span>
-          <span :class="cn('truncate px-0.5 text-xs', id === banner ? 'text-foreground font-medium' : 'text-muted-foreground')">{{ t(`profile.banner.${id}` as MessageKey) }}</span>
-        </button>
-      </div>
+      <StyleTiles
+        :model-value="banner"
+        :options="choices.map((id) => ({ value: id, label: t(`profile.banner.${id}` as MessageKey), testid: `profile-banner-${id}` }))"
+        :label="t('profile.banner.title')"
+        class="grid-cols-3"
+        @update:model-value="pick"
+      >
+        <template #tile="{ option }"><ProfileBanner :banner="option.value" :picture-url="pictureUrl" /></template>
+      </StyleTiles>
     </PopoverContent>
   </Popover>
 </template>

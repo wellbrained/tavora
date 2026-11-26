@@ -994,7 +994,7 @@ test("A frame has a right-click menu next to it: arrange, align, lock, a customi
     await layer.mouse.click(...(await centre(frame(first!.id))), { button: "right" });
     await layer.getByTestId("layout-menu-customize").click();
     await expect(customize).toBeVisible();
-    await expect(layer.getByTestId("layout-customize-lock")).toHaveAttribute("aria-checked", "true");
+    await expect(layer.getByTestId("layout-customize-lock").getByRole("checkbox")).toBeChecked();
     await layer.getByTestId("layout-customize-default").click();
     await expect.poll(async () => (await state(page)).toolbar.buttons).toEqual(["settings", "hide", "reset", "reset-size", "remove"]);
     await expect(bar.getByRole("button")).toHaveCount(5);

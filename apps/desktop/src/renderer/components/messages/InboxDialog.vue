@@ -6,6 +6,8 @@ import { X } from "@lucide/vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
 import { groupConversations, type ConversationItem } from "../../../shared/conversations";
 import { inbox, inboxOpen } from "../../host";
 import { t } from "../../i18n";
@@ -54,7 +56,7 @@ function itemTitle(item: ConversationItem): string {
         <div class="min-w-0 flex-1">
           <DialogTitle class="text-lg font-semibold">{{ t("inbox.title") }}</DialogTitle>
           <DialogDescription class="text-muted-foreground text-sm">
-            <Button variant="link" size="sm" class="h-auto p-0 text-sm" :aria-expanded="why" data-testid="inbox-why-toggle" @click="why = !why">{{ t("inbox.why") }}</Button>
+            <TextLink class="text-primary text-sm" :aria-expanded="why" data-testid="inbox-why-toggle" @click="why = !why">{{ t("inbox.why") }}</TextLink>
           </DialogDescription>
           <div v-if="why" class="text-muted-foreground mt-2 max-w-prose space-y-2 text-sm" data-testid="inbox-why">
             <NoteText v-if="inbox.why" :paragraphs="inbox.why" />
@@ -71,16 +73,18 @@ function itemTitle(item: ConversationItem): string {
             <h3 class="text-muted-foreground px-4 py-1 text-xs font-semibold tracking-wider uppercase">{{ heading(group) }}</h3>
             <ul>
               <li v-for="item in group.items" :key="item.id">
-                <button type="button" class="hover:bg-muted/60 focus-visible:ring-ring flex w-full flex-col gap-1 px-4 py-2 text-left outline-none focus-visible:ring-2" :class="item.id === selected && 'bg-muted'" :aria-current="item.id === selected || undefined" :data-testid="`inbox-item-${item.id}`" @click="selected = item.id">
+                <ListRow wrap :selected="item.id === selected" class="h-auto rounded-none px-4 py-2" :data-testid="`inbox-item-${item.id}`" @click="selected = item.id">
                   <span class="flex items-center gap-2">
-                    <span class="truncate text-sm" :class="item.unread && 'font-semibold'">{{ itemTitle(item) }}</span>
+                    <span :class="item.unread && 'font-semibold'">{{ itemTitle(item) }}</span>
                     <span v-if="item.unread" class="bg-primary size-2 flex-none rounded-full" :aria-label="t('inbox.unread')" />
                   </span>
-                  <span class="flex flex-wrap gap-1.5">
-                    <Badge v-if="item.type" variant="secondary">{{ t(`contact.type.${item.type}`) }}</Badge>
-                    <Badge :variant="item.state === 'open' ? 'success' : 'outline'">{{ stateLabel(item) }}</Badge>
-                  </span>
-                </button>
+                  <template #description>
+                    <span class="flex flex-wrap gap-1.5">
+                      <Badge v-if="item.type" variant="secondary">{{ t(`contact.type.${item.type}`) }}</Badge>
+                      <Badge :variant="item.state === 'open' ? 'success' : 'outline'">{{ stateLabel(item) }}</Badge>
+                    </span>
+                  </template>
+                </ListRow>
               </li>
             </ul>
           </section>

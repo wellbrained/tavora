@@ -12,6 +12,8 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { usePageMotion } from "@tavora/official-ui/components/ui/motion";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import { rank } from "@/lib/search";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { act, hiddenSettingIds, hiddenSettings, makesModules, openSettings, refreshReleaseStatuses, releasePendingCount, settingsOpen, settingsTarget, state } from "../../host";
@@ -251,26 +253,17 @@ function onSearchKey(event: KeyboardEvent) {
         />
         <!-- Updates & About, with the version: rarely needed, so it sits at the foot. As wide as a plate, border included;
              px-4 + its 1px border = a plate row (1px border + p-1 + px-3), so icon, text and version line up with the plates. -->
-        <button
-          type="button"
-          :class="
-            cn(
-              'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring mt-auto flex h-9 flex-none items-center gap-3 rounded-xl border border-transparent px-4 text-left text-sm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2',
-              !query && entry === 'about' && 'bg-primary/10 text-foreground',
-            )
-          "
-          :aria-current="!query && entry === 'about' ? 'page' : undefined"
+        <ListRow
+          :selected="!query && entry === 'about'"
+          :class="cn('text-muted-foreground hover:text-foreground mt-auto h-9 flex-none gap-3 rounded-xl border border-transparent px-4', !query && entry === 'about' && 'text-foreground')"
           :aria-label="`${t('settings.section.about')}, Tavora ${version}`"
           data-testid="settings-nav-about"
           @click="show('about')"
         >
-          <Info class="size-4 flex-none" aria-hidden="true" />
-          <!-- The name and the smaller version share one baseline, so they read as one line. -->
-          <span class="flex min-w-0 flex-1 items-baseline gap-3">
-            <span class="min-w-0 flex-1 truncate">{{ t("settings.section.about") }}</span>
-            <span class="text-xs tabular-nums" data-testid="settings-version">{{ version }}</span>
-          </span>
-        </button>
+          <template #leading><Info class="size-4 flex-none" aria-hidden="true" /></template>
+          {{ t("settings.section.about") }}
+          <template #trailing><span class="tabular-nums" data-testid="settings-version">{{ version }}</span></template>
+        </ListRow>
       </div>
 
       <div class="flex min-w-0 flex-1 flex-col">
@@ -285,9 +278,9 @@ function onSearchKey(event: KeyboardEvent) {
             <DialogTitle class="text-muted-foreground flex-none text-base font-medium">{{ t("settings.title") }}</DialogTitle>
             <span class="text-muted-foreground/60 flex-none" aria-hidden="true">/</span>
             <template v-if="parent && !query.trim()">
-              <button type="button" class="text-muted-foreground hover:text-foreground flex-none rounded-md font-medium" data-testid="settings-back" @click="show(parent)">
+              <TextLink class="text-muted-foreground hover:text-foreground flex-none font-medium" data-testid="settings-back" @click="show(parent)">
                 {{ menuLabel(parent) }}
-              </button>
+              </TextLink>
               <span class="text-muted-foreground/60 flex-none" aria-hidden="true">/</span>
             </template>
             <h2 class="truncate font-semibold" data-testid="settings-heading">{{ pageTitle }}</h2>
@@ -308,16 +301,11 @@ function onSearchKey(event: KeyboardEvent) {
               <p v-if="!results.length" class="text-muted-foreground" data-testid="settings-no-results">{{ t("settings.results.none", { query: query.trim() }) }}</p>
               <ul v-else class="-mx-3 flex flex-col gap-1" :aria-label="t('settings.results.title')" data-testid="settings-results">
                 <li v-for="result in results" :key="result.id">
-                  <button
-                    type="button"
-                    class="hover:bg-accent focus-visible:bg-accent flex w-full flex-col gap-1 rounded-lg px-3 py-3 text-left"
-                    :data-testid="`settings-result-${result.id}`"
-                    @click="open(result)"
-                  >
-                    <span class="text-primary text-xs font-medium">{{ placeLabel(result.section) }}</span>
+                  <ListRow wrap class="h-auto items-start rounded-lg px-3 py-3" :data-testid="`settings-result-${result.id}`" @click="open(result)">
+                    <span class="text-primary block pb-1 text-xs font-medium">{{ placeLabel(result.section) }}</span>
                     <span class="font-medium">{{ result.label }}</span>
-                    <span class="text-muted-foreground text-sm">{{ result.description }}</span>
-                  </button>
+                    <template #description><span class="text-sm">{{ result.description }}</span></template>
+                  </ListRow>
                 </li>
               </ul>
             </template>

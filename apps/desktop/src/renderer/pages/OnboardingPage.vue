@@ -11,6 +11,7 @@ import OnboardingChoice, { type FirstChoice } from "../components/onboarding/Onb
 import OnboardingGame, { type StartedGame } from "../components/onboarding/OnboardingGame.vue";
 import OnboardingMap from "../components/onboarding/OnboardingMap.vue";
 import OnboardingPersonal, { type StartedPersonal } from "../components/onboarding/OnboardingPersonal.vue";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 
 /** `dry`: the welcome is only tried (dev build): every action is pretended and nothing is written. */
 const props = defineProps<{ dry?: boolean }>();
@@ -98,14 +99,9 @@ watch(profileOpen, (open) => {
   <main class="relative flex h-full flex-col items-center overflow-y-auto px-8 py-8 max-[760px]:px-4 [@media(max-height:640px)]:pt-10 [@media(max-height:640px)]:pb-4" data-testid="onboarding" :data-status="phase">
     <p v-if="dry" class="bg-warning/15 text-warning absolute top-4 left-6 rounded-md px-2 py-1 text-xs" data-testid="onboarding-dry">{{ t("onboarding.dry") }}</p>
     <!-- Skips the whole welcome. -->
-    <button
-      type="button"
-      class="text-muted-foreground hover:text-foreground app-no-drag absolute top-4 right-6 z-10 rounded-md px-2 py-1 text-sm"
-      data-testid="onboarding-skip"
-      @click="finish"
-    >
+    <TextLink class="text-muted-foreground hover:text-foreground app-no-drag absolute top-4 right-6 z-10 px-2 py-1 text-sm" data-testid="onboarding-skip" @click="finish">
       {{ t("onboarding.skip") }}
-    </button>
+    </TextLink>
 
     <!-- Centred in the window; the step area keeps one height, so the dots and titles don't jump between steps. A
          taller step pushes it to the top and scrolls. -->

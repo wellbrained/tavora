@@ -18,6 +18,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { ProgressButton } from "@tavora/official-ui/components/ui/progress-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { act, confirmAction, dialog, workspacesUsing, listOf, settingsOpen, showToast, state, submitAction } from "../../host";
 import { problemText } from "../../../shared/module-problem";
@@ -337,21 +338,18 @@ function remove(module: ModuleView) {
       testid="leftover-data"
     >
       <AnimatedList tag="ul" class="flex flex-col" :aria-label="t('settings.modules.leftover')">
-        <li
-          v-for="entry in leftover"
-          :key="`${entry.owner}/${entry.moduleId}`"
-          class="flex items-center gap-4 border-b border-dashed py-2 last:border-b-0"
-          :data-testid="`leftover-${entry.owner}-${entry.moduleId}`"
-        >
-          <span class="flex min-w-0 flex-1 items-center gap-2">
-            <span class="truncate font-mono text-sm">{{ entry.moduleId }}</span>
-            <Badge variant="outline" :class="cn('text-muted-foreground py-0 font-normal', entry.publisher && 'font-mono')" :title="entry.publisher ? t('settings.modules.publisherHint', { key: entry.publisher }) : undefined">
+        <li v-for="entry in leftover" :key="`${entry.owner}/${entry.moduleId}`" class="border-b border-dashed last:border-b-0" :data-testid="`leftover-${entry.owner}-${entry.moduleId}`">
+          <ListRow as="div" class="h-auto gap-4 rounded-none px-0 py-2">
+            <span class="font-mono text-sm">{{ entry.moduleId }}</span>
+            <Badge variant="outline" :class="cn('text-muted-foreground ml-2 py-0 font-normal', entry.publisher && 'font-mono')" :title="entry.publisher ? t('settings.modules.publisherHint', { key: entry.publisher }) : undefined">
               {{ entry.publisher ? t("settings.modules.publisher", { short: entry.publisher.slice(0, 8) }) : t(`settings.modules.leftoverOwner.${entry.owner as "local" | "official"}`) }}
             </Badge>
-          </span>
-          <Button variant="danger" size="sm" :aria-label="t('settings.modules.deleteDataLabel', { id: entry.moduleId })" :data-testid="`delete-data-${entry.owner}-${entry.moduleId}`" @click="deleteData(entry)">
-            <Trash2 /> {{ t("settings.modules.deleteData") }}
-          </Button>
+            <template #trailing>
+              <Button variant="danger" size="sm" :aria-label="t('settings.modules.deleteDataLabel', { id: entry.moduleId })" :data-testid="`delete-data-${entry.owner}-${entry.moduleId}`" @click="deleteData(entry)">
+                <Trash2 /> {{ t("settings.modules.deleteData") }}
+              </Button>
+            </template>
+          </ListRow>
         </li>
       </AnimatedList>
     </SettingExpand>

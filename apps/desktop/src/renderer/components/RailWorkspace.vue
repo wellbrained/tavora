@@ -7,6 +7,7 @@ import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import WorkspaceIcon from "./WorkspaceIcon.vue";
 import MenuArea from "./menus/MenuArea.vue";
 import RailTooltip from "./RailTooltip.vue";
+import RailButton from "./RailButton.vue";
 
 const props = defineProps<{
   workspace: WorkspaceView;
@@ -42,8 +43,7 @@ defineOptions({ inheritAttrs: false });
       <span v-if="nested && expanded" class="bg-border absolute top-1/2 left-0 h-px w-1.5" aria-hidden="true" />
       <!-- The menu opens on right-click or the menu key; the row stays lit while it is open. -->
       <RailTooltip :text="workspace.name" :disabled="expanded">
-      <button
-        type="button"
+      <RailButton
         :class="
           cn(
             'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left',
@@ -61,7 +61,7 @@ defineOptions({ inheritAttrs: false });
         <span class="rail-icon flex flex-none" :style="{ borderRadius: `${Math.round(size / 5)}px` }"><WorkspaceIcon :workspace="workspace" :size="size" /></span>
         <span v-if="expanded" :class="cn('truncate font-medium', nested ? 'text-sm' : 'text-base')">{{ workspace.name }}</span>
         <Kbd v-if="shortcut" class="text-primary ml-auto flex-none" :data-testid="`${testid}-shortcut`">{{ shortcut }}</Kbd>
-      </button>
+      </RailButton>
       </RailTooltip>
     </div>
   </MenuArea>

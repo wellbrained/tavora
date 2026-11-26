@@ -5,6 +5,7 @@
 import { Plus, Search } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import WorkspaceIcon from "../components/WorkspaceIcon.vue";
 import { act, dialog, inbox, openInbox, openSearch, openSettings, state } from "../host";
@@ -169,29 +170,24 @@ const away = computed<AwayItem[]>(() => {
           <h2 id="recent-title" class="text-muted-foreground mb-3 text-xs font-medium tracking-wide uppercase">{{ t("welcome.recent") }}</h2>
           <ul class="grid grid-cols-[repeat(auto-fill,minmax(124px,1fr))] gap-3">
             <li v-for="workspace in recent" :key="workspace.id">
-              <button
-                type="button"
-                class="hover:bg-card flex w-full flex-col items-center gap-2 rounded-lg px-1.5 py-3"
+              <Button
+                variant="ghost"
+                class="hover:bg-card h-auto w-full flex-col gap-2 rounded-lg px-1.5 py-3"
                 :data-testid="`recent-${workspace.id}`"
                 @click="act({ type: 'open-workspace', workspaceId: workspace.id })"
               >
                 <WorkspaceIcon :workspace="workspace" :size="72" />
                 <span class="max-w-full truncate text-sm font-medium">{{ workspace.name }}</span>
-                <span class="text-muted-foreground max-w-full truncate text-xs">{{ ago(workspace.lastOpenedAt) }}</span>
-              </button>
+                <span class="text-muted-foreground max-w-full truncate text-xs font-normal">{{ ago(workspace.lastOpenedAt) }}</span>
+              </Button>
             </li>
             <li>
-              <button
-                type="button"
-                class="hover:bg-card flex w-full flex-col items-center gap-2 rounded-lg px-1.5 py-3"
-                data-testid="welcome-add-game"
-                @click="dialog = { kind: 'add-game' }"
-              >
+              <Button variant="ghost" class="hover:bg-card h-auto w-full flex-col gap-2 rounded-lg px-1.5 py-3" data-testid="welcome-add-game" @click="dialog = { kind: 'add-game' }">
                 <span class="border-input text-muted-foreground grid size-18 place-items-center rounded-2xl border border-dashed">
                   <Plus class="size-6" />
                 </span>
-                <span class="text-muted-foreground text-sm">{{ t("common.addGame") }}</span>
-              </button>
+                <span class="text-muted-foreground text-sm font-normal">{{ t("common.addGame") }}</span>
+              </Button>
             </li>
           </ul>
         </section>
@@ -211,7 +207,7 @@ const away = computed<AwayItem[]>(() => {
           <div class="min-w-0">
             <p class="font-semibold">{{ item.title }}</p>
             <p class="text-muted-foreground mt-0.5 text-xs">{{ item.text }}</p>
-            <Button v-if="item.action" variant="link" class="mt-1 h-auto p-0 text-xs font-semibold" @click="item.run()">{{ item.action }}</Button>
+            <TextLink v-if="item.action" class="text-primary mt-1 text-xs font-semibold" @click="item.run()">{{ item.action }}</TextLink>
           </div>
         </div>
         <p v-if="!away.length" class="text-muted-foreground text-xs" data-testid="welcome-away-quiet">{{ t("welcome.away.quiet") }}</p>

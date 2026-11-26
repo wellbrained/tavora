@@ -14,11 +14,13 @@ import { formatSize } from "../catalog-size";
 import { PLACEHOLDER_README } from "../catalog-placeholder";
 import { act, api, closeDialog, dialog, state } from "../host";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import { useTask } from "@tavora/official-ui/use-task";
 import { FadeImage } from "@tavora/official-ui/components/ui/fade-image";
 import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { ProgressButton, type ProgressButtonStatus } from "@tavora/official-ui/components/ui/progress-button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import { formatDate, t } from "../i18n";
 import { folderLabel, foldersOf } from "../folder-label";
 import { ArrowUpRight, X } from "@lucide/vue";
@@ -175,12 +177,12 @@ async function openHomepage() {
                 class="aspect-video min-w-0 max-w-[560px] flex-1 rounded-lg border" draggable="false" data-testid="catalog-info-screenshot"
               />
               <div v-if="shotCount > 1" class="flex flex-none flex-col gap-2">
-                <button v-for="(shot, index) in thumbs" :key="index" type="button"
-                  class="focus-visible:ring-ring h-14 w-24 overflow-hidden rounded-md border-2 outline-none focus-visible:ring-2"
-                  :class="index === shown ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'"
-                  :aria-label="t('catalog.screenshot', { number: index + 1, count: shotCount })" :aria-pressed="index === shown"
-                  @click="shown = index"
-                ><FadeImage :src="shot" :pending="!page" alt="" class="size-full rounded-sm" draggable="false" /></button>
+                <Toggle v-for="(shot, index) in thumbs" :key="index" variant="ghost"
+                  class="h-14 w-24 min-w-0 overflow-hidden rounded-md border-2 p-0 data-[state=on]:bg-transparent"
+                  :class="index === shown ? 'border-primary data-[state=on]:border-primary' : 'border-transparent opacity-70 hover:opacity-100'"
+                  :label="t('catalog.screenshot', { number: index + 1, count: shotCount })" :model-value="index === shown"
+                  @update:model-value="shown = index"
+                ><FadeImage :src="shot" :pending="!page" alt="" class="size-full rounded-sm" draggable="false" /></Toggle>
               </div>
             </Skeleton>
           </template>
@@ -231,9 +233,9 @@ async function openHomepage() {
                   <dd class="truncate" :title="module.owner">{{ module.publisher }}</dd>
                 </template>
               </dl>
-              <Button v-if="module.homepage" variant="link" class="mt-2 h-auto max-w-full justify-start gap-1.5 p-0" :disabled="opening" :title="module.homepage"
+              <TextLink v-if="module.homepage" class="text-primary mt-2 flex-row-reverse justify-end" :disabled="opening" :title="module.homepage"
                 :aria-label="t('catalog.homepageLabel', { name: module.name })" data-testid="catalog-info-homepage" @click="openHomepage"
-              ><span class="truncate">{{ homepageText }}</span><ArrowUpRight class="size-4 flex-none" /></Button>
+              ><template #icon><ArrowUpRight /></template>{{ homepageText }}</TextLink>
             </section>
 
             <section data-testid="catalog-info-access">

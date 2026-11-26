@@ -8,8 +8,8 @@ import { ArrowLeft, Check, Search } from "@lucide/vue";
 import { computed, onMounted, ref, type ComponentPublicInstance } from "vue";
 import type { CatalogMatch, CatalogModuleView } from "../../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { CheckboxField } from "@tavora/official-ui/components/ui/checkbox-field";
 import { useTask } from "@tavora/official-ui/use-task";
 import type { AddInput } from "../../lib/game-picker";
 import { useGamePicker } from "../../lib/use-game-picker";
@@ -213,15 +213,17 @@ function notNow() {
         <p class="text-muted-foreground mt-2 mb-5" data-testid="onboarding-offer-sub">{{ t("onboarding.offer.sub", { game: game?.name ?? "", names: listOf(offer.map((module) => module.name)) }) }}</p>
         <ul class="flex w-full flex-col gap-2 text-left" data-testid="onboarding-offer">
           <li v-for="module in offer" :key="module.id" class="bg-card rounded-lg border">
-            <label class="flex cursor-pointer items-center gap-3 p-3">
-              <Checkbox :model-value="ticked.has(module.id)" :data-testid="`onboarding-offer-${module.id}`" @update:model-value="(on: boolean | 'indeterminate') => toggle(module.id, on)" />
-              <CatalogIcon :module-id="module.id" :has="module.icon" size="size-9" />
-              <span class="flex min-w-0 flex-1 flex-col">
-                <span class="truncate font-medium">{{ module.name }}</span>
-                <span v-if="module.description" class="text-muted-foreground truncate text-sm">{{ module.description }}</span>
-                <span v-if="failed[module.id]" class="text-destructive text-sm" role="alert">{{ failed[module.id] }}</span>
-              </span>
-            </label>
+            <CheckboxField
+              :model-value="ticked.has(module.id)"
+              :label="module.name"
+              :description="module.description ?? undefined"
+              class="h-auto gap-3 rounded-lg p-3 text-base font-medium"
+              :data-testid="`onboarding-offer-${module.id}`"
+              @update:model-value="(on: boolean | 'indeterminate') => toggle(module.id, on)"
+            >
+              <template #leading><CatalogIcon :module-id="module.id" :has="module.icon" size="size-9" /></template>
+            </CheckboxField>
+            <p v-if="failed[module.id]" class="text-destructive px-3 pb-3 text-sm" role="alert">{{ failed[module.id] }}</p>
           </li>
         </ul>
         <div class="mt-6 flex items-center gap-3">

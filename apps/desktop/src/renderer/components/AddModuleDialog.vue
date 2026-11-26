@@ -21,6 +21,8 @@ import { cn } from "@tavora/official-ui/lib/utils";
 import { t } from "../i18n";
 import { Activity, Blocks, ChevronDown, CloudDownload, Code, FileArchive, Globe, LayoutGrid, NotebookPen, Search, Settings2, Upload, X } from "@lucide/vue";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import ModuleIcon from "./ModuleIcon.vue";
 import CatalogBrowse from "./CatalogBrowse.vue";
 import CatalogModuleDialog from "./CatalogModuleDialog.vue";
@@ -251,19 +253,14 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
         <!-- Community modules: the way out to the shop, right under your modules and set off by a line. A menu entry
              like the ones above (same hover, lit the same while its page is open), with three module icons fanned out. -->
         <div class="border-t pt-3 sm:mt-1">
-          <button
-            type="button"
-            :class="
-              cn(
-                'text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2',
-                view === 'catalog' && 'bg-primary/10 text-foreground hover:bg-primary/15',
-              )
-            "
-            :aria-current="view === 'catalog' ? 'page' : undefined"
+          <ListRow
+            :selected="view === 'catalog'"
+            :class="cn('text-muted-foreground hover:text-foreground h-auto gap-3 rounded-lg px-3 py-2', view === 'catalog' && 'text-foreground')"
             :title="t('addModule.about.catalog')"
             data-testid="module-tab-browse"
             @click="view = 'catalog'"
           >
+            <template #leading>
             <span class="relative hidden h-8 w-12 flex-none sm:block" aria-hidden="true" data-testid="community-tile-icons">
               <span
                 v-for="(icon, index) in TILE_ICONS"
@@ -274,29 +271,23 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                     index === 0 && 'left-0 -rotate-12',
                     index === 1 && 'left-6 rotate-12',
                     index === 2 && 'top-0.5 left-3 z-10 transition-colors',
-                    index === 2 && (view === 'catalog' ? 'border-primary/60 text-primary' : 'group-hover:border-primary/40 group-hover:text-primary/80'),
+                    index === 2 && (view === 'catalog' ? 'border-primary/60 text-primary' : 'group-hover/list-row:border-primary/40 group-hover/list-row:text-primary/80'),
                   )
                 "
               >
                 <component :is="icon" class="size-3.5" />
               </span>
             </span>
-            <span class="flex min-w-0 flex-1 flex-col">
-              <span class="truncate text-sm font-medium">{{ t("addModule.tab.browse") }}</span>
-              <span class="text-muted-foreground hidden truncate text-xs sm:block">{{ t("addModule.catalogTile") }}</span>
-            </span>
-          </button>
+            </template>
+            <span class="font-medium">{{ t("addModule.tab.browse") }}</span>
+            <template #description><span class="hidden sm:block">{{ t("addModule.catalogTile") }}</span></template>
+          </ListRow>
         </div>
         <!-- Module settings, as Settings' Updates & About: rarely needed, so it sits at the foot. -->
-        <button
-          type="button"
-          class="text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-ring flex h-9 flex-none items-center gap-3 rounded-lg px-3 text-left text-sm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 sm:mt-auto"
-          data-testid="manage-modules"
-          @click="manage"
-        >
-          <Settings2 class="size-4 flex-none" aria-hidden="true" />
-          <span class="min-w-0 flex-1 truncate">{{ t("addModule.manage") }}</span>
-        </button>
+        <ListRow class="text-muted-foreground hover:text-foreground h-9 flex-none gap-3 rounded-lg px-3 sm:mt-auto" data-testid="manage-modules" @click="manage">
+          <template #leading><Settings2 class="size-4 flex-none" aria-hidden="true" /></template>
+          {{ t("addModule.manage") }}
+        </ListRow>
       </aside>
 
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -342,9 +333,9 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                   </button>
                   <div class="min-w-0 flex-1">
                     <div class="flex min-w-0 items-center gap-2">
-                      <button type="button" class="hover:text-primary focus-visible:ring-ring truncate rounded-sm text-left font-medium outline-none focus-visible:ring-2" :title="module.name"
+                      <TextLink class="font-medium" :title="module.name"
                         :aria-label="t('catalog.infoLabel', { name: module.name })" :data-testid="`module-name-${module.id}`" @click="openInfo(module)"
-                      >{{ module.name }}</button>
+                      >{{ module.name }}</TextLink>
                       <!-- Where a copy came from, for your own modules (Catalog, From file, Local…). Official ones always sit in their own Official group, so the tag would only repeat it. -->
                       <Badge
                         v-if="group.id !== 'official'"
@@ -369,9 +360,8 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                 </div>
                 <div class="mt-auto flex items-center gap-2 pl-13">
                   <template v-if="module.panels.length > 1">
-                    <button
-                      type="button"
-                      class="text-muted-foreground hover:text-foreground min-w-0 flex-1 truncate text-left text-xs transition-colors"
+                    <TextLink
+                      class="text-muted-foreground hover:text-foreground flex-1 text-xs"
                       :aria-expanded="expanded === module.id"
                       :aria-controls="`panel-menu-${module.id}`"
                       :data-testid="`panel-count-${module.id}`"
@@ -381,7 +371,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                       <template v-if="openCount(module.id)">
                         · <span class="text-primary" :data-testid="`in-workspace-${module.id}`"><CountTo :value="openCount(module.id)" :format="(shown) => t('addModule.inWorkspace', { count: shown })" /></span>
                       </template>
-                    </button>
+                    </TextLink>
                     <ButtonGroup class="shrink-0">
                       <Button
                         size="sm"

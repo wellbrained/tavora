@@ -3,6 +3,7 @@
 // decides screen 3: a game search, or a personal space with ticked panels.
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Card } from "@tavora/official-ui/components/ui/card";
 import { ArrowLeft } from "@lucide/vue";
 import { t } from "../../i18n";
 import AppSkeleton from "./AppSkeleton.vue";
@@ -24,11 +25,11 @@ const EXAMPLES: Record<FirstChoice, string[]> = {
     <p class="text-muted-foreground mt-2 mb-6 [@media(max-height:640px)]:mb-3">{{ t("onboarding.choice.sub") }}</p>
 
     <div class="grid w-full grid-cols-2 gap-3 max-[760px]:gap-2">
-      <button
+      <Card
         v-for="kind in (['game', 'personal'] as const)"
         :key="kind"
-        type="button"
-        class="bg-card hover:border-primary/60 focus-visible:border-ring focus-visible:ring-ring/50 flex flex-col gap-3 rounded-xl border p-4 text-left transition-colors outline-none focus-visible:ring-3 max-[760px]:p-3"
+        interactive
+        class="gap-3 rounded-xl max-[760px]:p-3"
         :data-testid="`onboarding-pick-${kind}`"
         @click="$emit('pick', kind)"
       >
@@ -40,7 +41,7 @@ const EXAMPLES: Record<FirstChoice, string[]> = {
         <span class="flex flex-wrap gap-1" :aria-label="t('onboarding.choice.examples')">
           <Badge v-for="example in EXAMPLES[kind]" :key="example" variant="secondary">{{ example }}</Badge>
         </span>
-      </button>
+      </Card>
     </div>
 
     <Button variant="ghost" class="mt-5" data-testid="onboarding-back" @click="$emit('back')"><ArrowLeft /> {{ t("common.back") }}</Button>

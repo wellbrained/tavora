@@ -3,8 +3,8 @@ import { Download, Gamepad2, Search } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
-import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { CheckboxField } from "@tavora/official-ui/components/ui/checkbox-field";
 import { useTask } from "@tavora/official-ui/use-task";
 import type { SteamGameView } from "../../shared/host-api";
 import { act, api, closeDialog, dialog, showToast, state } from "../host";
@@ -105,10 +105,7 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
       <p class="text-muted-foreground text-xs leading-relaxed">
         {{ t("steamImport.profileHelp") }}
       </p>
-      <label class="flex items-center gap-2 text-sm">
-        <Checkbox v-model="remember" data-testid="steam-remember" />
-        {{ t("steamImport.remember") }}
-      </label>
+      <CheckboxField v-model="remember" :label="t('steamImport.remember')" class="-mx-2 w-auto" data-testid="steam-remember" />
       <p v-if="error" class="text-destructive text-sm" role="alert" data-testid="steam-import-error">{{ error }}</p>
     </form>
 
@@ -124,19 +121,16 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
         </div>
         <ul class="-mx-2 max-h-[300px] overflow-y-auto" :aria-label="t('steamImport.list')" data-testid="steam-list">
           <li v-for="game in shown" :key="game.appid">
-            <label
-              class="flex items-center gap-3 rounded-md px-2 py-2"
-              :class="game.status === 'new' ? 'hover:bg-accent cursor-pointer' : 'text-muted-foreground'"
+            <CheckboxField
+              :model-value="game.status === 'new' && ticked.has(game.appid)"
+              :label="game.name"
+              :disabled="busy || game.status !== 'new'"
+              class="h-auto gap-3 py-2 text-base"
+              :data-testid="`steam-game-${game.appid}`"
+              @update:model-value="(checked) => toggle(game.appid, checked === true)"
             >
-              <Checkbox
-                :model-value="game.status === 'new' && ticked.has(game.appid)"
-                :disabled="busy || game.status !== 'new'"
-                :data-testid="`steam-game-${game.appid}`"
-                @update:model-value="(checked) => toggle(game.appid, checked === true)"
-              />
-              <span class="min-w-0 flex-1 truncate">{{ game.name }}</span>
-              <span v-if="game.status !== 'new'" class="flex-none text-xs">{{ status(game) }}</span>
-            </label>
+              <template v-if="game.status !== 'new'" #trailing>{{ status(game) }}</template>
+            </CheckboxField>
           </li>
           <li v-if="shown.length === 0" class="text-muted-foreground px-2 py-2 text-sm">{{ t("steamImport.noMatch") }}</li>
         </ul>

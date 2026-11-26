@@ -5,6 +5,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { Ban, Flag, Trash2, X } from "@lucide/vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { useTask } from "@tavora/official-ui/use-task";
 import { developerNameOf, MAX_MESSAGE_LENGTH, messageProblem, type ConversationDetail, type ConversationItem, type ConversationMessage } from "../../../shared/conversations";
@@ -187,7 +188,7 @@ async function afterChange() {
       <div ref="thread" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4" data-testid="conversation-messages">
         <p v-if="previous" class="text-muted-foreground text-xs">
           {{ t("inbox.follows") }}
-          <Button variant="link" size="sm" class="h-auto p-0 text-xs" @click="emit('select', previous.id)">{{ t("inbox.showEarlier") }}</Button>
+          <TextLink class="text-primary text-xs" @click="emit('select', previous.id)">{{ t("inbox.showEarlier") }}</TextLink>
         </p>
         <p v-else-if="item.previousId" class="text-muted-foreground text-xs">{{ t("inbox.follows") }}</p>
         <div v-for="message in detail!.messages" :key="message.id" class="flex flex-col gap-1" :class="message.mine ? 'items-end' : 'items-start'" :data-testid="`message-${message.id}`">

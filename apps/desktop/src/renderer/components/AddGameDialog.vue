@@ -16,6 +16,8 @@ import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import { useTask } from "@tavora/official-ui/use-task";
 import { t } from "../i18n";
 import { addedWithGame, madeForWorkspace, type PickerLine, type PickerRow } from "../lib/game-picker";
@@ -249,38 +251,31 @@ function onDialogKey(event: KeyboardEvent) {
         </template>
 
         <div v-else class="flex flex-col gap-1 px-2" data-testid="add-personal" :data-status="adder.state.value.status">
-          <button
-            v-if="typedName"
-            type="button"
-            class="bg-accent relative flex items-center gap-3 rounded-lg px-3 py-2 text-left"
-            data-testid="create-personal"
-            @click="addPersonal"
-          >
+          <ListRow v-if="typedName" class="bg-accent hover:bg-accent relative h-auto gap-3 rounded-lg px-3 py-2 font-medium" data-testid="create-personal" @click="addPersonal">
             <span class="bg-primary absolute inset-y-1.5 left-0 w-0.5 rounded-full" aria-hidden="true" />
-            <span class="bg-background text-primary flex size-7 flex-none items-center justify-center rounded-md" aria-hidden="true"><UserRound class="size-4" /></span>
-            <span class="min-w-0 flex-1">
-              <span class="block truncate font-medium">{{ typedName }}</span>
-              <span class="text-muted-foreground block truncate text-xs">{{ adder.busy.value ? t("addGame.adding") : t("addPersonal.new") }}</span>
-            </span>
-            <Loader v-if="adder.busy.value" class="text-muted-foreground size-4 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />
-            <span v-else class="text-muted-foreground flex flex-none items-center gap-1.5 text-xs" aria-hidden="true">{{ t("addGame.actionAdd") }} <Kbd class="font-sans">↵</Kbd></span>
-          </button>
+            <template #leading><span class="bg-background text-primary flex size-7 flex-none items-center justify-center rounded-md" aria-hidden="true"><UserRound class="size-4" /></span></template>
+            {{ typedName }}
+            <template #description>{{ adder.busy.value ? t("addGame.adding") : t("addPersonal.new") }}</template>
+            <template #trailing>
+              <Loader v-if="adder.busy.value" class="text-muted-foreground size-4 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              <span v-else class="flex items-center gap-1.5" aria-hidden="true">{{ t("addGame.actionAdd") }} <Kbd class="font-sans">↵</Kbd></span>
+            </template>
+          </ListRow>
           <p v-else class="text-muted-foreground px-3 py-2 text-sm" data-testid="personal-type-name">{{ t("addPersonal.typeName") }}</p>
 
           <template v-if="personals.length">
             <p class="text-muted-foreground px-3 pt-3 pb-1 text-xs font-medium">{{ t("addPersonal.yours") }}</p>
-            <button
+            <ListRow
               v-for="workspace in personals"
               :key="workspace.id"
-              type="button"
-              class="hover:bg-accent group flex items-center gap-3 rounded-lg px-3 py-2 text-left"
+              class="h-auto gap-3 rounded-lg px-3 py-2 font-medium"
               :data-testid="`open-personal-${workspace.id}`"
               @click="openPersonal(workspace.id)"
             >
-              <span class="flex flex-none overflow-hidden rounded-md"><WorkspaceIcon :workspace="workspace" :size="28" /></span>
-              <span class="min-w-0 flex-1 truncate font-medium">{{ workspace.name }}</span>
-              <span class="text-muted-foreground flex-none text-xs opacity-0 group-hover:opacity-100">{{ t("addGame.actionOpen") }}</span>
-            </button>
+              <template #leading><span class="flex flex-none overflow-hidden rounded-md"><WorkspaceIcon :workspace="workspace" :size="28" /></span></template>
+              {{ workspace.name }}
+              <template #trailing><span class="opacity-0 group-hover/list-row:opacity-100">{{ t("addGame.actionOpen") }}</span></template>
+            </ListRow>
           </template>
         </div>
       </div>
@@ -297,7 +292,7 @@ function onDialogKey(event: KeyboardEvent) {
           {{ t("add.mode.personal") }}</span
         >
         <span class="ml-auto flex gap-4">
-          <button type="button" class="text-primary underline-offset-2 hover:underline" data-testid="open-steam-import" @click="dialog = { kind: 'steam-import' }">{{ t("addGame.steam") }}</button>
+          <TextLink class="text-primary" data-testid="open-steam-import" @click="dialog = { kind: 'steam-import' }">{{ t("addGame.steam") }}</TextLink>
         </span>
       </div>
     </DialogContent>

@@ -3,8 +3,8 @@
 // A change applies at once and is one setting for every frame (not an undo step). Reset to default brings back Settings,
 // Hide on canvas, Reset position, Reset size and Remove. The popover itself is placed by LayoutCanvas.vue.
 import { computed } from "vue";
-import { Button } from "@tavora/official-ui/components/ui/button";
-import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { CheckboxField } from "@tavora/official-ui/components/ui/checkbox-field";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import { DEFAULT_BUTTONS, TOOLBAR_ACTIONS, isGroupAction, toggleButton, type ToolbarActionId } from "../../../shared/layout-toolbar";
 import type { LayoutItemView } from "../../../shared/layout-view";
 import { t } from "../../i18n";
@@ -28,18 +28,16 @@ const reset = () => send({ type: "toolbar", buttons: [...DEFAULT_BUTTONS] });
   <div class="flex flex-col gap-2" data-testid="layout-toolbar-customize">
     <div class="flex items-center justify-between gap-2">
       <p class="text-sm font-medium">{{ t("overlays.layout.customizeToolbar") }}</p>
-      <Button type="button" variant="link" size="sm" class="h-auto p-0" :disabled="isDefault" data-testid="layout-customize-default" @click="reset">
+      <TextLink class="text-primary text-sm" :disabled="isDefault" data-testid="layout-customize-default" @click="reset">
         {{ t("overlays.layout.resetToolbar") }}
-      </Button>
+      </TextLink>
     </div>
     <ul class="flex flex-col">
       <li v-for="id in TOOLBAR_ACTIONS" :key="id">
-        <label class="hover:bg-accent flex cursor-default items-center gap-2 rounded-md px-1.5 py-1 text-sm">
-          <Checkbox :model-value="buttons.includes(id)" :data-testid="`layout-customize-${id}`" @update:model-value="toggle(id)" />
-          <component :is="actions[id].icon" class="text-muted-foreground size-4 shrink-0" />
-          <span class="min-w-0 flex-1 truncate">{{ labelOf(id) }}</span>
-          <span v-if="isGroupAction(id)" class="text-muted-foreground flex-none text-xs">▾</span>
-        </label>
+        <CheckboxField :model-value="buttons.includes(id)" :label="labelOf(id)" class="cursor-default" :data-testid="`layout-customize-${id}`" @update:model-value="toggle(id)">
+          <template #leading><component :is="actions[id].icon" class="text-muted-foreground size-4 shrink-0" /></template>
+          <template v-if="isGroupAction(id)" #trailing>▾</template>
+        </CheckboxField>
       </li>
     </ul>
   </div>

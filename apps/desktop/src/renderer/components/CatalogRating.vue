@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { computed } from "vue";
 import { MIN_RATINGS_SHOWN, type CatalogRating } from "../../shared/host-api";
 import { useFloating } from "../host";
@@ -32,9 +33,9 @@ const rows = computed(() =>
   </span>
   <DropdownMenu v-else-if="shown" @update:open="track">
     <DropdownMenuTrigger as-child>
-      <button
-        type="button"
-        class="hover:text-foreground focus-visible:ring-ring data-[state=open]:text-foreground text-muted-foreground inline-flex items-center gap-1.5 rounded-sm text-xs outline-none focus-visible:ring-2"
+      <Button
+        variant="ghost"
+        class="hover:text-foreground data-[state=open]:text-foreground text-muted-foreground h-auto gap-1.5 rounded-sm p-0 text-xs font-normal hover:bg-transparent"
         :aria-label="`${t('catalog.rating.breakdown', { name })}: ${t('catalog.rating.label', { average })}, ${t('catalog.rating.count', { count: shown.count })}`"
         data-testid="catalog-rating"
       >
@@ -42,7 +43,7 @@ const rows = computed(() =>
         <StarRating :model-value="shown.average" size="sm" :label="t('catalog.rating.label', { average })" />
         <ChevronDown class="size-3.5" />
         <span class="tabular-nums">(<CountTo :value="shown.count" :format="formatNumber" />)</span>
-      </button>
+      </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="start" class="w-64" data-testid="catalog-rating-breakdown">
       <DropdownMenuLabel class="flex items-center gap-2 font-normal">

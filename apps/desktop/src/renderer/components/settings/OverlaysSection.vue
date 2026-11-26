@@ -13,6 +13,7 @@ import { Input } from "@tavora/official-ui/components/ui/input";
 import { Kbd } from "@tavora/official-ui/components/ui/kbd";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import { Switch } from "@tavora/official-ui/components/ui/switch";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import type { HotkeyView } from "../../../shared/host-api";
@@ -190,12 +191,14 @@ watch(
       testid="overlay-links"
     >
       <AnimatedList tag="ul" v-if="streaming.links.length" class="flex flex-col" data-testid="overlay-link-list">
-        <li v-for="link in streaming.links" :key="`${link.workspaceId}:${link.moduleId}:${link.key}`" class="flex items-center gap-3 border-b border-dashed py-2 last:border-b-0">
-          <span class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate font-medium">{{ link.moduleName }} · {{ link.key }}</span>
-            <span class="text-muted-foreground truncate text-xs">{{ link.workspaceName }}</span>
-          </span>
-          <Button variant="secondary" size="sm" :aria-label="t('overlays.previewLabel', { name: link.moduleName })" :data-testid="`link-preview-${link.key}`" @click="previewLink(link)">{{ t("overlays.preview") }}</Button>
+        <li v-for="link in streaming.links" :key="`${link.workspaceId}:${link.moduleId}:${link.key}`" class="border-b border-dashed last:border-b-0">
+          <ListRow as="div" class="h-auto gap-3 rounded-none px-0 py-2 font-medium">
+            {{ link.moduleName }} · {{ link.key }}
+            <template #description>{{ link.workspaceName }}</template>
+            <template #trailing>
+              <Button variant="secondary" size="sm" :aria-label="t('overlays.previewLabel', { name: link.moduleName })" :data-testid="`link-preview-${link.key}`" @click="previewLink(link)">{{ t("overlays.preview") }}</Button>
+            </template>
+          </ListRow>
         </li>
       </AnimatedList>
       <div class="py-2">

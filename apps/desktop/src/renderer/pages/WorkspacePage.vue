@@ -615,18 +615,18 @@ const emptySlot = EmptySlot as unknown as VueComponent;
         <div class="border-border mt-6 w-full max-w-124 border-t" aria-hidden="true"></div>
         <p class="mt-4 mb-1 text-sm font-semibold" id="empty-layouts-label">{{ t("workspace.orLayout") }}</p>
         <div class="flex flex-wrap justify-center gap-2" role="group" aria-labelledby="empty-layouts-label" data-testid="empty-templates">
-          <button
+          <Button
             v-for="template in LAYOUT_TEMPLATES"
             :key="template.id"
-            type="button"
-            class="bg-card text-muted-foreground hover:border-primary hover:text-primary focus-visible:ring-ring rounded-lg border p-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            variant="outline"
+            class="bg-card text-muted-foreground hover:border-primary hover:bg-card hover:text-primary dark:bg-card dark:hover:bg-card h-auto rounded-lg p-2 shadow-none"
             :title="templateName(template)"
             :aria-label="templateName(template)"
             :data-testid="`empty-template-${template.id}`"
             @click="act({ type: 'apply-layout-template', templateId: template.id })"
           >
             <TemplatePreview :template="template" class="size-auto h-14 w-[84px]" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

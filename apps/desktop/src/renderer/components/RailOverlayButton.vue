@@ -8,6 +8,7 @@ import { act, state } from "../host";
 import { t } from "../i18n";
 import RailFooterTile from "./RailFooterTile.vue";
 import RailTooltip from "./RailTooltip.vue";
+import RailButton from "./RailButton.vue";
 
 defineProps<{ expanded: boolean }>();
 
@@ -17,8 +18,7 @@ const active = computed(() => state.value!.screen === "overlay");
 
 <template>
   <RailTooltip v-if="overlays.supported && overlays.enabled" :text="t('overlays.button.open')" :hint="t('overlays.rail.hint')" :disabled="expanded">
-    <button
-      type="button"
+    <RailButton
       :class="cn('group text-muted-foreground hover:text-foreground mx-2 flex items-center gap-2.5 rounded-lg px-1 group-data-[expanded=true]/rail:px-2 group-data-[expanded=true]/rail:py-[5px] transition-colors focus-visible:-outline-offset-2', expanded && 'hover:bg-rail-hover', active && 'text-foreground', expanded && active && 'bg-rail-active hover:bg-rail-active group-data-[state=open]:bg-rail-active')"
       data-rail-item
       data-testid="overlay-open"
@@ -30,6 +30,6 @@ const active = computed(() => state.value!.screen === "overlay");
         <Layers class="size-5" />
       </RailFooterTile>
       <span v-if="expanded" class="text-sm font-medium">{{ t("overlays.button.open") }}</span>
-    </button>
+    </RailButton>
   </RailTooltip>
 </template>

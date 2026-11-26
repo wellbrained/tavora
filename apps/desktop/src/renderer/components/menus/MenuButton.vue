@@ -2,6 +2,7 @@
 import { Ellipsis } from "@lucide/vue";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import { useFloating, type MenuItem } from "@/host";
 import MenuEntries from "./MenuEntries.vue";
 
@@ -26,11 +27,11 @@ const track = useFloating();
 <template>
   <DropdownMenu @update:open="track">
     <DropdownMenuTrigger as-child>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         :class="
           cn(
-            'text-muted-foreground hover:bg-card hover:text-foreground data-[state=open]:bg-card grid size-7 place-items-center rounded-sm',
+            'text-muted-foreground hover:bg-card hover:text-foreground data-[state=open]:bg-card size-7 rounded-sm p-0',
             $props.class,
           )
         "
@@ -38,7 +39,7 @@ const track = useFloating();
         :aria-label="label"
       >
         <slot><Ellipsis class="size-4" /></slot>
-      </button>
+      </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent data-testid="menu" :side="side" :align="align" :class="cn('max-w-72 min-w-52', menuClass)">
       <DropdownMenuLabel class="text-muted-foreground truncate text-xs font-normal">{{ title }}</DropdownMenuLabel>

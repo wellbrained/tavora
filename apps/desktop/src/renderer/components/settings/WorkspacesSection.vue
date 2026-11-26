@@ -5,6 +5,7 @@ import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { Input } from "@tavora/official-ui/components/ui/input";
+import { CheckboxField } from "@tavora/official-ui/components/ui/checkbox-field";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { deleteWithUndo, state } from "../../host";
 import { t } from "../../i18n";
@@ -85,15 +86,14 @@ function removeSelected() {
         <Input v-model="filter" :placeholder="t('steamImport.filter')" :aria-label="t('settings.workspaces.filterLabel')" autocomplete="off" maxlength="80" data-testid="workspaces-filter" />
       </div>
       <div class="bg-card sticky top-0 z-[5] -mx-5 flex min-h-12 flex-wrap items-center gap-3 border-y px-5 py-2">
-        <label class="flex flex-1 cursor-pointer items-center gap-3">
-          <Checkbox
-            :model-value="allShown ? true : someShown ? 'indeterminate' : false"
-            :disabled="!shown.length"
-            data-testid="workspaces-select-all"
-            @update:model-value="tickShown($event === true)"
-          />
-          <span>{{ t("settings.workspaces.selectAll") }}</span>
-        </label>
+        <CheckboxField
+          :model-value="allShown ? true : someShown ? 'indeterminate' : false"
+          :label="t('settings.workspaces.selectAll')"
+          :disabled="!shown.length"
+          class="w-auto flex-1 px-0 text-base"
+          data-testid="workspaces-select-all"
+          @update:model-value="tickShown($event === true)"
+        />
         <span class="text-muted-foreground text-sm tabular-nums" data-testid="workspaces-selected">{{ t("settings.workspaces.selected", { count: selected.length }) }}</span>
         <Button variant="danger" :disabled="!selected.length" data-testid="workspaces-remove" @click="removeSelected">
           <Trash2 />{{ t("settings.workspaces.remove") }}

@@ -6,6 +6,7 @@
 import { computed, ref } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
 import { Tooltip, tooltipDelay } from "@tavora/official-ui/components/tooltip";
 import type { ModuleConnector } from "../../../shared/host-api";
 import type { MessageKey } from "../../../shared/i18n";
@@ -62,39 +63,45 @@ function hideHosts() {
     <p v-if="heading" class="text-muted-foreground pb-1 text-xs font-semibold">{{ heading }}</p>
     <p v-if="!users.length" class="text-muted-foreground py-1 text-sm" :data-testid="`${testid}-users-none`">{{ none }}</p>
     <AnimatedList tag="ul" v-else class="flex flex-col" :data-testid="`${testid}-users`">
-      <li v-for="module in users" :key="module.id" class="flex items-center gap-3 border-b border-dashed py-2 last:border-b-0" :data-testid="`${testid}-user-${module.id}`">
-        <span class="module-tile size-8" aria-hidden="true">
-          <ModuleIcon :module-id="module.id" size="size-4" />
-        </span>
-        <span class="flex min-w-0 flex-1 flex-col gap-1">
-          <span class="truncate font-medium">{{ module.name }}</span>
-          <span v-if="uses === 'network'" class="flex flex-wrap gap-1">
-            <!-- One chip per site; its tooltip lists the full hosts (granting always shows them in full). -->
-            <code
-              v-for="group in siteGroups(module.permissions.granted.network)"
-              :key="group.site"
-              tabindex="0"
-              class="bg-muted rounded px-1.5 py-0.5 text-xs break-all"
-              :aria-label="group.hosts.join(', ')"
-              :data-testid="`${testid}-site-${module.id}-${group.site}`"
-              @pointerenter="showHosts($event, group.hosts)"
-              @pointerleave="hideHosts"
-              @focus="showHosts($event, group.hosts)"
-              @blur="hideHosts"
-              >{{ group.site }}</code
-            >
-          </span>
-          <span v-else-if="uses === 'folders'" class="flex flex-col gap-1">
-            <span v-for="folder in foldersOf(module.permissions.granted.folders)" :key="folder.key" class="flex flex-wrap items-center gap-2">
-              <code class="bg-muted rounded px-1.5 py-0.5 text-xs break-all">{{ folderLabel(folder) }}</code>
-              <slot name="folder" :module="module" :folder="folder" />
+      <li v-for="module in users" :key="module.id" class="border-b border-dashed last:border-b-0" :data-testid="`${testid}-user-${module.id}`">
+        <ListRow as="div" wrap class="h-auto gap-3 rounded-none px-0 py-2 font-medium">
+          <template #leading>
+            <span class="module-tile size-8" aria-hidden="true">
+              <ModuleIcon :module-id="module.id" size="size-4" />
             </span>
-          </span>
-        </span>
-        <slot :module="module" />
-        <Button variant="danger" size="sm" :aria-label="t(revokeLabel, { name: module.name })" :data-testid="`${testid}-revoke-${module.id}`" @click="revokeModule(module, revokeUnused)">
-          {{ t("integrations.grants.revoke") }}
-        </Button>
+          </template>
+          {{ module.name }}
+          <template v-if="uses === 'network' || uses === 'folders'" #description>
+            <span v-if="uses === 'network'" class="flex flex-wrap gap-1 pt-1">
+              <!-- One chip per site; its tooltip lists the full hosts (granting always shows them in full). -->
+              <code
+                v-for="group in siteGroups(module.permissions.granted.network)"
+                :key="group.site"
+                tabindex="0"
+                class="bg-muted text-foreground rounded px-1.5 py-0.5 text-xs break-all"
+                :aria-label="group.hosts.join(', ')"
+                :data-testid="`${testid}-site-${module.id}-${group.site}`"
+                @pointerenter="showHosts($event, group.hosts)"
+                @pointerleave="hideHosts"
+                @focus="showHosts($event, group.hosts)"
+                @blur="hideHosts"
+                >{{ group.site }}</code
+              >
+            </span>
+            <span v-else class="flex flex-col gap-1 pt-1">
+              <span v-for="folder in foldersOf(module.permissions.granted.folders)" :key="folder.key" class="flex flex-wrap items-center gap-2">
+                <code class="bg-muted text-foreground rounded px-1.5 py-0.5 text-xs break-all">{{ folderLabel(folder) }}</code>
+                <slot name="folder" :module="module" :folder="folder" />
+              </span>
+            </span>
+          </template>
+          <template #trailing>
+            <slot :module="module" />
+            <Button variant="danger" size="sm" :aria-label="t(revokeLabel, { name: module.name })" :data-testid="`${testid}-revoke-${module.id}`" @click="revokeModule(module, revokeUnused)">
+              {{ t("integrations.grants.revoke") }}
+            </Button>
+          </template>
+        </ListRow>
       </li>
     </AnimatedList>
     <Tooltip :open="tip !== null" :anchor="tip?.anchor" side="top" compact @dismiss="hideHosts">

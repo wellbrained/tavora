@@ -18,6 +18,7 @@ import { useActionStatus } from "../action-status";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Skeleton } from "@tavora/official-ui/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@tavora/official-ui/components/ui/select";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import { t } from "../i18n";
 import { formatSize } from "../catalog-size";
 import { PLACEHOLDER_MODULES } from "../catalog-placeholder";
@@ -160,9 +161,9 @@ function settings() {
             </button>
             <div class="min-w-0">
               <div class="flex min-w-0 items-baseline gap-2">
-                <button type="button" class="hover:text-primary focus-visible:ring-ring truncate rounded-sm text-left font-medium outline-none focus-visible:ring-2" :title="module.name"
+                <TextLink class="font-medium" :title="module.name"
                   :aria-label="t('catalog.infoLabel', { name: module.name })" data-testid="catalog-name" :data-module="module.id" @click="open(module)"
-                >{{ module.name }}</button>
+                >{{ module.name }}</TextLink>
                 <span class="text-muted-foreground shrink-0 text-xs tabular-nums" :title="isPreview(module) ? t('catalog.previewHint', { version: module.version }) : undefined" :data-testid="`catalog-version-${module.id}`">{{
                   isPreview(module) ? t("catalog.preview") : module.version
                 }}</span>

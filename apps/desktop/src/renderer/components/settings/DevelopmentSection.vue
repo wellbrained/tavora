@@ -10,6 +10,7 @@ import { ChevronRight, CircleAlert, KeyRound, Loader, RefreshCw, Rocket, Upload 
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { TextLink } from "@tavora/official-ui/components/ui/text-link";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
 import type { SettingsSection } from "./settings-index";
 import { account, act, developerKeys, developerState, dialog, inbox, makesModules, releaseStatus, showToast, state } from "../../host";
@@ -140,7 +141,7 @@ onMounted(() => {
     <p v-if="signedIn && recoveryKey" class="mb-6 flex flex-wrap items-center gap-x-2 text-sm" data-testid="dev-modules-recovery">
       <KeyRound class="text-warning size-4 flex-none" aria-hidden="true" />
       {{ t("devModules.recovery") }}
-      <Button variant="link" class="h-auto p-0" @click="emit('show', 'dev-publishing')">{{ t("settings.section.dev-publishing") }}</Button>
+      <TextLink class="text-primary" @click="emit('show', 'dev-publishing')">{{ t("settings.section.dev-publishing") }}</TextLink>
     </p>
 
     <SettingGroup v-if="startCard">
@@ -182,7 +183,7 @@ onMounted(() => {
     <p v-if="problems" class="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-2 text-sm" data-testid="dev-modules-problems">
       <CircleAlert class="text-warning size-4 flex-none" aria-hidden="true" />
       {{ t("devModules.problems") }}
-      <Button variant="link" class="h-auto p-0" @click="emit('show', 'dev-folders')">{{ t("settings.section.dev-folders") }}</Button>
+      <TextLink class="text-primary" @click="emit('show', 'dev-folders')">{{ t("settings.section.dev-folders") }}</TextLink>
     </p>
 
     <SettingGroup v-if="official.available" :title="t('officialPublish.title')" :description="t('officialPublish.description')">

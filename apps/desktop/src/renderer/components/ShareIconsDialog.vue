@@ -3,7 +3,7 @@ import { Images, Loader } from "@lucide/vue";
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
-import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
+import { CheckboxField } from "@tavora/official-ui/components/ui/checkbox-field";
 import { useTask } from "@tavora/official-ui/use-task";
 import { MAX_SHARE_BATCH } from "../../shared/host-actions";
 import type { HostAction } from "../../shared/host-api";
@@ -157,16 +157,16 @@ async function share() {
       </div>
       <ul class="-mx-2 max-h-[280px] overflow-y-auto" :aria-label="t('shareIcons.list')">
         <li v-for="row in rows" :key="row.key">
-          <label class="hover:bg-accent flex cursor-pointer items-center gap-3 rounded-md px-2 py-2">
-            <Checkbox
-              :model-value="ticked.has(row.key)"
-              :disabled="busy"
-              :data-testid="`share-icon-${row.key}`"
-              @update:model-value="(checked) => toggle(row.key, checked === true)"
-            />
-            <img :src="row.icon" alt="" class="bg-secondary size-10 flex-none rounded-lg object-contain p-1" draggable="false" />
-            <span class="min-w-0 flex-1 truncate">{{ row.name }}</span>
-          </label>
+          <CheckboxField
+            :model-value="ticked.has(row.key)"
+            :label="row.name"
+            :disabled="busy"
+            class="h-auto gap-3 py-2 text-base"
+            :data-testid="`share-icon-${row.key}`"
+            @update:model-value="(checked) => toggle(row.key, checked === true)"
+          >
+            <template #leading><img :src="row.icon" alt="" class="bg-secondary size-10 flex-none rounded-lg object-contain p-1" draggable="false" /></template>
+          </CheckboxField>
         </li>
       </ul>
     </template>

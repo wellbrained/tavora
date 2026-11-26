@@ -16,6 +16,7 @@ import { act, state } from "../host";
 import { t } from "../i18n";
 import { addInputForUnlisted } from "../lib/game-picker";
 import RailTooltip from "./RailTooltip.vue";
+import RailButton from "./RailButton.vue";
 
 defineProps<{ expanded: boolean }>();
 
@@ -88,8 +89,7 @@ watch(
   <!-- The 28 px that show above the profile card; the rest of the layer sits under it. -->
   <div ref="peek" :class="cn('running-peek relative', shown ? 'h-7' : 'h-0')" :inert="!shown">
     <RailTooltip :text="label" :disabled="expanded">
-      <button
-        type="button"
+      <RailButton
         :class="
           cn(
             'running-layer group/run absolute top-0 flex h-10 items-start rounded-lg border pt-[5px] text-xs font-medium',
@@ -119,7 +119,7 @@ watch(
             )
           "
         />
-      </button>
+      </RailButton>
     </RailTooltip>
   </div>
 </template>
