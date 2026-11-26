@@ -6,7 +6,7 @@ const overlaps=(a:TooltipRect,b:TooltipRect)=>a.left<b.right&&b.left<a.right&&a.
 describe('tooltipPlacement',()=>{
  it('sits below the anchor with a gap, centred, the arrow on its middle',()=>{
   const anchor={left:180,top:100,right:220,bottom:130},p=tooltipPlacement(anchor,120,40,view);
-  expect(p).toEqual({side:'bottom',left:140,top:130+TOOLTIP_GAP,width:120,arrow:60});
+  expect(p).toEqual({side:'bottom',left:140,top:130+TOOLTIP_GAP,width:120,arrow:60,maxHeight:584,covers:false});
  });
  it('flips above when there is no room below',()=>{
   const p=tooltipPlacement({left:180,top:560,right:220,bottom:590},120,40,view);
@@ -27,6 +27,15 @@ describe('tooltipPlacement',()=>{
    expect(overlaps(card,anchor)).toBe(false);
    expect(card.left).toBeGreaterThanOrEqual(8);expect(card.right).toBeLessThanOrEqual(392);
   }
+ });
+ it('keeps a tall card inside the window: beside its anchor where there is room, else over it, from the top',()=>{
+  const anchor={left:180,top:300,right:220,bottom:330};
+  const over=tooltipPlacement(anchor,280,500,view,'top',280,true);
+  expect(over.top).toBe(8);expect(over.covers).toBe(true);
+  const beside=tooltipPlacement(anchor,280,900,{width:800,height:600},'top',280,true);
+  expect(beside).toMatchObject({side:'right',top:8,maxHeight:584,covers:false});
+  const narrow=tooltipPlacement(anchor,280,900,view,'right',280,true);
+  expect(narrow.top).toBe(8);expect(narrow.covers).toBe(true);
  });
  it('is 280 px wide at most by default, wider when asked, never wider than the window',()=>{
   const anchor={left:180,top:100,right:220,bottom:130};

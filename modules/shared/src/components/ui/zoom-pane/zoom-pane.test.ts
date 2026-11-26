@@ -923,3 +923,22 @@ describe("Tab order", () => {
     expect(controls.className).toContain("z-(--layer-overlay)")
   })
 })
+
+describe("bare and loading", () => {
+  it("has no frame or background of its own when bare, and its focus ring over the content", () => {
+    const { pane } = mountLive({ bare: true })
+    expect(pane.classList.contains("border")).toBe(false)
+    expect(pane.classList.contains("rounded-md")).toBe(false)
+    expect(pane.classList.contains("bg-background")).toBe(false)
+    expect(pane.className).toContain("focus-visible:after:inset-ring-3")
+  })
+
+  it("hides its zoom controls while loading and shows them once the content is there", async () => {
+    const { props, root } = mountLive({ loading: true })
+    const controls = () => root.querySelector("[data-slot=zoom-controls]")!
+    expect(controls().classList.contains("invisible")).toBe(true)
+    props.loading = false
+    await nextTick()
+    expect(controls().classList.contains("invisible")).toBe(false)
+  })
+})

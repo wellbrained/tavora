@@ -174,3 +174,13 @@ describe("Table sort", () => {
     expect(heads().map((th) => th.getAttribute("aria-sort"))).toEqual([null, "descending", null])
   })
 })
+
+describe("Table flush", () => {
+  it("takes the padding off the outer edges only, and keeps a marked row's line off its text", () => {
+    const root = mount(() => h(Table, { flush: true }, () => h(TableBody, null, () => h(TableRow, { marked: true }, () => h(TableCell, null, () => "Life")))))
+    const table = q(root, "table")
+    expect(table.className).toContain("[&_:is(th,td):first-child]:ps-0")
+    expect(table.className).toContain("[&_:is(th,td):last-child]:pe-0")
+    expect(table.className).toContain("[&_tr[data-marked]>:first-child]:ps-2")
+  })
+})

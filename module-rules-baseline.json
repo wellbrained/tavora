@@ -8,9 +8,6 @@
       },
       "focus-ring": {
         "<div ref=\"scroller\" class=\"min-h-0 flex-1 overflow-y-auto p-2 outline-none\" tabindex=\"-1\">": 1
-      },
-      "shadow": {
-        "return drop.value?.id === rowId(row) && (drop.value.after ? \"shadow-[0_2px_0_0_var(--primary)]\" : \"shadow-[0_-2px_0_0_var(--primary)]\");": 2
       }
     },
     "modules/clock-counter/src/ItemCard.vue": {
@@ -108,9 +105,6 @@
     "modules/notes/src/NoteList.vue": {
       "dom-query": {
         "setTimeout(() => document.querySelector<HTMLElement>(`[data-testid=\"note-${id}\"] button`)?.focus(), 60);": 1
-      },
-      "shadow": {
-        "return drop.value?.id === entry.id && (drop.value.after ? \"shadow-[0_2px_0_0_var(--primary)]\" : \"shadow-[0_-2px_0_0_var(--primary)]\");": 2
       }
     },
     "modules/pdf-viewer/src/PdfPage.vue": {

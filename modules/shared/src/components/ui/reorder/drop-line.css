@@ -1,0 +1,25 @@
+/* The drop line (drop-line.ts): a 2 px line with an 8 px dot at its start, centred on the boundary between two rows
+ (or in the middle of the list's gap, --tavora-drop-gap). It takes no room and no pointer. */
+.tavora-drop-before,
+.tavora-drop-after {
+  position: relative;
+}
+.tavora-drop-before::after,
+.tavora-drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 6px;
+  height: 8px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle closest-side, var(--primary) 90%, transparent) left center / 8px 8px no-repeat,
+    linear-gradient(var(--primary), var(--primary)) 4px center / calc(100% - 4px) 2px no-repeat;
+}
+.tavora-drop-before::after {
+  top: calc(var(--tavora-drop-gap, 0px) / -2 - 4px);
+}
+.tavora-drop-after::after {
+  bottom: calc(var(--tavora-drop-gap, 0px) / -2 - 4px);
+}

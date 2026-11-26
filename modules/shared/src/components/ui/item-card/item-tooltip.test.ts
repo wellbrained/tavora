@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { TooltipContent } from "@tavora/sdk"
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { createApp, h, nextTick, type App } from "vue"
 import { fromBundle, ItemCard, ItemCardName, ItemCardStats, ItemTooltip, type ItemCardSkin } from "."
 
@@ -89,5 +89,63 @@ describe("fromBundle", () => {
     expect(local.icons?.map((icon) => icon.image)).toEqual(["tavora-module://my.module/dist/i.png", "data:image/png;base64,AA"])
     expect(local.properties?.map((p) => p.icon)).toEqual(["https://cdn.example/p.png", undefined])
     expect(content.image).toBe("dist/a.webp")
+  })
+})
+
+describe("a card taller than the panel", () => {
+  // jsdom lays nothing out: every box gets the height given here.
+  async function tall(height: number) {
+    const rect = { left: 0, top: 0, right: 280, bottom: height, width: 280, height, x: 0, y: 0, toJSON: () => ({}) }
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(rect as DOMRect)
+    let dismissed = 0
+    await render(() => h(ItemTooltip, { open: true, anchor, content: card, onDismiss: () => dismissed++ }))
+    for (let pass = 0; pass < 4; pass++) await nextTick()
+    spy.mockRestore()
+    return { tooltip: document.querySelector<HTMLElement>("[data-slot=tooltip]")!, dismissed: () => dismissed }
+  }
+
+  it("is held to the panel's height, from its top, without an arrow", async () => {
+    const { tooltip } = await tall(innerHeight + 200)
+    expect(tooltip.getAttribute("data-scrolls")).toBe("true")
+    expect(tooltip.style.maxHeight).toBe(`${innerHeight - 16}px`)
+    expect(tooltip.style.top).toBe("8px")
+    expect(tooltip.querySelector(".tavora-tooltip-arrow")).toBeNull()
+  })
+
+  it("scrolls with the wheel over its element, keeps the wheel from the page and stays open", async () => {
+    const { tooltip, dismissed } = await tall(innerHeight + 200)
+    const scroller = tooltip.firstElementChild as HTMLElement
+    let top = 0
+    Object.defineProperty(scroller, "scrollTop", { configurable: true, get: () => top, set: (value: number) => (top = Math.max(0, Math.min(value, 100))) })
+    const turn = (deltaY: number, x = 15) => {
+      const event = new WheelEvent("wheel", { deltaY, clientX: x, clientY: 15, bubbles: true, cancelable: true })
+      document.body.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    expect(turn(60)).toBe(true)
+    expect(top).toBe(60)
+    scroller.dispatchEvent(new Event("scroll"))
+    expect(dismissed()).toBe(0)
+    // At the card's end the wheel stays the card's; away from the element and the card it is the page's.
+    turn(60)
+    expect(turn(60)).toBe(true)
+    expect(turn(60, 900)).toBe(false)
+  })
+
+  it("is measured again when a picture in it loads", async () => {
+    const { tooltip } = await tall(100)
+    const rect = { left: 0, top: 0, right: 280, bottom: innerHeight + 200, width: 280, height: innerHeight + 200, x: 0, y: 0, toJSON: () => ({}) }
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(rect as DOMRect)
+    const picture = tooltip.appendChild(document.createElement("img"))
+    picture.dispatchEvent(new Event("load"))
+    for (let pass = 0; pass < 4; pass++) await nextTick()
+    spy.mockRestore()
+    expect(tooltip.getAttribute("data-scrolls")).toBe("true")
+  })
+
+  it("is left as it is when it fits", async () => {
+    const { tooltip } = await tall(100)
+    expect(tooltip.hasAttribute("data-scrolls")).toBe(false)
+    expect(tooltip.style.maxHeight).toBe("")
   })
 })

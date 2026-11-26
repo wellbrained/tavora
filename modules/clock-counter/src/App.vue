@@ -10,7 +10,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { handleUndoKey, Toaster, type Undoable } from "@tavora/official-ui/components/ui/toast";
-import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
+import { dropLine, liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from "vue";
@@ -227,9 +227,8 @@ function endDrag(): void {
 }
 
 /** The line where a row would land, for reduced motion; otherwise the gap that opens is the place. */
-function dropLine(row: Row): string | false {
-  if (!reducedMotion()) return false;
-  return drop.value?.id === rowId(row) && (drop.value.after ? "shadow-[0_2px_0_0_var(--primary)]" : "shadow-[0_-2px_0_0_var(--primary)]");
+function dropClass(row: Row): string | false {
+  return reducedMotion() && dropLine(drop.value, rowId(row));
 }
 
 /** Moves a row one place, at once (a key or the menu never animates). */
@@ -588,14 +587,14 @@ onBeforeUnmount(() => {
           </Button>
         </div>
       </div>
-      <div ref="listEl" class="flex flex-col gap-2" @dragover="onDragOver" @drop="onDrop">
+      <div ref="listEl" class="flex flex-col gap-2 [--tavora-drop-gap:--spacing(2)]" @dragover="onDragOver" @drop="onDrop">
         <div
           v-for="row in rows"
           :key="row.type === 'item' ? row.item.id : `group-${row.key}`"
           :data-reorder-id="rowId(row)"
           :draggable="rows.length > 1"
           class="rounded-lg"
-          :class="dropLine(row)"
+          :class="dropClass(row)"
           :data-testid="`row-${rowId(row)}`"
           @dragstart="onDragStart($event, rowId(row))"
           @dragend="endDrag"

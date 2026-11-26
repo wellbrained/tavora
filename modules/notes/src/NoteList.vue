@@ -4,7 +4,7 @@ import { NotebookPen, PanelLeftClose, PanelLeftOpen, Pin, Plus } from "@lucide/v
 import { cn, useFocusRecovery } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
-import { liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
+import { dropLine, liftedDragImage, reducedMotion, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { SearchInput } from "@tavora/official-ui/components/ui/search-input";
 import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { computed, nextTick, ref } from "vue";
@@ -97,10 +97,9 @@ async function onMove(id: string, delta: -1 | 1) {
   setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="note-${id}"] button`)?.focus(), 60);
 }
 
-function dropShadow(entry: NoteEntry): string | false {
+function dropClass(entry: NoteEntry): string | false {
   // The gap that opens is the drop place; the line is for reduced motion.
-  if (!reducedMotion()) return false;
-  return drop.value?.id === entry.id && (drop.value.after ? "shadow-[0_2px_0_0_var(--primary)]" : "shadow-[0_-2px_0_0_var(--primary)]");
+  return reducedMotion() && dropLine(drop.value, entry.id);
 }
 
 /** The collapsed strip: the scratchpad, pinned notes, then the rest, each as a small icon. */
@@ -195,7 +194,7 @@ function railTitle(entry: NoteEntry): string {
               :key="entry.id"
               :draggable="renamingId !== entry.id"
               :data-reorder-id="entry.id"
-              :class="cn(dragId === entry.id && 'opacity-50', dropShadow(entry))"
+              :class="cn(dragId === entry.id && 'opacity-50', dropClass(entry))"
               @dragstart="onDragStart($event, entry)"
               @dragover="onDragOver($event, entry)"
               @drop="onDrop"
@@ -212,7 +211,7 @@ function railTitle(entry: NoteEntry): string {
             :key="entry.id"
             :draggable="renamingId !== entry.id"
             :data-reorder-id="entry.id"
-            :class="cn(dragId === entry.id && 'opacity-50', dropShadow(entry))"
+            :class="cn(dragId === entry.id && 'opacity-50', dropClass(entry))"
             @dragstart="onDragStart($event, entry)"
             @dragover="onDragOver($event, entry)"
             @drop="onDrop"

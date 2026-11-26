@@ -104,7 +104,9 @@ export default defineComponent({
   emits: ['dismiss'],
   setup(props, { attrs, emit, slots }) {
     const card = ref<HTMLElement | null>(null);
-    const position = ref({ left: 0, top: 0, width: 360, side: 'bottom' as TooltipSide, arrow: 0 });
+    const position = ref({ left: 0, top: 0, width: 360, side: 'bottom' as TooltipSide, arrow: 0, maxHeight: 0, covers: false });
+    /** Taller than the panel: held to its height, and the wheel scrolls it. */
+    const scrolls = ref(false);
     const ready = ref(false);
     /** Shown while another was open: it appears at once instead of fading in. */
     const instant = ref(false);
@@ -141,6 +143,9 @@ export default defineComponent({
       if (!props.open) { if (!closing.value) ready.value = false; return; }
       const viewport = { width: innerWidth, height: innerHeight }, side = props.side, max = tooltipMaxWidth(props.width);
       position.value = tooltipPlacement(anchor(), 0, 0, viewport, side, max, props.bare, props.align);
+      // Measured at its full height first.
+      scrolls.value = false;
+      let height = 0;
       // Measure, place, and measure again if a side placement made the card narrower and so taller.
       for (let pass = 0; pass < 2; pass++) {
         await nextTick();
@@ -150,13 +155,30 @@ export default defineComponent({
         const measured = { width: Math.ceil(box.width), height: Math.ceil(box.height) };
         const placed = tooltipPlacement(anchor(), measured.width, measured.height, viewport, side, max, props.bare, props.align);
         position.value = placed;
+        height = measured.height;
         if (placed.width >= measured.width) break;
       }
+      scrolls.value = height > position.value.maxHeight;
       ready.value = true;
     }
     watch(() => [props.open, props.anchor, props.at?.x, props.at?.y, props.side, props.align, props.title, props.description, props.shortcut, props.badge, props.meta, props.divider, props.width], place, { immediate: true });
     const dismiss = () => emit('dismiss');
     const key = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss(); };
+    // The card's own scrolling is not the page moving away under it.
+    const scrolled = (event: Event) => { if (!(event.target instanceof Node && card.value?.contains(event.target))) dismiss(); };
+    // A card that scrolls stays out of the pointer's way (it may lie over its element, which would end the hover), so
+    // the wheel over the element or over the card scrolls it. It stays the card's at either end too: the page scrolling
+    // would close the card while it is being read.
+    function wheel(event: WheelEvent) {
+      const box = card.value;
+      if (!box || event.ctrlKey || !event.deltaY) return;
+      const over = (rect: TooltipRect) => event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+      if (!over(anchor()) && !over(box.getBoundingClientRect())) return;
+      const scroller = (props.bare ? box.firstElementChild ?? box : box) as HTMLElement;
+      scroller.scrollTop += event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroller.clientHeight : 1);
+      event.preventDefault();
+      event.stopPropagation();
+    }
     // Only an open tooltip listens to the window: a list of closed ones adds nothing to every scroll and key.
     let listening = false;
     function listen(on: boolean) {
@@ -165,15 +187,25 @@ export default defineComponent({
       const change = on ? window.addEventListener.bind(window) : window.removeEventListener.bind(window);
       change('blur', dismiss);
       change('resize', dismiss);
-      change('scroll', dismiss, true);
+      change('scroll', scrolled, true);
       change('keydown', key, true);
     }
+    // Not passive, so the page does not scroll along; on only while a card scrolls.
+    let wheeling = false;
+    function listenWheel(on: boolean) {
+      if (on === wheeling) return;
+      wheeling = on;
+      if (on) window.addEventListener('wheel', wheel, { capture: true, passive: false });
+      else window.removeEventListener('wheel', wheel, { capture: true });
+    }
+    watch(() => props.open && scrolls.value, listenWheel);
     onMounted(() => watch(() => props.open, (open) => listen(!!open), { immediate: true }));
     onUnmounted(() => {
       generation++;
       track(false);
       finishClose();
       listen(false);
+      listenWheel(false);
     });
     /** The title line's own parts: badges after the title, meta text at the right. Null when it is the title alone. */
     function extras() {
@@ -208,8 +240,11 @@ export default defineComponent({
       ...(props.open ? { id: props.id, role: 'tooltip', 'data-slot': 'tooltip' } : { 'data-slot': 'tooltip-closing', 'aria-hidden': 'true' }), ref: card, 'data-side': position.value.side, 'data-tone': props.tone === 'danger' ? 'destructive' : props.tone, // A closing card is no longer ready: its fade-out then wins over the fade-in (tooltip.css).
       'data-ready': ready.value && !closing.value ? 'true' : undefined, 'data-instant': instant.value ? 'true' : undefined, 'data-closing': !props.open && closing.value ? 'true' : undefined,
       'data-bare': props.bare ? 'true' : undefined,
+      'data-scrolls': scrolls.value ? 'true' : undefined,
+      // A picture that arrives makes the card taller: placed again (a load does not bubble, so it is caught on the way in).
+      ...(props.open ? { onLoadCapture: () => void place() } : {}),
       class: props.compact ? 'tavora-tooltip compact' : 'tavora-tooltip',
-      style: { left: position.value.left + 'px', top: position.value.top + 'px', maxWidth: position.value.width + 'px', '--tavora-tooltip-arrow': position.value.arrow + 'px', visibility: ready.value ? 'visible' : 'hidden' },
-    }), [...head(), ...body(), props.arrow ? h('span', { class: 'tavora-tooltip-arrow', 'aria-hidden': 'true' }) : null])] : []);
+      style: { left: position.value.left + 'px', top: position.value.top + 'px', maxWidth: position.value.width + 'px', maxHeight: scrolls.value ? position.value.maxHeight + 'px' : undefined, '--tavora-tooltip-arrow': position.value.arrow + 'px', visibility: ready.value ? 'visible' : 'hidden' },
+    }), [...head(), ...body(), props.arrow && !position.value.covers && !scrolls.value ? h('span', { class: 'tavora-tooltip-arrow', 'aria-hidden': 'true' }) : null])] : []);
   },
 });

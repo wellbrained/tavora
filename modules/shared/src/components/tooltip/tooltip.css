@@ -51,6 +51,13 @@
 .tavora-tooltip[data-bare]{padding:0;border:0;background:transparent;box-shadow:none}
 .tavora-tooltip[data-bare]>[data-slot=item-card]:not([data-layout=unit]){box-shadow:inset 0 1px 0 #ffffff0a,0 8px 24px #000a,0 2px 6px #0006}
 
+/* Taller than the panel (Tooltip.ts holds it to the panel's height): it scrolls. An item card scrolls inside its own
+   surface, so its edge, corners and shadow stay whole. */
+.tavora-tooltip[data-scrolls]{overflow-y:auto;scrollbar-width:thin}
+.tavora-tooltip[data-bare][data-scrolls]{display:flex;flex-direction:column;overflow:visible}
+.tavora-tooltip[data-bare][data-scrolls]>*{min-height:0;overflow-y:auto;scrollbar-width:thin}
+.tavora-tooltip[data-bare][data-scrolls]>*>*{flex-shrink:0}
+
 /* A one-line label: tighter, the text as bright as a title. */
 .tavora-tooltip.compact{padding:6px 10px;border-radius:7px;font-size:13px}
 .tavora-tooltip.compact .tavora-tooltip-title{font-size:13px;line-height:1.3}

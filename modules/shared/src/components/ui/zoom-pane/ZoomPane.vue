@@ -18,6 +18,9 @@
 // The `overlay` slot lies over the content without being scaled (pins that keep their size); its `view` and `pane` slot
 // props place things on it. Inside the content or the overlay, a pan never starts on a button or a field, unless it is
 // marked `data-zoom-pane-drag`.
+// With `bare` the pane has no frame and sits flush with what is around it, for a map or tree that fills its panel: the
+// focus ring then sits inside its edge, over the content. While `loading` (the content is not there yet) the zoom
+// controls are hidden, as they are while a saved view is on its way: they would show the % of nothing.
 // With `viewOnly` the pane does all of the above but moves nothing: for a game that draws itself (a canvas, an SVG).
 // The default slot gets the `view` and the `pane` size (also sent as viewChange) and fills the pane, the game draws with
 // them; `world` is the size of what it draws, in its own units at zoom 1, so fitting and the limits know the content.
@@ -68,6 +71,10 @@ const props = withDefaults(defineProps<{
   wholeLabel?: string
   /** What the pane shows, for screen readers. */
   label?: string
+  /** No frame, corners or background of its own, for a map or tree that fills its panel. */
+  bare?: boolean
+  /** What the pane shows is still loading: the zoom controls are hidden until it is there. */
+  loading?: boolean
   class?: HTMLAttributes["class"]
 }>(), {
   minZoom: 0.25,
@@ -534,7 +541,11 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
     :aria-label="label"
     tabindex="0"
     :class="cn(
-      'bg-background relative touch-none overflow-hidden rounded-md border outline-none select-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3',
+      'relative touch-none overflow-hidden outline-none select-none',
+      // Bare: the ring is drawn over the content, which would cover an inset shadow on the pane itself.
+      bare
+        ? 'after:pointer-events-none after:absolute after:inset-0 after:z-(--layer-overlay) focus-visible:after:inset-ring-3 focus-visible:after:inset-ring-ring/50'
+        : 'bg-background rounded-md border focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3',
       dragging ? 'cursor-grabbing' : 'cursor-grab',
       props.class,
     )"
@@ -553,7 +564,7 @@ defineExpose({ fit, actualSize, zoomIn, zoomOut, moveOrigin, setView, showArea, 
       role="group"
       :aria-label="uiText.zoomControls"
       data-zoom-pane-ignore
-      class="bg-background/90 absolute z-(--layer-overlay) right-2 bottom-2 flex cursor-default items-center gap-0.5 rounded-md border p-0.5 shadow-elevation-1"
+      :class="cn('bg-background/90 absolute z-(--layer-overlay) right-2 bottom-2 flex cursor-default items-center gap-0.5 rounded-md border p-0.5 shadow-elevation-1', (loading || restoring) && 'invisible')"
       @pointerdown.stop
       @dblclick.stop
     >

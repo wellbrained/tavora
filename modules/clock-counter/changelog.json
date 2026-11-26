@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.89",
+    "date": "2026-11-26",
+    "notes": [
+      "With reduced motion, the line where a dragged row will land is clearer."
+    ]
+  },
+  {
     "version": "0.1.88",
     "date": "2026-11-26",
     "notes": [

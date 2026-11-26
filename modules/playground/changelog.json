@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.107",
+    "date": "2026-11-26",
+    "notes": [
+      "New examples: bare zoom pane, tall card, drop line and flush table."
+    ]
+  },
+  {
     "version": "0.1.106",
     "date": "2026-11-26",
     "notes": [

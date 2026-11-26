@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.75",
+    "date": "2026-11-26",
+    "notes": [
+      "With reduced motion, the line where a dragged note will land is clearer."
+    ]
+  },
+  {
     "version": "0.6.74",
     "date": "2026-11-26",
     "notes": [
