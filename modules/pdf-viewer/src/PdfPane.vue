@@ -15,6 +15,7 @@ import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Progress } from "@tavora/official-ui/components/ui/progress";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Toggle, ToggleGroup } from "@tavora/official-ui/components/ui/toggle";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { isComposing } from "@tavora/official-ui/lib/keys";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import OutlineList from "./OutlineList.vue";
@@ -516,8 +517,8 @@ const setPageRef = (number: number) => (element: unknown) => {
     </div>
 
     <template v-else>
-      <div class="bg-card flex shrink-0 flex-wrap items-center gap-1 border-b px-2 py-1" role="toolbar" :aria-label="t('pdf.toolbar')">
-        <ToggleGroup :model-value="side ? [side] : []" :options="sideOptions" :label="t('pdf.pages') + ', ' + t('pdf.outline')" @update:model-value="chooseSide" />
+      <Toolbar variant="bar" wrap :label="t('pdf.toolbar')">
+        <ToggleGroup variant="ghost" :model-value="side ? [side] : []" :options="sideOptions" :label="t('pdf.pages') + ', ' + t('pdf.outline')" @update:model-value="chooseSide" />
         <Button variant="ghost" size="icon" :disabled="page <= 1" :title="t('pdf.previous')" :aria-label="t('pdf.previous')" data-testid="pdf-prev" @click="goToPage(page - 1)">
           <ChevronUp />
         </Button>
@@ -536,14 +537,14 @@ const setPageRef = (number: number) => (element: unknown) => {
         <Button variant="ghost" size="icon" :title="t('pdf.zoomIn')" :aria-label="t('pdf.zoomIn')" data-testid="pdf-zoom-in" @click="setZoom(stepZoom(zoom, 1), null)">
           <Plus />
         </Button>
-        <ToggleGroup :model-value="fit ? [fit] : []" :options="fitOptions" :label="t('pdf.fitWidth') + ', ' + t('pdf.fitPage')" @update:model-value="chooseFit" />
+        <ToggleGroup variant="ghost" :model-value="fit ? [fit] : []" :options="fitOptions" :label="t('pdf.fitWidth') + ', ' + t('pdf.fitPage')" @update:model-value="chooseFit" />
         <span class="flex-1" />
-        <Toggle :model-value="searching" :label="t('pdf.search')" data-testid="pdf-search-toggle" @update:model-value="searching ? closeSearch() : openSearch()">
+        <Toggle variant="ghost" :model-value="searching" :label="t('pdf.search')" data-testid="pdf-search-toggle" @update:model-value="searching ? closeSearch() : openSearch()">
           <Search class="size-4" />
         </Toggle>
-      </div>
+      </Toolbar>
 
-      <div v-if="searching" class="bg-card flex shrink-0 items-center gap-1 border-b px-2 py-1" data-testid="pdf-search">
+      <Toolbar v-if="searching" variant="bar" :label="t('pdf.search')" data-testid="pdf-search">
         <Input
           ref="searchInput"
           v-model="query"
@@ -564,7 +565,7 @@ const setPageRef = (number: number) => (element: unknown) => {
         <Button variant="ghost" size="icon" :title="t('pdf.searchClose')" :aria-label="t('pdf.searchClose')" data-testid="pdf-search-close" @click="closeSearch">
           <X />
         </Button>
-      </div>
+      </Toolbar>
 
       <div class="relative flex min-h-0 flex-1">
         <div ref="scroller" class="bg-muted/40 relative min-w-0 flex-1 overflow-auto" tabindex="0" :inert="covered" data-testid="pdf-scroller" @scroll.passive="onScroll" @wheel="onWheel">

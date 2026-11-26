@@ -11,6 +11,7 @@ export const en = {
   "undo.undo": "Undo",
 
   "list.label": "Notes",
+  "list.toolbar": "Note list tools",
   "list.search": "Search notes",
   "list.clearSearch": "Clear search",
   "list.new": "New note",
@@ -74,6 +75,7 @@ export const en = {
   "editor.text": "Note text",
   "editor.allNotes": "All notes",
   "editor.formatting": "Formatting",
+  "editor.toolbar": "Note tools",
   "editor.textStyle": "Text style",
   "editor.moreFormatting": "More formatting",
   "editor.on": "On",
@@ -137,6 +139,7 @@ export const de: Record<keyof typeof en, string> = {
   "undo.undo": "Rückgängig",
 
   "list.label": "Notizen",
+  "list.toolbar": "Werkzeuge der Notizliste",
   "list.search": "Notizen durchsuchen",
   "list.clearSearch": "Suche löschen",
   "list.new": "Neue Notiz",
@@ -200,6 +203,7 @@ export const de: Record<keyof typeof en, string> = {
   "editor.text": "Notiztext",
   "editor.allNotes": "Alle Notizen",
   "editor.formatting": "Formatierung",
+  "editor.toolbar": "Notizwerkzeuge",
   "editor.textStyle": "Textstil",
   "editor.moreFormatting": "Mehr Formatierung",
   "editor.on": "An",

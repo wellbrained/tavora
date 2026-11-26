@@ -211,6 +211,23 @@ describe("Toolbar", () => {
     expect(document.activeElement).toBe(get("c"))
   })
 
+  it("lets Shift+Tab from a field leave the toolbar instead of landing on a tool after it", async () => {
+    const text = ref("")
+    const { root } = await mount(() => [
+      h(SearchInput, { modelValue: text.value, "onUpdate:modelValue": (next: string) => (text.value = next), "aria-label": "Find" }),
+      h(Button, { "data-testid": "a" }, () => "a"),
+    ])
+    const bar = root.querySelector("[role=toolbar]") as HTMLElement
+    const field = root.querySelector("input") as HTMLInputElement
+    expect(bar.tabIndex).toBe(0)
+    field.focus()
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }))
+    // While the browser moves the focus back, the toolbar's own element is no stop; then it is again.
+    expect(bar.tabIndex).toBe(-1)
+    await wait()
+    expect(bar.tabIndex).toBe(0)
+  })
+
   it("keeps a field as a Tab stop of its own, out of the arrow keys", async () => {
     const text = ref("")
     const { root, get, key } = await mount(() => [
@@ -223,5 +240,101 @@ describe("Toolbar", () => {
     get("a").focus()
     await key("ArrowRight")
     expect(document.activeElement).toBe(get("a"))
+  })
+})
+
+describe("Toolbar looks", () => {
+  async function mountLook(props: Record<string, unknown>, below?: () => VNodeChild) {
+    const root = document.createElement("div")
+    document.body.append(root)
+    const slots: Record<string, () => VNodeChild> = { default: buttons("a", "b") }
+    if (below) slots.below = below
+    app = createApp({ render: () => h(Toolbar, { label: "Tools", ...props }, slots) })
+    app.mount(root)
+    await nextTick()
+    await wait()
+    const bar = root.querySelector("[role=toolbar]") as HTMLElement
+    const get = (id: string) => root.querySelector(`[data-testid=${id}]`) as HTMLElement
+    return { bar, get }
+  }
+  const classes = (element: Element) => element.className.split(/\s+/)
+
+  it("has no look of its own by default", async () => {
+    const { bar } = await mountLook({})
+    expect(bar.dataset.variant).toBe("plain")
+    expect(classes(bar)).not.toContain("bg-primary/5")
+    expect(classes(bar)).not.toContain("tavora-floating")
+  })
+
+  it("is a tinted strip as a bar, a control plus 8px tall, wrapping on asking", async () => {
+    const { bar } = await mountLook({ variant: "bar" })
+    expect(bar.dataset.variant).toBe("bar")
+    expect(classes(bar)).toEqual(expect.arrayContaining(["bg-primary/5", "border-primary/25", "border-b", "px-2", "min-h-[calc(var(--style-control-height,32px)+8px)]"]))
+    expect(classes(bar)).not.toContain("flex-wrap")
+    app!.unmount()
+    document.body.innerHTML = ""
+    const wrapped = await mountLook({ variant: "bar", wrap: true })
+    expect(classes(wrapped.bar)).toEqual(expect.arrayContaining(["flex-wrap", "py-1"]))
+  })
+
+  it("has a line at its right as a column bar", async () => {
+    const { bar } = await mountLook({ variant: "bar", orientation: "vertical" })
+    expect(classes(bar)).toEqual(expect.arrayContaining(["bg-primary/5", "border-r", "flex-col"]))
+    expect(classes(bar)).not.toContain("border-b")
+  })
+
+  it("puts the below rows under the tools, all in the one toolbar", async () => {
+    const { bar, get } = await mountLook({ variant: "bar" }, () => h("div", { "data-testid": "status" }, [h(Button, { "data-testid": "c" }, () => "c")]))
+    expect(classes(bar)).toEqual(expect.arrayContaining(["flex-col", "border-b", "p-2"]))
+    const row = bar.querySelector("[data-slot=toolbar-row]")!
+    expect(row.contains(get("a"))).toBe(true)
+    expect(row.nextElementSibling).toBe(get("status"))
+    // The row under the tools is still part of the arrow keys.
+    get("b").focus()
+    ;(document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }))
+    await nextTick()
+    await wait()
+    expect(document.activeElement).toBe(get("c"))
+  })
+
+  it("stacks the below rows in a plain toolbar too, without a strip", async () => {
+    const { bar, get } = await mountLook({}, () => h("span", { "data-testid": "status" }, "3 shown"))
+    expect(bar.querySelector("[data-slot=toolbar-row]")!.nextElementSibling).toBe(get("status"))
+    expect(classes(bar)).toContain("flex-col")
+    expect(classes(bar)).not.toContain("bg-primary/5")
+  })
+
+  it("stacks and unstacks when its below rows come and go", async () => {
+    const root = document.createElement("div")
+    document.body.append(root)
+    const searching = ref(false)
+    app = createApp({
+      render: () =>
+        h(Toolbar, { label: "Tools", variant: "bar" }, {
+          default: buttons("a"),
+          ...(searching.value ? { below: () => h("div", { "data-testid": "find" }, "find") } : {}),
+        }),
+    })
+    app.mount(root)
+    await nextTick()
+    const bar = root.querySelector("[role=toolbar]") as HTMLElement
+    expect(bar.querySelector("[data-slot=toolbar-row]")).toBeNull()
+    searching.value = true
+    await nextTick()
+    expect(bar.querySelector("[data-slot=toolbar-row]")).not.toBeNull()
+    expect(bar.querySelector("[data-testid=find]")).not.toBeNull()
+    expect(classes(bar)).toContain("flex-col")
+    searching.value = false
+    await nextTick()
+    expect(bar.querySelector("[data-slot=toolbar-row]")).toBeNull()
+    expect(classes(bar)).not.toContain("flex-col")
+  })
+
+  it("takes the floating surface over a map or canvas", async () => {
+    const { bar } = await mountLook({ variant: "floating", class: "absolute top-2 right-2" })
+    expect(bar.dataset.variant).toBe("floating")
+    expect(classes(bar)).toEqual(expect.arrayContaining(["tavora-floating", "p-1", "gap-0.5", "absolute"]))
+    expect(classes(bar)).not.toContain("gap-1")
+    expect(classes(bar)).not.toContain("bg-primary/5")
   })
 })

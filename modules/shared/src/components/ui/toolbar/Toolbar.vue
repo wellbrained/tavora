@@ -5,28 +5,57 @@
 // `Separator` turns across the row. In a choice group the arrows only move the focus; Space or Enter picks. A field
 // (search, number, select) stays a Tab stop of its own, since it needs the arrows for its text.
 // A switched-off Button stays reachable here, so a keyboard user hears that it's off (and why, with `disabledReason`).
-// It lays its items out in a row (or a column with `orientation="vertical"`) and has no look of its own: give the bar its
-// border, background and padding where it's used.
+// It lays its items out in a row (or a column with `orientation="vertical"`). Its look:
+// - `plain` (the default): none of its own; give it border, background and padding where it's used.
+// - `bar`: the panel's tool strip under its header, tinted with a line below (a column: a line at its right), as tall as a
+//   control plus 8px. `wrap` lets a narrow panel give it a second row instead of cutting tools off.
+// - `floating`: the bar over a map, canvas or text (`tavora-floating`: the style's surface, elevation 2). Where it sits and
+//   its layer stay with the caller.
+// The `below` slot adds rows under the tools (a search and filter header: the status line, chips, a progress bar), still
+// in the one toolbar, so its buttons are on the same arrow keys.
 import { ToolbarRoot } from "reka-ui"
-import { computed, useId, type HTMLAttributes } from "vue"
+import { computed, useId, useSlots, type HTMLAttributes } from "vue"
 import { cn } from "../../../lib/utils"
 import { provideToolbar, type ToolbarOrientation } from "./context"
+import { toolbarVariants, type ToolbarVariant } from "./variants"
 
 const props = withDefaults(defineProps<{
   /** Its name for screen readers, such as "Text style" or "Map". */
   label: string
   orientation?: ToolbarOrientation
+  variant?: ToolbarVariant
+  /** In a narrow panel the tools go on to a second row instead of being cut off. */
+  wrap?: boolean
   class?: HTMLAttributes["class"]
-}>(), { orientation: "horizontal" })
+}>(), { orientation: "horizontal", variant: "plain", wrap: false })
+
+const slots = useSlots()
+/** Rows under its tools (a search and filter header). Read while rendering, since a `below` may come and go. */
+const stacked = () => !!slots.below
 
 const id = useId()
 provideToolbar({ id, orientation: computed(() => props.orientation) })
+
+/**
+ * Shift+Tab from a field in the toolbar leaves it (or goes to the tool before the field). Without this the toolbar's own
+ * element, which takes the Tab stop on the way in, would catch the focus and hand it to a tool after the field.
+ */
+function onShiftTab(event: KeyboardEvent, root: HTMLElement) {
+  const target = event.target
+  if (!(target instanceof HTMLElement) || target === root || target.hasAttribute("data-toolbar-item")) return
+  const before = root.tabIndex
+  root.tabIndex = -1
+  setTimeout(() => {
+    if (root.tabIndex === -1) root.tabIndex = before
+  })
+}
 
 /**
  * In a column, ↓ moves to the next item, also from a menu trigger, which would open its menu on ↓ in a row. Runs before
  * the trigger sees the key, and moves the focus itself; Enter and Space still open the menu.
  */
 function onKeydownCapture(event: KeyboardEvent) {
+  if (event.key === "Tab" && event.shiftKey && event.currentTarget instanceof HTMLElement) return onShiftTab(event, event.currentTarget)
   if (props.orientation !== "vertical" || event.key !== "ArrowDown" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
   const target = event.target
   const root = event.currentTarget
@@ -51,9 +80,14 @@ function onKeydownCapture(event: KeyboardEvent) {
     :aria-label="label"
     data-slot="toolbar"
     :data-toolbar-id="id"
-    :class="cn('flex min-w-0 items-center gap-1', orientation === 'vertical' && 'flex-col', props.class)"
+    :data-variant="variant"
+    :class="cn(toolbarVariants({ variant, orientation, wrap, stacked: stacked() }), props.class)"
     @keydown.capture="onKeydownCapture"
   >
-    <slot />
+    <template v-if="stacked()">
+      <div data-slot="toolbar-row" :class="cn('flex min-w-0 items-center gap-1', orientation === 'vertical' && 'flex-col', wrap && 'flex-wrap')"><slot /></div>
+      <slot name="below" />
+    </template>
+    <slot v-else />
   </ToolbarRoot>
 </template>

@@ -10,6 +10,7 @@ import { computed, onBeforeUnmount, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { Tooltip } from "@tavora/official-ui/components/tooltip";
 import { isGroupAction, offered, selectionOf, type ToolbarActionId } from "../../../shared/layout-toolbar";
 import type { LayoutItemView } from "../../../shared/layout-view";
@@ -56,11 +57,11 @@ onBeforeUnmount(() => clearTimeout(delay));
 </script>
 
 <template>
-  <div
+  <Toolbar
     v-if="actions.length"
-    class="bg-popover text-popover-foreground absolute z-[100] flex items-center gap-1 rounded-md border p-1 shadow-md"
-    role="toolbar"
-    :aria-label="items.length > 1 ? t('overlays.layout.manyTools') : t('overlays.layout.itemTools')"
+    variant="floating"
+    class="absolute z-[100]"
+    :label="items.length > 1 ? t('overlays.layout.manyTools') : t('overlays.layout.itemTools')"
     data-testid="layout-frame-toolbar"
     @pointerdown.stop
   >
@@ -128,5 +129,5 @@ onBeforeUnmount(() => clearTimeout(delay));
     </template>
     <!-- Drawn on the page, not inside the toolbar, so the layer's edge can't clip it. -->
     <Tooltip :open="tip !== null" :anchor="tip?.anchor" :side="side" compact :description="tip?.text" @dismiss="hide" />
-  </div>
+  </Toolbar>
 </template>

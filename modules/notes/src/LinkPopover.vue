@@ -3,6 +3,7 @@
 // Open, Edit and Remove. Ctrl+click opens a link without it.
 import { ExternalLink, Pencil, Unlink } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { computed } from "vue";
 import { t } from "./i18n";
 
@@ -16,11 +17,11 @@ const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window
 </script>
 
 <template>
-  <div
-    class="bg-popover text-popover-foreground fixed z-50 flex max-w-[272px] items-center gap-0.5 rounded-md border py-1 pr-1 pl-2.5 text-xs shadow-lg"
+  <Toolbar
+    variant="floating"
+    class="fixed z-(--layer-floating) max-w-[272px] pl-2.5 text-xs"
     :style="style"
-    role="toolbar"
-    :aria-label="t('link.actions')"
+    :label="t('link.actions')"
     data-link-popover
     data-testid="link-popover"
   >
@@ -34,5 +35,5 @@ const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window
     <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="link-remove" :aria-label="t('link.remove')" :title="t('link.remove')" @click="emit('remove')">
       <Unlink />
     </Button>
-  </div>
+  </Toolbar>
 </template>

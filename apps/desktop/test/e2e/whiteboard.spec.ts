@@ -652,7 +652,7 @@ test("cards move as groups, undo, keep their pictures, and leave room in narrow 
     await setContentSize(app, 540, 620);
     await expect.poll(() => inModule(app, WHITEBOARD, `document.querySelector('[data-testid="board-actions"]').getBoundingClientRect().width > 0`)).toBe(true);
     expect(await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="copy-picture"]').getBoundingClientRect().width`)).toBe(0);
-    expect(await inModule(app, WHITEBOARD, `document.querySelector('header').getBoundingClientRect().height`)).toBeLessThan(45);
+    expect(await inModule(app, WHITEBOARD, `document.querySelector('[data-testid="board-toolbar"]').getBoundingClientRect().height`)).toBeLessThan(45);
     // Fit to the resized viewport, as a user can do with Shift+1.
     await drag(app, {x: 100, y: 200}, {x: 100, y: 200});
     await app.evaluate(({webContents}, id) => {

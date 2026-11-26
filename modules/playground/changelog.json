@@ -1,9 +1,16 @@
 [
   {
-    "version": "0.1.100",
+    "version": "0.1.101",
     "date": "2026-11-26",
     "notes": [
       "A new tooltip example: rows and tiles that show a card when you point at them."
+    ]
+  },
+  {
+    "version": "0.1.100",
+    "date": "2026-11-26",
+    "notes": [
+      "New examples: Tool strip and Floating toolbar, on the Buttons page."
     ]
   },
   {
@@ -707,13 +714,6 @@
     "date": "2026-10-31",
     "notes": [
       "The tile map shows a layer over the map and under the pins, such as a fog of war."
-    ]
-  },
-  {
-    "version": "0.1.1",
-    "date": "2026-10-31",
-    "notes": [
-      "Text fields and dropdowns look calmer in Dark mode."
     ]
   }
 ]
