@@ -294,12 +294,16 @@ describe("Toolbar Tab stops with fields", () => {
     expect(await tab(get("before"))).toBe(get("a"))
     expect(await tab(get("a"))).toBe(get("find"))
     expect(await tab(get("find"))).toBe(get("after"))
+    // And back: the field after the tools is the last stop, then the tool used last.
+    get("after").focus()
+    expect(await tab(get("after"), true)).toBe(get("find"))
   })
 
   it("keeps a field between tools a stop of its own", async () => {
     const { get } = await page(() => [h(Button, { "data-testid": "a" }, () => "a"), search("find"), h(Button, { "data-testid": "b" }, () => "b")])
     expect(await tab(get("before"))).toBe(get("a"))
     expect(await tab(get("a"))).toBe(get("find"))
+    expect(await tab(get("find"), true)).toBe(get("a"))
   })
 
   it("lands on a leading field first even once a later tool was used", async () => {

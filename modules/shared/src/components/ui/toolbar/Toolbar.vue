@@ -63,8 +63,8 @@ function entryTool(root: HTMLElement) {
 
 /** The fields of this toolbar (not its tools, not what its tools open) that Tab stops on, in page order. */
 function fieldsOf(root: HTMLElement) {
-  return [...root.querySelectorAll<HTMLElement>("input, select, textarea, button, [tabindex], [contenteditable=true]")].filter(
-    (element) => element.closest("[data-slot=toolbar]") === root && !element.closest("[data-toolbar-item]") && element.tabIndex >= 0 && !(element as HTMLInputElement).disabled && !element.hidden,
+  return [...root.querySelectorAll<HTMLElement>("input:not([type=hidden]), select, textarea, button, [tabindex], [contenteditable=true]")].filter(
+    (element) => element.closest("[data-slot=toolbar]") === root && !element.closest("[data-toolbar-item]") && element.tabIndex >= 0 && !(element as HTMLInputElement).disabled && !element.hidden && !element.closest("[inert], [aria-hidden=true]"),
   )
 }
 
@@ -107,7 +107,7 @@ function onKeydownCapture(event: KeyboardEvent) {
   if (event.key === "Tab" && event.currentTarget instanceof HTMLElement) {
     const target = event.target
     if (event.shiftKey) return onShiftTab(event, event.currentTarget)
-    if (target instanceof HTMLElement && target !== event.currentTarget && !target.closest("[data-toolbar-item]")) return onFieldTab(event, event.currentTarget, target)
+    if (target instanceof HTMLElement && target !== event.currentTarget && target.closest("[data-slot=toolbar]") === event.currentTarget && !target.closest("[data-toolbar-item]")) return onFieldTab(event, event.currentTarget, target)
     return
   }
   if (props.orientation !== "vertical" || event.key !== "ArrowDown" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
