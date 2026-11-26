@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.76",
+    "date": "2026-11-26",
+    "notes": [
+      "Checkboxes, the description field and buttons look and feel like the rest of Tavora."
+    ]
+  },
+  {
     "version": "0.2.75",
     "date": "2026-11-26",
     "notes": [

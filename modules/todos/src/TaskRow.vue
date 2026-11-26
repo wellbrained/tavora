@@ -11,9 +11,11 @@
 import { ChevronRight, Ellipsis, GripVertical, Pin, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Checkbox } from "@tavora/official-ui/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { isComposing } from "@tavora/official-ui/lib/keys";
 import { Popover, PopoverAnchor, PopoverContent } from "@tavora/official-ui/components/ui/popover";
+import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { computed, inject, nextTick, ref } from "vue";
 import { t } from "./i18n";
 import { PANEL, ROW_FOCUS } from "./panel";
@@ -58,7 +60,6 @@ const hasMeta = computed(() => props.compact || props.children.total > 0 || prop
 // another panel saved first, so every value it uses is read now, never inside it.
 const actions = taskActions(props.store, panel, rowFocus);
 const change = actions.change;
-const checked = (event: Event) => (event.target as HTMLInputElement).checked;
 const setTaskDone = (done: boolean) => actions.setDone(props.task, done);
 const remove = () => actions.remove(props.task);
 
@@ -134,7 +135,7 @@ function addBelow(level: number) {
 
 const describing = ref(false);
 const description = ref("");
-const descriptionInput = ref<HTMLTextAreaElement | null>(null);
+const descriptionInput = ref<InstanceType<typeof Textarea> | null>(null);
 let cancelled = false;
 /** A menu item that needs the focus (the description, a new to-do) runs once the menu has closed and let go of it. */
 const menuFocus = afterMenu();
@@ -157,7 +158,7 @@ function cancelDescription() {
 
 function focusDescription(event: Event) {
   event.preventDefault();
-  const input = descriptionInput.value;
+  const input = descriptionInput.value?.$el as HTMLTextAreaElement | undefined;
   input?.focus();
   input?.setSelectionRange(input.value.length, input.value.length);
 }
@@ -222,26 +223,27 @@ function choose(action: RowAction) {
         <GripVertical class="size-3.5" />
       </span>
       <span v-if="!compact" class="flex h-8 w-4 flex-none items-center justify-center">
-        <button
+        <Button
           v-if="children.total"
-          type="button"
-          class="text-muted-foreground hover:text-foreground flex size-5 items-center justify-center rounded-sm"
+          variant="ghost"
+          size="icon-xs"
+          class="text-muted-foreground hover:text-foreground size-5 rounded-sm hover:bg-transparent"
           :aria-expanded="!folded"
           :aria-label="folded ? t('task.unfold', { title: task.title }) : t('task.fold', { title: task.title })"
           data-testid="task-fold"
           @click="panel.toggleFolded(task.id)"
         >
           <ChevronRight :class="cn('size-3.5 transition-transform', !folded && 'rotate-90')" />
-        </button>
+        </Button>
       </span>
       <span class="flex h-8 flex-none items-center px-0.5">
-        <input
-          type="checkbox"
-          class="todo-check"
-          :checked="task.done"
+        <!-- Round, so it reads as a to-do rather than a setting. -->
+        <Checkbox
+          class="data-[state=checked]:bg-primary hover:border-primary size-5 cursor-pointer rounded-full border-[1.5px] border-[color-mix(in_oklab,var(--primary)_45%,var(--muted-foreground))]"
+          :model-value="task.done"
           :aria-label="task.done ? t('task.notDone', { title: task.title }) : t('task.done', { title: task.title })"
           data-testid="task-done"
-          @change="setTaskDone(checked($event))"
+          @update:model-value="setTaskDone($event === true)"
         />
       </span>
 
@@ -296,14 +298,14 @@ function choose(action: RowAction) {
           @open-auto-focus="focusDescription"
           @escape-key-down="cancelDescription"
         >
-          <textarea
+          <Textarea
             ref="descriptionInput"
             v-model="description"
             :maxlength="MAX.details"
             :placeholder="t('task.description')"
             :aria-label="t('task.description')"
             data-testid="description-input"
-            class="placeholder:text-muted-foreground border-input focus-visible:border-ring field-sizing-content block max-h-60 min-h-20 w-full resize-none rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none"
+            class="block max-h-60 min-h-20 resize-none px-2 py-1.5 text-sm"
             @keydown="onDescriptionKey"
           />
           <p class="text-muted-foreground mt-1.5 px-0.5 text-[11px]">{{ t("task.descriptionHint") }}</p>
@@ -330,18 +332,22 @@ function choose(action: RowAction) {
       </span>
       <span class="flex h-8 flex-none items-center">
         <DropdownMenu v-model:open="menuOpen">
-          <DropdownMenuTrigger
-            :class="
-              cn(
-                'text-muted-foreground hover:text-foreground flex size-7 items-center justify-center rounded-md opacity-40 group-hover/task:opacity-100 focus-visible:opacity-100',
-                (menuOpen || editing) && 'opacity-100',
-              )
-            "
-            :aria-label="t('moreFor', { name: task.title })"
-            :title="t('more')"
-            data-testid="task-menu"
-          >
-            <Ellipsis class="size-4" />
+          <DropdownMenuTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              :class="
+                cn(
+                  'text-muted-foreground hover:text-foreground size-7 opacity-40 group-hover/task:opacity-100 hover:bg-transparent focus-visible:opacity-100',
+                  (menuOpen || editing) && 'opacity-100',
+                )
+              "
+              :aria-label="t('moreFor', { name: task.title })"
+              :title="t('more')"
+              data-testid="task-menu"
+            >
+              <Ellipsis />
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" @close-auto-focus="menuFocus.closed">
             <RowMenuItems :entries="menuEntries()" @choose="choose" />

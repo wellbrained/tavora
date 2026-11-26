@@ -110,11 +110,6 @@
       "dom-query": {
         "setTimeout(() => document.querySelector<HTMLElement>(`[data-testid=\"note-${id}\"] button`)?.focus(), 60);": 1
       },
-      "kit-control": {
-        "<button type=\"button\" :class=\"cn('hover:bg-accent relative flex size-8 items-center justify-center rounded-md', entry.id === selectedId && 'bg-accent ring-primary ring-1')\"": 1,
-        "<button v-if=\"query\" type=\"button\" class=\"text-muted-foreground hover:text-foreground absolute right-1 rounded-sm p-1\"": 1,
-        "<input v-model=\"query\" type=\"search\" data-testid=\"search\"": 1
-      },
       "shadow": {
         "return drop.value?.id === entry.id && (drop.value.after ? \"shadow-[0_2px_0_0_var(--primary)]\" : \"shadow-[0_-2px_0_0_var(--primary)]\");": 2
       }
@@ -122,9 +117,6 @@
     "modules/notes/src/NoteRow.vue": {
       "focus-ring": {
         "class=\"bg-background border-ring placeholder:text-muted-foreground h-6 w-full min-w-0 rounded-sm border px-1 text-sm font-medium outline-none\"": 1
-      },
-      "kit-control": {
-        "<button v-else type=\"button\" class=\"flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left\"": 1
       }
     },
     "modules/pdf-viewer/src/PdfPage.vue": {
@@ -256,10 +248,6 @@
       "focus-ring": {
         "class=\"focus-visible:border-ring h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-semibold outline-none\"": 1
       },
-      "kit-control": {
-        "<button type=\"button\" :class=\"cn('text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-40 group-hover/header:opacity-100 focus-visible:opacity-100', menuOpen && 'opacity-100')\"": 1,
-        "<button type=\"button\" class=\"text-muted-foreground hover:text-foreground flex size-6 flex-none items-center justify-center rounded-md\"": 1
-      },
       "motion": {
         "class=\"absolute bottom-[-1px] left-0 h-px bg-[var(--tint,var(--primary))] transition-[width] duration-300 motion-reduce:transition-none\"": 2
       }
@@ -277,17 +265,13 @@
     },
     "modules/todos/src/TaskRow.vue": {
       "focus-ring": {
-        "class=\"block field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent px-1 py-1.5 font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words outline-none\"": 1,
-        "class=\"placeholder:text-muted-foreground border-input focus-visible:border-ring field-sizing-content block max-h-60 min-h-20 w-full resize-none rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none\"": 1
+        "class=\"block field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent px-1 py-1.5 font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words outline-none\"": 1
       },
       "font-size": {
         "<p class=\"text-muted-foreground mt-1.5 px-0.5 text-[11px]\">{{ t(\"task.descriptionHint\") }}</p>": 1
       },
       "kit-control": {
         "<button v-else type=\"button\" class=\"block w-full cursor-text rounded-sm px-1 py-1.5 text-left font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words\"": 1,
-        "<button v-if=\"children.total\" type=\"button\"": 1,
-        "<input type=\"checkbox\" class=\"todo-check\"": 1,
-        "<textarea ref=\"descriptionInput\" v-model=\"description\"": 1,
         "<textarea v-if=\"editing\" ref=\"titleInput\"": 1
       }
     },
@@ -327,10 +311,6 @@
       }
     },
     "modules/todos/src/style.css": {
-      "motion": {
-        "background-color 150ms ease,": 1,
-        "transition: transform 150ms ease;": 1
-      },
       "radius": {
         "border-radius: 1px;": 1
       }

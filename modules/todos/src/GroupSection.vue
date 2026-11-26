@@ -7,6 +7,8 @@ import type { MenuEntry } from "@tavora/sdk";
 import { ChevronRight, Ellipsis } from "@lucide/vue";
 import { cn, useFocusRecovery } from "@tavora/official-ui";
 import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
+import { Button } from "@tavora/official-ui/components/ui/button";
+import { Card } from "@tavora/official-ui/components/ui/card";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { isComposing } from "@tavora/official-ui/lib/keys";
 import { computed, inject, nextTick, onBeforeUnmount, provide, ref } from "vue";
@@ -293,10 +295,11 @@ function dropMark(position: number): "before" | "after" | null {
 </script>
 
 <template>
-  <section
+  <Card
+    as="section"
     :class="
       cn(
-        'bg-card overflow-hidden rounded-lg border',
+        'gap-0 overflow-hidden p-0',
         drop?.groupId === group.id && (collapsed || !rows.length) && 'border-primary bg-primary/10',
       )
     "
@@ -320,16 +323,17 @@ function dropMark(position: number): "before" | "after" | null {
       @click="onHeaderClick"
       @contextmenu="onHeaderContextMenu"
     >
-      <button
-        type="button"
-        class="text-muted-foreground hover:text-foreground flex size-6 flex-none items-center justify-center rounded-md"
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        class="text-muted-foreground hover:text-foreground size-6 hover:bg-transparent"
         :aria-expanded="!collapsed"
         :aria-label="collapsed ? t('group.show', { name: group.name }) : t('group.hide', { name: group.name })"
         data-testid="group-collapse"
         @click="emit('toggleCollapsed')"
       >
         <ChevronRight :class="cn('size-4 transition-transform', !collapsed && 'rotate-90')" />
-      </button>
+      </Button>
       <input
         v-if="renaming"
         ref="nameInput"
@@ -362,9 +366,10 @@ function dropMark(position: number): "before" | "after" | null {
         :style="{ width: `${(doneCount / group.tasks.length) * 100}%` }"
         aria-hidden="true"
       />
-      <button
-        type="button"
-        :class="cn('text-muted-foreground hover:text-foreground flex size-7 flex-none items-center justify-center rounded-md opacity-40 group-hover/header:opacity-100 focus-visible:opacity-100', menuOpen && 'opacity-100')"
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        :class="cn('text-muted-foreground hover:text-foreground size-7 opacity-40 group-hover/header:opacity-100 hover:bg-transparent focus-visible:opacity-100', menuOpen && 'opacity-100')"
         :aria-label="t('moreFor', { name: group.name })"
         :title="t('more')"
         aria-haspopup="menu"
@@ -373,8 +378,8 @@ function dropMark(position: number): "before" | "after" | null {
         data-focus-target
         @click="onMenuButton"
       >
-        <Ellipsis class="size-4" />
-      </button>
+        <Ellipsis />
+      </Button>
     </header>
 
     <div v-if="!collapsed" ref="tasksEl" class="p-1">
@@ -424,5 +429,5 @@ function dropMark(position: number): "before" | "after" | null {
         @add="add"
       />
     </div>
-  </section>
+  </Card>
 </template>

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.69",
+    "date": "2026-11-26",
+    "notes": [
+      "The search field, empty list and buttons look like the rest of Tavora."
+    ]
+  },
+  {
     "version": "0.6.68",
     "date": "2026-11-26",
     "notes": [

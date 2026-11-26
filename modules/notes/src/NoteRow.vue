@@ -3,6 +3,7 @@
 // Double-click on the row (or F2) renames it in place.
 import { Ellipsis, NotebookPen, Pencil, Pin, PinOff, Trash2 } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
+import { Button } from "@tavora/official-ui/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
 import { isComposing } from "@tavora/official-ui/lib/keys";
 import { computed, nextTick, ref, watch } from "vue";
 import { locale, plural, t } from "./i18n";
@@ -110,10 +112,10 @@ defineExpose({ startRename });
         @blur="finishRename(true)"
       />
     </div>
-    <button
+    <!-- The row around it draws the hover and the selection, so the menu button sits inside them. -->
+    <ListRow
       v-else
-      type="button"
-      class="flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left"
+      class="flex-1 px-3 py-2 hover:bg-transparent"
       :aria-current="selected ? 'true' : undefined"
       @click="emit('select')"
       @dblclick="startRename"
@@ -121,30 +123,36 @@ defineExpose({ startRename });
       @keydown.alt.up.prevent="emit('move', -1)"
       @keydown.alt.down.prevent="emit('move', 1)"
     >
-      <span class="flex w-full min-w-0 items-center gap-1.5 text-sm font-medium">
+      <span class="flex w-full min-w-0 items-center gap-1.5 font-medium">
         <NotebookPen v-if="scratchpad" class="text-muted-foreground size-3.5 flex-none" aria-hidden="true" />
         <Pin v-else-if="entry.pinned" class="text-muted-foreground size-3.5 flex-none" :aria-label="t('row.pinned')" />
         <!-- A wider font or a narrow panel can shorten either line; the title shows it in full. -->
         <span class="truncate" :title="title" data-testid="note-title">{{ title }}</span>
       </span>
-      <span class="text-muted-foreground flex w-full min-w-0 gap-2 text-xs">
-        <span v-if="when" class="flex-none tabular-nums">{{ when }}</span>
-        <span class="truncate" :title="previewText">{{ previewText }}</span>
-      </span>
-    </button>
+      <template #description>
+        <span class="flex w-full min-w-0 gap-2">
+          <span v-if="when" class="flex-none tabular-nums">{{ when }}</span>
+          <span class="truncate" :title="previewText">{{ previewText }}</span>
+        </span>
+      </template>
+    </ListRow>
     <DropdownMenu v-model:open="menuOpen">
-      <DropdownMenuTrigger
-        :class="
-          cn(
-            'text-muted-foreground hover:text-foreground mt-1.5 mr-1 flex size-7 flex-none items-center justify-center rounded-md opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-            (selected || menuOpen) && 'opacity-100',
-          )
-        "
-        :aria-label="t('row.moreFor', { title })"
-        :title="t('row.more')"
-        data-testid="note-menu"
-      >
-        <Ellipsis class="size-4" />
+      <DropdownMenuTrigger as-child>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          :class="
+            cn(
+              'text-muted-foreground hover:text-foreground mt-1.5 mr-1 opacity-0 group-hover:opacity-100 hover:bg-transparent focus-visible:opacity-100',
+              (selected || menuOpen) && 'opacity-100',
+            )
+          "
+          :aria-label="t('row.moreFor', { title })"
+          :title="t('row.more')"
+          data-testid="note-menu"
+        >
+          <Ellipsis />
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem v-if="!scratchpad" data-testid="menu-rename" @select="startRenameLater">
