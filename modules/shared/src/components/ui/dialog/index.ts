@@ -10,7 +10,6 @@ export { default as DialogScrollContent } from "./DialogScrollContent.vue"
 export { default as DialogTitle } from "./DialogTitle.vue"
 export { default as DialogTrigger } from "./DialogTrigger.vue"
 export { dialogIsInstant } from "./instant"
-export { DIALOG_WIDTHS } from "./size"
 export type { DialogAnchor, DialogSize } from "./size"
 // Where modules have always found it; the kit and the app read it from lib/layers.
 export { isModalOpen } from "../../../lib/layers"
