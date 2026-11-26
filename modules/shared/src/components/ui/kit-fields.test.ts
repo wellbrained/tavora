@@ -15,6 +15,8 @@ import { Textarea } from "./textarea"
 const wait = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms))
 let app: App | undefined
 beforeAll(() => {
+  // jsdom has no scrolling; an open list scrolls to its chosen row.
+  Element.prototype.scrollIntoView ??= () => {}
   globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver
 })
 afterEach(() => {
@@ -90,6 +92,15 @@ describe("a picture in the field", () => {
     const hidden = [...button.querySelectorAll("[aria-hidden=true].invisible")].map((el) => el.textContent)
     expect(hidden).toEqual(["Alpha", "A much longer one"])
     expect([...button.querySelectorAll("span.col-start-1:not(.invisible)")].map((el) => el.textContent)).toEqual(["Alpha"])
+  })
+})
+
+describe("a Picker with a value slot", () => {
+  it("shows it in the list rows too, and grows with size auto", async () => {
+    const options = [{ value: "a", label: "Alpha" }, { value: "b", label: "Beta" }]
+    const root = await mount(() => h(Picker, { modelValue: "a", options, label: "Pick", size: "auto", open: true, testid: "p" }, { value: ({ option }: { option: { value: string; label: string } }) => [h("i", { class: `mark-${option.value}` }), option.label] }))
+    expect(root.querySelector("button")!.classList.contains("h-auto")).toBe(true)
+    expect(document.querySelector("[data-testid=p-option-b] .mark-b")).not.toBeNull()
   })
 })
 

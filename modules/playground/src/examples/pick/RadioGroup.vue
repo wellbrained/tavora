@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { Label } from "@tavora/official-ui/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@tavora/official-ui/components/ui/radio-group";
+import { RadioField } from "@tavora/official-ui/components/ui/radio-field";
+import { RadioGroup } from "@tavora/official-ui/components/ui/radio-group";
 import { ref } from "vue";
 
 const density = ref("normal");
 </script>
 
 <template>
-  <RadioGroup v-model="density">
-    <Label><RadioGroupItem value="compact" /> Compact</Label>
-    <Label><RadioGroupItem value="normal" /> Normal</Label>
-    <Label><RadioGroupItem value="roomy" /> Roomy</Label>
+  <RadioGroup v-model="density" class="max-w-60 gap-0.5">
+    <RadioField value="compact" label="Compact" />
+    <RadioField value="normal" label="Normal" />
+    <RadioField value="roomy" label="Roomy" />
   </RadioGroup>
 </template>

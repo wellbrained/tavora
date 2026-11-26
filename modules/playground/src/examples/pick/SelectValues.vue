@@ -41,7 +41,7 @@ const current = computed(() => PLACES.find((item) => item.value === detailed.val
       </SelectContent>
     </Select>
     <Picker v-model="picked" :options="PLACES" label="Show">
-      <template #value="{ option }"><component :is="iconOf(option.value)" class="text-muted-foreground size-4" /><span class="truncate">{{ option.label }}</span></template>
+      <template #value="{ option }"><component :is="iconOf(option.value)" class="size-4" /><span class="truncate">{{ option.label }}</span></template>
     </Picker>
   </div>
 </template>

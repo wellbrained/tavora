@@ -3,7 +3,8 @@
 // set, a field on top narrows the list by label and keywords, and Enter picks the first match.
 // Arrow keys, Home and End move through the list, as in any listbox.
 // Options with a `group` are listed under its heading. Slots, all optional: `value` (a choice as the button shows it, with
-// a picture or icon: the button stays as wide as the widest choice), `current` (what the button shows; then the
+// a picture or icon: the button stays as wide as the widest choice, and the list rows show it too unless `option` is set.
+// It is rendered once for every choice, so give nothing in it an id or test id), `current` (what the button shows; then the
 // button is sized by its class, not by the longest choice; its `option` is undefined while the value isn't in
 // `options`), `option` (a row, e.g. with badges at its end), `group` (a heading, e.g. with an icon) and `filters` (above
 // the list, under the search: toggles that narrow `options`). Use `filters` with `search` (the field keeps the focus)
@@ -59,6 +60,8 @@ const open = defineModel<boolean>("open", { default: false })
 const [DefineRow, Row] = createReusableTemplate<{ option: PickerOption<T> }>()
 const rowClass = cn("data-[highlighted]:bg-accent flex h-[var(--style-control-height,32px)] w-full cursor-default items-center gap-2 rounded-sm px-3 text-left text-sm outline-none select-none", choiceRow, choiceHighlighted)
 const query = ref("")
+// Icons in a choice are dimmed, as in a Select; pictures keep their colours.
+const valueClass = "flex min-w-0 items-center gap-2 [&_svg:not([class*='text-'])]:text-muted-foreground"
 const current = computed(() => props.options.find((option) => option.value === model.value) ?? (slots.current || slots.filters ? undefined : props.options[0]))
 const shown = computed(() => (props.search ? filterOptions(props.options, query.value) : props.options))
 /** The shown options by group, in the order each group's first option comes; ungrouped ones first. */
@@ -100,8 +103,8 @@ function pick(value: unknown) {
         <span v-if="slots.current" class="flex min-w-0 flex-1 items-center gap-2 text-left"><slot name="current" :option="current" /></span>
         <!-- The same trick with `value`: every choice is laid out, only the picked one shows. -->
         <span v-else-if="slots.value" class="grid min-w-0 text-left">
-          <span v-for="option in options" :key="option.value" class="invisible col-start-1 row-start-1 flex min-w-0 items-center gap-2" aria-hidden="true" inert><slot name="value" :option="option" /></span>
-          <span v-if="current" class="col-start-1 row-start-1 flex min-w-0 items-center gap-2"><slot name="value" :option="current" /></span>
+          <span v-for="option in options" :key="option.value" :class="cn('invisible col-start-1 row-start-1', valueClass)" aria-hidden="true" inert><slot name="value" :option="option" /></span>
+          <span v-if="current" :class="cn('col-start-1 row-start-1', valueClass)"><slot name="value" :option="current" /></span>
         </span>
         <!-- Every label sits in the same grid cell, hidden but for the current one, so the button is as wide as the longest
              choice (up to max-w-56) and keeps that size whichever is picked. -->
@@ -164,7 +167,10 @@ function pick(value: unknown) {
                 :class="rowClass"
                 :data-testid="part(`option-${option.value}`)"
               >
-                <slot name="option" :option="option"><span class="flex-1 truncate">{{ option.label }}</span></slot>
+                <slot name="option" :option="option">
+                  <span v-if="slots.value" :class="cn('flex-1', valueClass)"><slot name="value" :option="option" /></span>
+                  <span v-else class="flex-1 truncate">{{ option.label }}</span>
+                </slot>
               </ListboxItem>
             </DefineRow>
             <!-- Options without a group sit right in the list, as in a Picker without groups. -->

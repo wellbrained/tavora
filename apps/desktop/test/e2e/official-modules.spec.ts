@@ -391,9 +391,9 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
       const input = ${q("task-title-input")};
       input.value = "Find the Ancient Crypt again";
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     })()`,
   );
+  await inModule(app, TODOS, `${q("task-title-input")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }))`);
   await expect.poll(() => taskTitles(app)).toContain("Find the Ancient Crypt again");
   await inModule(app, TODOS, `${taskTitled("Find the Ancient Crypt again")}.querySelector('[data-testid="task-open"]').click()`);
   await expect.poll(() => inModule(app, TODOS, `!!${q("task-title-input")}`)).toBe(true);
@@ -404,9 +404,9 @@ test("to-dos: groups, sub-to-dos, editing in place, objectives and finished task
       const input = ${q("task-title-input")};
       input.value = "Find the Ancient Crypt";
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     })()`,
   );
+  await inModule(app, TODOS, `${q("task-title-input")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }))`);
   await expect.poll(() => taskTitles(app)).toContain("Find the Ancient Crypt");
 
   // The description is written in a popover from the to-do's menu; Ctrl+Enter saves.

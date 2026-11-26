@@ -33,8 +33,8 @@ const pages = ref(true);
         <Button variant="ghost" size="icon" aria-label="Settings" title="Settings"><Settings /></Button>
         <template #below>
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <Badge variant="secondary" class="tabular-nums">12 shown</Badge>
-            <Badge variant="secondary" class="tabular-nums">3 locked</Badge>
+            <Badge variant="secondary" numeric>12 shown</Badge>
+            <Badge variant="secondary" numeric>3 locked</Badge>
             <Button variant="link" size="xs" class="ml-auto h-auto p-0" @click="filtering = false">Clear filters</Button>
           </div>
         </template>

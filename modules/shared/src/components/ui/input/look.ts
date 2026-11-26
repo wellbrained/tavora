@@ -9,6 +9,7 @@ export const inputLook = [
 /**
  * A field that reads as text until it is used (a title edited in place): no edge, fill or shadow until the pointer is over
  * it (an edge) or it has the focus (the kit's ring). looks.css leaves these out of a style's field fill.
+ * A caller's own fill needs both `bg-*` and `dark:bg-*`, or the dark one here wins.
  */
 export const BARE_FIELD = "border-transparent bg-transparent dark:bg-transparent shadow-none hover:border-input focus-visible:border-ring disabled:hover:border-transparent"
 
