@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.113",
+    "date": "2026-11-27",
+    "notes": [
+      "Menus › Dropdown shows a submenu entry that holds the chosen choice."
+    ]
+  },
+  {
     "version": "0.1.112",
     "date": "2026-11-27",
     "notes": [
