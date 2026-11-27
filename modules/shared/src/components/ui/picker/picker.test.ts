@@ -112,4 +112,30 @@ describe("Picker", () => {
     const root = await mount({ modelValue: "gone" }, { current: ({ option }: { option?: PickerOption }) => h("b", { "data-testid": "current" }, option ? option.label : "none") })
     expect(root.querySelector("[data-testid=current]")?.textContent).toBe("none")
   })
+
+  it("says a label the button cuts short in its title, and nothing for one that fits", async () => {
+    const scroll = Object.getOwnPropertyDescriptor(Element.prototype, "scrollWidth")!
+    Object.defineProperty(Element.prototype, "scrollWidth", { configurable: true, get(this: Element) { return this.textContent?.length ?? 0 } })
+    Object.defineProperty(Element.prototype, "clientWidth", { configurable: true, get: () => 10 })
+    try {
+      const long = await mount({ open: false, modelValue: "towers" })
+      expect(long.querySelector("button")?.getAttribute("title")).toBe("Double towers")
+      app!.unmount()
+      const short = await mount({ open: false, modelValue: "tower", options: [{ value: "tower", label: "Wall" }] })
+      expect(short.querySelector("button")?.getAttribute("title")).toBeNull()
+    } finally {
+      Object.defineProperty(Element.prototype, "scrollWidth", scroll)
+      Object.defineProperty(Element.prototype, "clientWidth", { configurable: true, get: () => 0 })
+    }
+  })
+
+  it("stays reachable while off with a reason, and does not open", async () => {
+    const root = await mount({ open: undefined, disabled: true, disabledReason: "Sign in first." })
+    const button = root.querySelector("button")!
+    expect(button.hasAttribute("disabled")).toBe(false)
+    expect(button.getAttribute("aria-disabled")).toBe("true")
+    button.click()
+    for (let tick = 0; tick < 4; tick++) await nextTick()
+    expect(document.querySelector("[data-testid=pick-menu]")).toBeNull()
+  })
 })

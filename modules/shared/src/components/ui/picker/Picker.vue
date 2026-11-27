@@ -10,12 +10,13 @@
 // the list, under the search: toggles that narrow `options`). Use `filters` with `search` (the field keeps the focus)
 // and with `current` (a filter may hide the picked option, and the button still shows it).
 // `size="auto"` makes the button as tall as its content (a big picture, two lines).
+// A label the button has to cut short shows whole in its tooltip. `disabled-reason` beside `disabled` says why it is off.
 // A name with a smaller second text in `current` or `option` goes in one `items-baseline` span, so both share a baseline
 // (Playground: Picker with groups); the kit centres the slot as a whole, so icons stay centred.
 import { ChevronsUpDown, Search, X } from "@lucide/vue"
 import type { HTMLAttributes } from "vue"
-import { createReusableTemplate } from "@vueuse/core"
-import { computed, ref, useTemplateRef, watch } from "vue"
+import { createReusableTemplate, useResizeObserver } from "@vueuse/core"
+import { computed, onMounted, ref, useTemplateRef, watch } from "vue"
 import { ListboxContent, ListboxFilter, ListboxGroup, ListboxGroupLabel, ListboxItem, ListboxRoot, PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
 import type { ControlSize } from "../../../lib/control-size"
 import { cn } from "../../../lib/utils"
@@ -42,6 +43,8 @@ const props = defineProps<{
   /** Test ids for the menu parts: `<testid>-menu`, `-search`, `-search-clear`, `-filters`, `-option-<value>`, `-none`. */
   testid?: string
   disabled?: boolean
+  /** Why it is off. While `disabled` the button stays hoverable and focusable, and the reason shows in a tooltip beside it. */
+  disabledReason?: string
   /** The button's size on the kit's scale, or `auto`: as tall as what `value` holds. */
   size?: ControlSize | "auto"
   class?: HTMLAttributes["class"]
@@ -70,6 +73,18 @@ const part = (name: string) => (props.testid ? `${props.testid}-${name}` : undef
 
 const filter = useTemplateRef<{ $el?: HTMLElement }>("filter")
 
+/** The picked label as the button shows it (not with the `current` or `value` slots, which draw their own). */
+const shownLabel = useTemplateRef<HTMLElement>("shownLabel")
+/** It is cut short: the button's tooltip then says it whole. */
+const cut = ref(false)
+function measure() {
+  const element = shownLabel.value
+  cut.value = !!element && element.scrollWidth > element.clientWidth
+}
+useResizeObserver(shownLabel, measure)
+onMounted(measure)
+watch(() => current.value?.label, measure, { flush: "post" })
+
 /** Empties the search and keeps the focus in it. */
 function clear() {
   query.value = ""
@@ -96,6 +111,8 @@ function pick(value: unknown) {
         :size="size === 'auto' ? 'default' : size"
         press="dip"
         :disabled="disabled"
+        :disabled-reason="disabledReason"
+        :title="($attrs.title as string | undefined) ?? (cut ? current?.label : undefined)"
         :class="cn('max-w-56 min-w-44 justify-between', size === 'auto' && 'h-auto min-h-[var(--style-control-height,32px)] py-1.5 pl-1.5', props.class)"
         :aria-label="label"
         aria-haspopup="listbox"
@@ -110,7 +127,7 @@ function pick(value: unknown) {
              choice (up to max-w-56) and keeps that size whichever is picked. -->
         <span v-else class="grid min-w-0 text-left">
           <span v-for="option in options" :key="option.value" class="invisible col-start-1 row-start-1 truncate" aria-hidden="true">{{ option.label }}</span>
-          <span class="col-start-1 row-start-1 truncate">{{ current?.label }}</span>
+          <span ref="shownLabel" class="col-start-1 row-start-1 truncate">{{ current?.label }}</span>
         </span>
         <ChevronsUpDown class="size-4 flex-none" data-icon="end" />
       </Button>
