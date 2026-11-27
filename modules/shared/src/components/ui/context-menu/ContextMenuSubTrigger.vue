@@ -8,10 +8,16 @@ import {
   useForwardProps,
 } from "reka-ui"
 import { cn } from "../../../lib/utils"
+import { choiceSubmenu } from "../choice-row"
 
-const props = defineProps<ContextMenuSubTriggerProps & { class?: HTMLAttributes["class"], inset?: boolean }>()
+const props = defineProps<ContextMenuSubTriggerProps & {
+  class?: HTMLAttributes["class"]
+  inset?: boolean
+  /** Its submenu holds the chosen choice: the entry gets the chosen row's look, as the radio items in it do. */
+  chosen?: boolean
+}>()
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, "class", "inset", "chosen")
 
 const forwardedProps = useForwardProps(delegatedProps)
 </script>
@@ -20,9 +26,11 @@ const forwardedProps = useForwardProps(delegatedProps)
   <ContextMenuSubTrigger
     data-slot="context-menu-sub-trigger"
     :data-inset="inset ? '' : undefined"
+    :data-chosen="chosen ? '' : undefined"
     v-bind="forwardedProps"
     :class="cn(
       `focus:bg-[color-mix(in_srgb,var(--foreground)_5%,var(--accent))] focus:text-accent-foreground data-[state=open]:bg-[color-mix(in_srgb,var(--foreground)_5%,var(--accent))] data-[state=open]:text-accent-foreground flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-(--disabled-opacity) data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground focus:[&_svg:not([class*='text-'])]:text-accent-foreground data-[state=open]:[&_svg:not([class*='text-'])]:text-accent-foreground`,
+      choiceSubmenu,
       props.class,
     )"
   >

@@ -13,3 +13,10 @@ export const choiceHighlighted = "data-[state=checked]:data-[highlighted]:bg-pri
 
 /** The chosen row while highlighted, for a list that moves the focus to its highlight (Select, menus). */
 export const choiceFocused = "data-[state=checked]:focus:bg-primary/24 data-[state=checked]:focus:inset-ring-primary"
+
+/**
+ * A submenu entry whose submenu holds the chosen choice (Number › 2 decimals), for `chosen` on the menus' sub
+ * triggers: the chosen row's look, and the stronger one while it is highlighted or its submenu is open.
+ */
+export const choiceSubmenu =
+  "data-[chosen]:bg-primary/15 data-[chosen]:inset-ring data-[chosen]:inset-ring-primary/50 data-[chosen]:font-semibold data-[chosen]:focus:bg-primary/24 data-[chosen]:focus:inset-ring-primary data-[chosen]:data-[state=open]:bg-primary/24 data-[chosen]:data-[state=open]:inset-ring-primary"
