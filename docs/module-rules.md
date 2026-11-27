@@ -87,7 +87,7 @@ classes where you use a control; never copy it.
 | Floating panel | `Popover` | absolutely positioned `div` |
 | A card with links or buttons that opens on hover (a preview, an item you can act on, a card to pin) | `HoverCard` with `HoverCardTrigger` and `HoverCardContent` (the tooltip's look: `title`, `description`, `width`, `TooltipRows` inside), or for many targets `useHoverCard()`: `v-bind="card.on(item)"` on each target and one `<HoverCard v-bind="card.props">`. It opens after 400 ms on hover (at once along a row), at once by keyboard, and stays while the pointer is on the target or the card; Tab goes from the target into the card and on past it, Escape closes it and gives the focus back. `pinnable`: a click on a target that isn't a button or link pins the card, with a close X (on touch, a tap pins). `bare` takes an `ItemCard` with your own buttons between its parts. Anything in the card must also be reachable without it (touch and screen readers may never open it). Text only: a `Tooltip` | a `Tooltip` with buttons in it, own hover box that stays open, own pin and close button, `Popover` opened from `pointerenter` |
 | A card, tip or notice of your own floating in a pane (a card over a map, a node's tip), or small controls drawn over a map or canvas (a row of tools there is `Toolbar variant="floating"`) | The `tavora-floating` class: the popover's colours, a border, the kit's corner and elevation step 2, and the style's surface look (raised in Hardware, glass in Liquid Glass). Controls over a map add `shadow-elevation-1`. Stack it with `z-(--layer-floating)` (controls: `--layer-overlay`) | `bg-popover border rounded-md shadow-md`, a `z-20` or `z-50` of your own |
-| Dialog | `ConfirmDialog` (asks; only before what can't be put back, see [Deleting](#deleting)), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
+| Dialog | `ConfirmDialog` (asks; only before a final delete or what can't be put back, see [Deleting](#deleting)), `NameDialog` (asks for a name), else `Dialog` with `DialogHeader`, `DialogFooter`, `DialogButton` (see [Dialogs](#dialogs)) | own overlay |
 | Nothing here yet | `EmptyState` (one sentence, one action). `framed` (default, a dashed frame) for an empty spot among other content; `variant="bare"` for a panel or list that is empty as a whole; `fill` takes the free height of its column and centres it | a bare `<p>`; `border-0` or `flex-1 justify-center` on it |
 | Loading with a known amount | `Progress` | "Loading…" in a `<p>` |
 | A list, card or page that loads | `Skeleton` around the real template with placeholder data (see [Loading](#loading)) | generic grey bars, a spinner, "Loading…" |
@@ -96,7 +96,7 @@ classes where you use a control; never copy it.
 | Error or warning in place | `Notice` (`info`, `success`, `warning`, `destructive`); a field's own error is the `error` of its `Field` | red text in a `<p>` |
 | Short message | `toast()` from `ui/toast` (the `Toaster` follows the user's toast position) | own status line |
 | Work a view waits for (a confirm, an import, a load) | `useTask()` from `@tavora/official-ui/use-task`: one `state` (`idle`, `running`, `failed` with its message), always ends, drops an answer that is no longer the newest (`mode: "latest"` for loads) | `busy` and `error` refs set by hand around an `await` |
-| Delete something that can be put back | `undoable()` from `ui/toast`: delete at once, then "… deleted" with Undo (see [Deleting](#deleting)) | "Are you sure?" first, a toast with an own Undo button |
+| Delete a simple thing that can be put back (a row, a to-do, a value) | `undoable()` from `ui/toast`: delete at once, then "… deleted" with Undo (see [Deleting](#deleting)) | "Are you sure?" first, a toast with an own Undo button |
 | A list whose rows can be deleted, or go away by themselves | `useFocusRecovery(list)` from `@tavora/official-ui` (in the app `@tavora/official-ui/focus-recovery`), each row marked `data-focus-row="<id>"`: when the focused row goes, the focus moves to the same spot in the next row, else the row before, else the first control of the empty state (`data-focus-empty`) or the list. `data-focus-target` names a row's main control, for rows that differ. Undo calls `restore(id)` (see [Deleting](#deleting)). `NavList` and `DataGrid` do it themselves | focusing a neighbour by hand after a timeout, `document.querySelector` for the next row, the focus left on the page |
 | Key hint | `Kbd` | |
 | Zoomable picture, map, tree or canvas | `ZoomPane` (one control group: −, %, +, Whole map, and your own buttons in `extras`; `hundred` sets what 100 % is; `persist-key` remembers the view; a game that draws itself, canvas or SVG, uses `view-only`; one that fills its panel is `bare`; `loading` hides the controls until the content is there) and `TileMap` for tiles and pins | own wheel, drag, double-click or zoom buttons, own zoom controls per game, CSS that strips the pane's frame or hides its controls |
@@ -368,15 +368,18 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
   `pointercancel` of its own pointer end. With real transitions, write a pure step function over the union and test it
   (the dock's `dockDragStep` in `apps/desktop/src/renderer/dock-drag.ts` is the model). Put the current value on the
   view's root as `data-status`, so tests and tools read one value.
-- **Add, edit, delete**: What people can add, they can edit and delete; deletes of restorable things use Undo. Fixed built-ins are the exception.
-- **Deleting**<a id="deleting"></a>: what can be put back exactly as it was (an item of the module's own document: a to-do, a
-  group, a saved value) is deleted at once and saved, then `undoable({ title, undo })` shows "<Thing> deleted" with Undo
+- **Add, edit, delete**: What people can add, they can edit and delete; deletes of simple things use Undo, deletes of things with more to them ask first (see [Deleting](#deleting)). Fixed built-ins are the exception.
+- **Deleting**<a id="deleting"></a>: a simple thing that can be put back exactly as it was (an item of the module's own
+  document: a to-do, a group, a saved value) is deleted at once and saved, then `undoable({ title, undo })` shows "<Thing> deleted" with Undo
   for a few seconds; Ctrl+Z outside text fields takes back the newest one (`handleUndoKey(event)` in the page's
   keydown; it stands down while a kit dialog is open and for keys pressed inside a menu, list or popover). The focus stays in the list ([`useFocusRecovery`](#2-kit-map)); its `restore(id)` in `undo` gives the thing back the focus. Each delete gets its own toast; `undo` puts back only its own thing, in its place, with its id, and
   answers `false` when it can't any more (its place is gone, something took its name): the kit then says so. Check that
   on the list as it is now, since a store change may run again on a newer one. A closed panel or app keeps the delete
-  (it is saved already); end open offers in `onBeforeUnmount` with `close()`. `ConfirmDialog` stays for what can't be
-  put back: files, data outside the module, anything sent out, money, keys.
+  (it is saved already); end open offers in `onBeforeUnmount` with `close()`.
+  A thing with more logic to it, or with parts linked to it (a saved build with its data and marks, a plan with its
+  world, a profile with its runs), asks first with `ConfirmDialog` and is then deleted for good, with no Undo (decided
+  2026-11-27). `ConfirmDialog` also stays for what can't be put back: files, data outside the module, anything sent out,
+  money, keys.
 - **Panel state**: what one panel remembers (open item, view, tab, filters, folded parts, scroll or zoom) is saved with
   panel state and **read back on start**. Writing it without reading it is the common bug. The view of a `ZoomPane` or `TileMap` is the exception: give it a `persist-key` and the kit saves and restores it in the module's storage (nothing saved: the whole map), so don't copy it into panel state.
 - **Wheel**: a map, tree or graph that fills its panel zooms with the plain wheel (`ZoomPane wheel="zoom"`; `TileMap`
