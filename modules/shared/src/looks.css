@@ -417,8 +417,8 @@
 
 /* ---------- Toggles (Bold, Italic…) follow the style's tabs ---------- */
 
-/* Keycap: a pressed toggle is a solid key in the text colour. */
-:root[data-look-tabs="keycap"] :is([data-slot="toggle"][data-state="on"], [data-slot="toggle-group"] > [data-state="on"], .tavora-button[aria-pressed="true"]) {
+/* Keycap: a pressed toggle is a solid key in the text colour. A bare Button draws its own on state, here and in Glass. */
+:root[data-look-tabs="keycap"] :is([data-slot="toggle"][data-state="on"], [data-slot="toggle-group"] > [data-state="on"], .tavora-button[aria-pressed="true"]:not(:where([data-variant="bare"]))) {
   background: var(--foreground);
   border-color: var(--foreground);
   color: var(--background);
@@ -531,7 +531,7 @@
     &:first-child { border-radius: var(--radius-lg) 0 0 var(--radius-lg); }
     &:last-child { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
   }
-  & :is([data-slot="toggle"][data-state="on"], [data-slot="toggle-group"] > [data-state="on"], .tavora-button[aria-pressed="true"]) {
+  & :is([data-slot="toggle"][data-state="on"], [data-slot="toggle-group"] > [data-state="on"], .tavora-button[aria-pressed="true"]:not(:where([data-variant="bare"]))) {
     background: var(--card);
     color: var(--foreground);
     border-color: transparent;

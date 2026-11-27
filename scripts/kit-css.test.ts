@@ -1,4 +1,5 @@
-// The kit's plain stylesheets (looks.css, tooltip.css): the rules that keep text readable in them.
+// @vitest-environment jsdom
+// The kit's plain stylesheets (looks.css, tooltip.css): the rules that keep text and tiles readable in them.
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -19,6 +20,26 @@ describe("glass toasts", () => {
     const body = rulesFor(looks, '[data-look-surface="glass"]', '[data-slot="toast"]')
     expect(body).toMatch(/--toast:\s*var\(--popover\)/)
     expect(body).toMatch(/--toast-foreground:\s*var\(--popover-foreground\)/)
+  })
+})
+
+describe("pressed buttons", () => {
+  // Hardware and Glass paint a Button with aria-pressed like a pressed toggle. A bare Button is a tile the caller draws,
+  // so the paint would cover it.
+  it("leave a bare Button to its caller", () => {
+    const found = [...looks.matchAll(/\.tavora-button\[aria-pressed="true"\](?::not\(:where\(\[data-variant="bare"\]\)\))?/g)].map(([selector]) => selector)
+    expect(found).toHaveLength(2)
+    const button = (variant: string) => {
+      const element = document.createElement("button")
+      element.className = "tavora-button"
+      element.setAttribute("aria-pressed", "true")
+      element.dataset.variant = variant
+      return element
+    }
+    for (const selector of found) {
+      expect(button("ghost").matches(selector), selector).toBe(true)
+      expect(button("bare").matches(selector), selector).toBe(false)
+    }
   })
 })
 

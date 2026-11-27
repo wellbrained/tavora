@@ -15,11 +15,6 @@
         "class=\"bg-card rounded-lg border outline-none\"": 1
       }
     },
-    "modules/clock-counter/src/active.ts": {
-      "motion": {
-        "export const ROW_FADE = \"transition-[background-color,border-color] duration-(--duration-press) ease-(--ease-out-strong) motion-reduce:transition-none\";": 1
-      }
-    },
     "modules/clock-counter/src/items.ts": {
       "color": {
         "export const COLORS = [\"#ffffff\", \"#facc15\", \"#fb923c\", \"#f87171\", \"#f472b6\", \"#a78bfa\", \"#60a5fa\", \"#2dd4bf\", \"#4ade80\", \"#111111\"] as const;": 10

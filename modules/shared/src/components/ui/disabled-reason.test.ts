@@ -391,6 +391,29 @@ describe("menu items with a reason", () => {
     expect(picked).toHaveBeenCalledWith("gas")
   })
 
+  it("a destructive row is only red while it can be chosen, in both menus", async () => {
+    const off = ref(true)
+    const rows = (Item: typeof DropdownMenuItem | typeof ContextMenuItem) => [
+      h(Item, { variant: "destructive", disabled: off.value, disabledReason: REASON }, () => "Clear"),
+      h(Item, { variant: "destructive", disabled: off.value }, () => "Wipe"),
+      h(Item, { variant: "destructive" }, () => "Delete"),
+    ]
+    mount(defineComponent({
+      render: () => h("div", null, [
+        h(DropdownMenu, { open: true, modal: false }, () => [h(DropdownMenuTrigger, null, () => "Menu"), h(DropdownMenuContent, null, () => rows(DropdownMenuItem))]),
+        h(ContextMenu, { modal: false }, () => [h(ContextMenuTrigger, null, () => "Area"), h(ContextMenuContent, null, () => rows(ContextMenuItem))]),
+      ]),
+    }))
+    document.querySelector("[data-slot=context-menu-trigger]")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }))
+    await wait(20)
+    const looks = () => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((el) => `${label(el)} ${el.dataset.variant}`)
+    const both = (...expected: string[]) => [...expected, ...expected]
+    expect(looks()).toEqual(both("Clear default", "Wipe default", "Delete destructive"))
+    off.value = false
+    await wait(20)
+    expect(looks()).toEqual(both("Clear destructive", "Wipe destructive", "Delete destructive"))
+  })
+
   it("a context menu row works the same", async () => {
     const selected = vi.fn()
     mount(defineComponent({

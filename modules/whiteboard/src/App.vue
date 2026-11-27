@@ -462,8 +462,8 @@ async function addPicture(event: Event) {
       <DropdownMenu>
         <DropdownMenuTrigger as-child><Button class="board-actions-menu" variant="ghost" size="icon-sm" :aria-label="t('board.actions')" :title="t('board.actions')" data-testid="board-actions"><MoreHorizontal class="size-4" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem data-testid="compact-copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" :action="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
-          <DropdownMenuItem data-testid="compact-save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @select="saveAsPicture">{{ t("savePicture.button") }}</DropdownMenuItem>
+          <DropdownMenuItem class="[&_[data-slot=menu-reason]]:max-w-none" data-testid="compact-copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" :action="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
+          <DropdownMenuItem class="[&_[data-slot=menu-reason]]:max-w-none" data-testid="compact-save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @select="saveAsPicture">{{ t("savePicture.button") }}</DropdownMenuItem>
           <DropdownMenuSeparator v-if="boardState.pictures.count > 0" />
           <DropdownMenuItem v-if="boardState.pictures.count > 0" @select="togglePictureLocks">{{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}</DropdownMenuItem>
         </DropdownMenuContent>

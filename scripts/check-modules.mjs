@@ -27,7 +27,7 @@ export const RULES = {
   "view-flush": "Call flushViewMemory() in onSuspend and onDispose.",
   "panel-state-read": "Read the panel state back on start with panel.getState().",
   catalogs: "Add a test that runs checkCatalogs(en, de) (the kit) or catalogProblems(en, de) (@tavora/sdk/testing) on the module's texts.",
-  motion: "Use the kit's motion tokens and animate transform and opacity only.",
+  motion: "Use the kit's motion tokens and animate transform and opacity (a hover or state change may also fade colours).",
   "z-index": "No z-index of your own: use the kit's layers, z-(--layer-lift|sticky|overlay|floating), or -1 for a decoration behind its box.",
   shadow: "No shadow of your own: areas separate by a surface step and border-border.",
   "all-caps": "Write it in sentence case; no all caps.",
@@ -230,7 +230,10 @@ const NEUTRAL_VALUES = /^(?:inherit|initial|unset|revert|revert-layer)$/;
 const LAYERS = new Set(["--layer-lift", "--layer-sticky", "--layer-overlay", "--layer-floating"]);
 /** A z-index of no layer (auto, 0, -1 for a decoration behind its own box) or one of the kit's layers as `var(--layer-…)`. */
 const zIndexOk = (v) => /^(?:auto|0|-1)$/.test(v) || LAYERS.has(/^var\((--[\w-]+)\)$/.exec(v)?.[1]);
-const ALLOWED_TRANSITION = new Set(["transform", "opacity", "translate", "scale", "rotate", "none"]);
+/** What may move (transform, opacity) and, for a hover or state change, the colours Tailwind's transition-colors fades. */
+const ALLOWED_TRANSITION = new Set(["transform", "opacity", "translate", "scale", "rotate", "none", "color", "background-color", "border-color", "outline-color", "text-decoration-color", "fill", "stroke"]);
+const BORDER_SIDE_COLOR = /^border-(?:top|right|bottom|left|(?:block|inline)(?:-(?:start|end))?)-color$/;
+const mayTransition = (name) => ALLOWED_TRANSITION.has(name) || BORDER_SIDE_COLOR.test(name);
 
 /** A size in px, or null when it is not a fixed length (em, %, a variable). */
 function pixels(number, unit) {
@@ -317,7 +320,7 @@ function checkDeclaration(property, value, at) {
     if (/(?:^|[\s,])\d*\.?\d+m?s(?=[\s,]|$)/.test(own)) reasons.push("a duration of your own");
     if (prop === "transition" || prop === "transition-property") {
       const names = own.split(",").map((part) => part.trim().split(/\s+/)[0]).filter((name) => name && !/^\d/.test(name) && !NEUTRAL_VALUES.test(name));
-      const wrong = names.filter((name) => !ALLOWED_TRANSITION.has(name));
+      const wrong = names.filter((name) => !mayTransition(name));
       if (wrong.length) reasons.push(`it animates ${wrong.join(", ")}`);
     }
     if (reasons.length) add("motion", `${prop}: ${reasons.join(", ")}`);
@@ -418,12 +421,12 @@ const CLASS_RULES = [
   { re: /(?<![\w-])transition-all(?![\w-])/g, check: (m) => ({ rule: "motion", message: m[0] }) },
   { re: /(?<![\w-])ease-(?:in|out|in-out|linear)(?![\w-])/g, check: (m) => ({ rule: "motion", message: `${m[0]} (an easing of your own)` }) },
   { re: /(?<![\w-])duration-\d+(?![\w-])/g, check: (m) => ({ rule: "motion", message: `${m[0]} (a duration of your own)` }) },
-  { re: /(?<![\w-])transition-(?:colors|shadow)(?![\w-])/g, check: (m) => ({ rule: "motion", message: `${m[0]} (only transform and opacity)` }) },
+  { re: /(?<![\w-])transition-shadow(?![\w-])/g, check: (m) => ({ rule: "motion", message: `${m[0]} (only transform, opacity and colours)` }) },
   {
     re: /(?<![\w-])transition-\[([^\]]+)\]/g,
-    check: (m) => (m[1].split(",").every((name) => ALLOWED_TRANSITION.has(name.trim()) || name.trim().startsWith("var(")) ? null : { rule: "motion", message: `${m[0]} (only transform and opacity)` }),
+    check: (m) => (m[1].split(",").every((name) => mayTransition(name.trim()) || name.trim().startsWith("var(")) ? null : { rule: "motion", message: `${m[0]} (only transform, opacity and colours)` }),
   },
-  { re: /(?<![\w-:])transition(?![\w-/[])/g, bare: true, check: () => ({ rule: "motion", message: "transition (also animates colours; name transform or opacity)" }) },
+  { re: /(?<![\w-:])transition(?![\w-/[])/g, bare: true, check: () => ({ rule: "motion", message: "transition (also animates shadows and filters; name transform, opacity or colors)" }) },
 ];
 
 function problem(rule, message, what) {
@@ -537,6 +540,10 @@ function templateChecks(code, ctx) {
     if (kit) out.push({ index: m.index, rule: "kit-control", message: `raw <input type="${type}">: use ${kit}` });
   }
   for (const m of matches(new RegExp(`<Button\\b(?:[^>"']|"[^"]*"|'[^']*')*?\\s:?aria-pressed\\b`, "g"), code)) {
+    // A bare Button is a tile the caller draws, on state included: a Toggle would give it a look.
+    const tag = new RegExp(`<Button\\b(${ATTRS})>`, "y");
+    tag.lastIndex = m.index;
+    if (/(?:^|\s)variant\s*=\s*["']bare["']/.test(tag.exec(code)?.[1] ?? "")) continue;
     out.push({ index: m.index, rule: "kit-control", message: "Button with aria-pressed: use Toggle or ToggleGroup" });
   }
   // role="toolbar" promises one Tab stop and arrow keys; the kit's Toolbar keeps that promise.

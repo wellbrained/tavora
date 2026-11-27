@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, Copy, FolderInput, MoreHorizontal, Pencil, Pin, Trash2 } from "@lucide/vue";
+import { ChevronDown, Copy, Eraser, FolderInput, MoreHorizontal, Pencil, Pin, Trash2 } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import {
   DropdownMenu,
@@ -54,6 +54,8 @@ const decimals = ref("2");
           <DropdownMenuRadioItem value="size" disabled disabled-reason="Only for notes with files.">Size</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
+        <!-- Off, it isn't red: the red comes back once it can be chosen. -->
+        <DropdownMenuItem variant="destructive" disabled disabled-reason="Already empty."><Eraser /> Clear</DropdownMenuItem>
         <DropdownMenuItem variant="destructive"><Trash2 /> Delete note</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

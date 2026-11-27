@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<ContextMenuItemProps & {
   action?: MenuAction
   class?: HTMLAttributes["class"]
   inset?: boolean
+  /** Red. Not while the row is off: it then looks like any other off row. */
   variant?: "default" | "destructive"
 }>(), {
   variant: "default",
@@ -53,7 +54,7 @@ const menu = useMenuAction(() => props.action, root)
     ref="item"
     data-slot="context-menu-item"
     :data-inset="inset ? '' : undefined"
-    :data-variant="variant"
+    :data-variant="disabled ? 'default' : variant"
     v-bind="mergeProps(forwarded, soft.attrs(), action ? { onSelect: menu.select } : {})"
     :disabled="soft.disabled()"
     :data-reason="reason ? '' : undefined"
