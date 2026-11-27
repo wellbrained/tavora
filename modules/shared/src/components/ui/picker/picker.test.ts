@@ -121,6 +121,10 @@ describe("Picker", () => {
       const long = await mount({ open: false, modelValue: "towers" })
       expect(long.querySelector("button")?.getAttribute("title")).toBe("Double towers")
       app!.unmount()
+      const off = await mount({ open: false, modelValue: "towers", disabled: true })
+      expect(off.querySelector("button")?.getAttribute("title")).toBeNull()
+      expect(off.querySelector("button")?.hasAttribute("disabled")).toBe(true)
+      app!.unmount()
       const short = await mount({ open: false, modelValue: "tower", options: [{ value: "tower", label: "Wall" }] })
       expect(short.querySelector("button")?.getAttribute("title")).toBeNull()
     } finally {

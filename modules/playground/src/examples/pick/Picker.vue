@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // With `search`, a field on top narrows the list by label and keywords. A label too long for the button shows whole in
-// its tooltip, and `disabled-reason` says why a picker is off.
+// its tooltip; `disabled-reason` says why a picker is off.
 import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { ref } from "vue";
 
 const game = ref("satisfactory");
 const server = ref("long");
+const off = ref("one");
 const language = ref("en");
 const LANGUAGES = [
   { value: "en", label: "English", keywords: "englisch" },
@@ -28,6 +29,7 @@ const LANGUAGES = [
       ]"
     />
     <Picker v-model="language" label="Language" search="Search languages" empty="No language found" :options="LANGUAGES" />
-    <Picker v-model="server" label="Server" disabled disabled-reason="Connect first." :options="[{ value: 'long', label: 'A server with a very long name that is cut short' }]" />
+    <Picker v-model="server" label="Server" :options="[{ value: 'long', label: 'A server with a very long name that is cut short' }]" />
+    <Picker v-model="off" label="Channel" disabled disabled-reason="Connect first." :options="[{ value: 'one', label: 'General' }]" />
   </div>
 </template>

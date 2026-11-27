@@ -10,7 +10,8 @@
 // the list, under the search: toggles that narrow `options`). Use `filters` with `search` (the field keeps the focus)
 // and with `current` (a filter may hide the picked option, and the button still shows it).
 // `size="auto"` makes the button as tall as its content (a big picture, two lines).
-// A label the button has to cut short shows whole in its tooltip. `disabled-reason` beside `disabled` says why it is off.
+// A label the button has to cut short shows whole in its tooltip (not while off: a title would change how an off button
+// behaves, and the reason is what the tooltip then says). `disabled-reason` beside `disabled` says why it is off.
 // A name with a smaller second text in `current` or `option` goes in one `items-baseline` span, so both share a baseline
 // (Playground: Picker with groups); the kit centres the slot as a whole, so icons stay centred.
 import { ChevronsUpDown, Search, X } from "@lucide/vue"
@@ -112,7 +113,7 @@ function pick(value: unknown) {
         press="dip"
         :disabled="disabled"
         :disabled-reason="disabledReason"
-        :title="($attrs.title as string | undefined) ?? (cut ? current?.label : undefined)"
+        :title="($attrs.title as string | undefined) ?? (cut && !disabled ? current?.label : undefined)"
         :class="cn('max-w-56 min-w-44 justify-between', size === 'auto' && 'h-auto min-h-[var(--style-control-height,32px)] py-1.5 pl-1.5', props.class)"
         :aria-label="label"
         aria-haspopup="listbox"
