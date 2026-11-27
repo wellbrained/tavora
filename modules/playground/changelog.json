@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.119",
+    "date": "2026-11-27",
+    "notes": [
+      "Stats & Charts shows the new Meter, a bar for an amount."
+    ]
+  },
+  {
     "version": "0.1.118",
     "date": "2026-11-27",
     "notes": [
