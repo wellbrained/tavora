@@ -9,6 +9,7 @@ import { Separator } from "../separator"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "../popover"
 import { SearchInput } from "../search-input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../select"
 import { ariaProblems } from "../../../testing"
 import { isTabStop } from "../../../aria-patterns"
 
@@ -315,6 +316,36 @@ describe("Toolbar Tab stops with fields", () => {
     get("before").focus()
     expect(await tab(get("before"))).toBe(get("find"))
     expect(await tab(get("find"))).toBe(get("b"))
+  })
+
+  it("lands on a kit Select and a search in front of the tools, in page order", async () => {
+    const select = () => h(Select, { modelValue: "a" }, () => [h(SelectTrigger, { "aria-label": "World", "data-testid": "world" }, () => h(SelectValue)), h(SelectContent, null, () => h(SelectItem, { value: "a" }, () => "Alpha"))])
+    const { get } = await page(() => [search("find"), select(), h(Button, { "data-testid": "a" }, () => "a"), h(Button, { "data-testid": "b" }, () => "b")])
+    expect(await tab(get("before"))).toBe(get("find"))
+    expect(await tab(get("find"))).toBe(get("world"))
+    expect(await tab(get("world"))).toBe(get("a"))
+    expect(await tab(get("a"))).toBe(get("after"))
+    get("after").focus()
+    expect(await tab(get("after"), true)).toBe(get("a"))
+    expect(await tab(get("a"), true)).toBe(get("world"))
+    expect(await tab(get("world"), true)).toBe(get("find"))
+    expect(await tab(get("find"), true)).toBe(get("before"))
+  })
+
+  it("reaches the field of a toolbar that holds only a field", async () => {
+    const { get } = await page(() => [search("find")])
+    expect(await tab(get("before"))).toBe(get("find"))
+    expect(await tab(get("find"))).toBe(get("after"))
+    expect(await tab(get("after"), true)).toBe(get("find"))
+    expect(await tab(get("find"), true)).toBe(get("before"))
+  })
+
+  it("reaches every field of a toolbar that holds only fields", async () => {
+    const select = () => h(Select, { modelValue: "a" }, () => [h(SelectTrigger, { "aria-label": "World", "data-testid": "world" }, () => h(SelectValue)), h(SelectContent, null, () => h(SelectItem, { value: "a" }, () => "Alpha"))])
+    const { get } = await page(() => [select(), h(Separator, { orientation: "vertical" }), search("find")])
+    expect(await tab(get("before"))).toBe(get("world"))
+    expect(await tab(get("world"))).toBe(get("find"))
+    expect(await tab(get("find"))).toBe(get("after"))
   })
 
   it("lands on a leading field that is a select-like button", async () => {
