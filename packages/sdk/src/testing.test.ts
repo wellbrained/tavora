@@ -732,7 +732,7 @@ describe("menus, tooltips and Discord pictures", () => {
     const { sdk, host } = createMemoryHost();
     const at = { x: 0, y: 0 };
     const off = (disabledReason: unknown) => ({ ...item(), disabled: true, disabledReason }) as never;
-    for (const bad of ["x".repeat(121), "  ", "", "two\nlines", "tab\there", " ", 5]) {
+    for (const bad of ["x".repeat(121), "  ", "", "two\nlines", "tab\there", "\u2028", "a\u202eb", "zero\u200bwidth", 5]) {
       expect(await failure(sdk.ui.showMenu({ at, items: [off(bad)] }))).toMatchObject({ code: "INVALID_PARAMS" });
     }
     expect(await failure(sdk.ui.showMenu({ at, items: [{ ...item(), disabledReason: "In use" }] }))).toMatchObject({ code: "INVALID_PARAMS" });

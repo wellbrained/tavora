@@ -1,5 +1,5 @@
 import { TavoraError } from "./index.js";
-import { supportsCall, type MenuEntry, type MenuRequest, type TooltipAnchor, type TooltipContent, type TooltipRequest, type TooltipSkin } from "./protocol.js";
+import { LIMITS, supportsCall, type MenuEntry, type MenuRequest, type TooltipAnchor, type TooltipContent, type TooltipRequest, type TooltipSkin } from "./protocol.js";
 
 /** What a menu or tooltip is for: an element (its box is read when you call) or a box you measured yourself. */
 export type AnchorTarget = Element | { x: number; y: number; width?: number; height?: number };
@@ -45,7 +45,7 @@ function withoutReasons(items: MenuEntry[]): MenuEntry[] {
     if (entry?.type === "submenu" && Array.isArray(entry.items)) return { ...entry, items: withoutReasons(entry.items) };
     if (entry?.type !== "item" || entry.disabledReason === undefined) return entry;
     const { disabledReason, ...item } = entry;
-    return item.disabled && item.hint === undefined && typeof disabledReason === "string" && disabledReason.trim() ? { ...item, hint: cut(disabledReason.trim(), 30) } : item;
+    return item.disabled && item.hint === undefined && typeof disabledReason === "string" && disabledReason.trim() ? { ...item, hint: cut(disabledReason.trim(), LIMITS.maxMenuHint) } : item;
   });
 }
 

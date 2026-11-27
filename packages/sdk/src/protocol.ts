@@ -1674,6 +1674,8 @@ export interface CheckedMenu {
 const MENU_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 /** A CSS colour without anything that could load or run: hex, a colour function of numbers, or transparent. */
 const MENU_COLOR = /^(?:#[0-9a-f]{3,8}|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\([0-9.%\s,/+-]{1,60}\)|transparent)$/i;
+/** What a reason may not hold: control characters, line and paragraph breaks, zero-width marks and the marks that reorder text. */
+const MENU_NOT_PLAIN = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/;
 /** Largest offset or size accepted for a menu's `at`, in CSS pixels. */
 const MAX_MENU_COORDINATE = 100_000;
 
@@ -1691,9 +1693,9 @@ export function checkMenu(params: unknown): ParamCheck<CheckedMenu> {
     };
     const text = (value: unknown, max: number, name: string): string =>
       typeof value !== "string" || value.trim() === "" || value.length > max ? invalid(`${name} must be text of 1 to ${max} characters`) : value;
-    /** Text on one line: no line breaks or other control characters, which the tooltip and a screen reader would show as they are. */
-    const line = (value: unknown, max: number, name: string): string =>
-      typeof value === "string" && /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value) ? invalid(`${name} must be one line of plain text`) : text(value, max, name);
+    /** Text on one line, without line breaks, control characters or invisible marks that hide or reorder it. */
+    const oneLine = (value: unknown, max: number, name: string): string =>
+      typeof value === "string" && MENU_NOT_PLAIN.test(value) ? invalid(`${name} must be one line of plain text`) : text(value, max, name);
     const flag = (value: unknown, name: string): boolean | undefined => (value === undefined || typeof value === "boolean" ? value : invalid(`${name} must be true or false`));
     const color = (value: unknown, name: string): string | undefined =>
       value === undefined || (typeof value === "string" && MENU_COLOR.test(value)) ? value : invalid(`${name} must be a CSS colour such as #e5675a or oklch(0.7 0.17 150)`);
@@ -1730,7 +1732,7 @@ export function checkMenu(params: unknown): ParamCheck<CheckedMenu> {
             ids.add(id);
             const disabled = flag(entry.disabled, `${where}.disabled`);
             if (enabled && !disabled) choices.add(id);
-            const disabledReason = entry.disabledReason === undefined ? undefined : line(entry.disabledReason, LIMITS.maxMenuReason, `${where}.disabledReason`);
+            const disabledReason = entry.disabledReason === undefined ? undefined : oneLine(entry.disabledReason, LIMITS.maxMenuReason, `${where}.disabledReason`);
             if (disabledReason !== undefined && !disabled) invalid(`${where}.disabledReason goes with disabled: true`);
             return defined<MenuEntry>({
               type: "item",
