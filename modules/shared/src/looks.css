@@ -175,6 +175,7 @@
   &:is([data-variant="secondary"], [data-variant="outline"]):not([aria-haspopup="listbox"], [role="combobox"]) {
     background: color-mix(in srgb, var(--card) 72%, transparent);
     border: 0;
+    --pill-border: 0px;
     box-shadow:
       inset 0 1px 0 color-mix(in srgb, white 55%, transparent),
       0 0 0 0.5px color-mix(in srgb, black 10%, transparent),
@@ -535,6 +536,7 @@
     border-radius: var(--radius-lg);
     --pill-corner: var(--radius-lg);
   }
+  /* Joined items keep their padding: only one end of the first and last is round. */
   & [data-slot="toggle-group"]:not([data-variant="ghost"]) > * {
     border-radius: 0;
     --pill-corner: 0px;

@@ -28,11 +28,8 @@
   --pill-step: calc((var(--pill-corner) - var(--pill-height) * 0.425) * 4096);
   /* Text end: what the curve takes. */
   --pill-px: calc(var(--pill-pad) + clamp(0px, var(--pill-step), min(var(--pill-corner), var(--pill-height) / 2) * 0.2146));
-  /* Icon end, measured from the outer edge: from where it is today to an even gap, at least 6 px (or today's, if closer). */
-  --pill-shift: calc(
-    max((var(--pill-height) - var(--pill-icon)) / 2, min(var(--pill-pad-icon) + var(--pill-border), 6px))
-    - var(--pill-pad-icon) - var(--pill-border)
-  );
+  /* Icon end, measured from the outer edge: from where it is today to an even gap, never closer than 6 px. */
+  --pill-shift: calc(max((var(--pill-height) - var(--pill-icon)) / 2, 6px) - var(--pill-pad-icon) - var(--pill-border));
   --pill-px-icon: calc(
     var(--pill-pad-icon)
     + clamp(0px, var(--pill-step), max(var(--pill-shift), 0px))

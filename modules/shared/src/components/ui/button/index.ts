@@ -117,11 +117,12 @@ export function buttonVariants(props: ButtonVariants = {}): string {
 // the text says so with `data-icon="end"`. Left out when the caller sets its own padding (`px-0`, `pl-2`…), so a narrow
 // or icon-only button keeps the padding it asked for.
 // Written out in full: Tailwind only finds class names that appear in the source as plain strings.
+const ICON_SIDE = "has-[>svg:not([data-icon=end])]:pl-(--pill-px-icon) has-[>svg[data-icon=end]]:pr-(--pill-px-icon)"
 export const BUTTON_ICON_PADDING: Partial<Record<NonNullable<ButtonVariants["size"]>, string>> = {
-  default: "has-[>svg:not([data-icon=end])]:pl-(--pill-px-icon) has-[>svg[data-icon=end]]:pr-(--pill-px-icon)",
-  xs: "has-[>svg:not([data-icon=end])]:pl-(--pill-px-icon) has-[>svg[data-icon=end]]:pr-(--pill-px-icon)",
-  sm: "has-[>svg:not([data-icon=end])]:pl-(--pill-px-icon) has-[>svg[data-icon=end]]:pr-(--pill-px-icon)",
-  lg: "has-[>svg:not([data-icon=end])]:pl-(--pill-px-icon) has-[>svg[data-icon=end]]:pr-(--pill-px-icon) has-[>svg]:[--pill-pad:--spacing(4.5)]",
+  default: ICON_SIDE,
+  xs: ICON_SIDE,
+  sm: ICON_SIDE,
+  lg: `${ICON_SIDE} has-[>svg]:[--pill-pad:--spacing(4.5)]`,
 }
 
 // The same lighter icon side for a button with an `action`, whose content sits one level down (it can't be found with
