@@ -16,6 +16,7 @@
 .tavora-item-card[data-skinned] :is(.tavora-tooltip-text[data-box],.tavora-tooltip-badge){border-radius:0}
 /* The rich layout's own padding, for the footer line across its bottom. */
 .tavora-item-card[data-layout=rich]{--tavora-tooltip-pad-x:14px;--tavora-tooltip-pad-y:15px}
+.tavora-item-card[data-layout=rich]>.tavora-tooltip-footer{margin-top:10px}
 /* In a unit's body the footer is a line over its last row, inside the body's padding. */
 .tavora-item-card-unit-body>.tavora-tooltip-footer{margin:0;padding:6px 0 0}
 .tavora-item-card-unit-body>:is(.tavora-tooltip-text,.tavora-tooltip-heading,.tavora-tooltip-tags,.tavora-tooltip-list){margin-top:0;margin-bottom:0}

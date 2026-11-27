@@ -87,7 +87,8 @@ function applySkin(card: HTMLElement, skin: Skin | undefined) {
 }
 /**
  * Runs of text as the kit's parts draw them (renderRuns in tooltip/parts.ts): the text as text, an italic run in an
- * `em`, a bold one in a `strong`, an accented one in a span of its own around them.
+ * `em`, a bold one in a `strong`, an accented one in a span of its own around them (marked with the class `accent`
+ * here, as the effect box always was).
  */
 function runNodes(runs: readonly TooltipEffectRun[]): Node[] {
     return runs.map(run => {

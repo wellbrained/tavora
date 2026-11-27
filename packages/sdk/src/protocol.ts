@@ -1808,12 +1808,18 @@ const tooltipImage = (v: unknown, icon = false): string => {
   if (!TOOLTIP_IMAGE_PATH.test(image) || (icon && !TOOLTIP_ICON_PATH.test(image)) || image.split("/").includes("..")) invalid(TOOLTIP_INVALID);
   return image;
 };
-/** What a block's or the footer's text may not hold: control characters (but a line break where it may have one), zero-width marks and the marks that reorder text. */
-const TOOLTIP_NOT_PLAIN = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/;
+/**
+ * What a block's or the footer's text may not hold: control characters, format characters (zero-width marks, the marks
+ * that reorder text, soft hyphens, tag characters), line and paragraph separators, and the blank fillers that show
+ * nothing. Variation selectors stay, for emoji.
+ */
+const TOOLTIP_NOT_PLAIN = /[\p{Cc}\p{Cf}\u034f\u115f\u1160\u2028\u2029\u3164\uffa0]/u;
+/** Whether `text` is plain, with line breaks only where `breaks` says. */
+const isPlain = (text: string, breaks: boolean): boolean => !TOOLTIP_NOT_PLAIN.test(breaks ? text.replaceAll("\n", "") : text);
 /** Plain text of 1 to `max` characters, with line breaks only where `breaks` says. */
 const plainText = (v: unknown, max: number, breaks: boolean): string => {
   const text = tooltipText(v, max);
-  return TOOLTIP_NOT_PLAIN.test(text) || (!breaks && text.includes("\n")) ? invalid(TOOLTIP_INVALID) : text;
+  return isPlain(text, breaks) ? text : invalid(TOOLTIP_INVALID);
 };
 /**
  * Runs of text, up to 40 and `max` characters in all, at least one not blank: each in the accent colour, bold or italic.
@@ -1825,7 +1831,7 @@ const tooltipRuns = (v: unknown, max: number, plain: boolean, breaks = true): To
     const run = tooltipObject(r, ["text", "accent", "strong", "italic"]);
     if (typeof run.text !== "string" || !run.text || (length += run.text.length) > max) invalid(TOOLTIP_INVALID);
     const text = run.text as string;
-    if (plain && (TOOLTIP_NOT_PLAIN.test(text) || (!breaks && text.includes("\n")))) invalid(TOOLTIP_INVALID);
+    if (plain && !isPlain(text, breaks)) invalid(TOOLTIP_INVALID);
     for (const flag of [run.accent, run.strong, run.italic]) if (flag !== undefined && typeof flag !== "boolean") invalid(TOOLTIP_INVALID);
     return { text, ...(run.accent === true ? { accent: true } : {}), ...(run.strong === true ? { strong: true } : {}), ...(run.italic === true ? { italic: true } : {}) };
   });

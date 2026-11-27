@@ -130,6 +130,8 @@ describe("tooltip boundary", () => {
         expect(checkTooltip({ ...base, content: { title: "x", blocks: [{ type: "text", text: "x", tone: "default", size: "default", box: false }] } }).content.blocks).toEqual([{ type: "text", text: "x" }]);
         for (const key of ["blocks", "footer"])
             expect(key in checkTooltip(base).content).toBe(false);
+        // Emoji keep their variation selector; other scripts stay.
+        expect(checkTooltip({ ...base, content: { title: "x", footer: "Love \u2764\ufe0f \u00b7 \u05e9\u05dc\u05d5\u05dd \u00b7 \u4f60\u597d" } }).content.footer).toContain("\u2764\ufe0f");
     });
     it("refuses blocks and footers that are not plain, bounded text", () => {
         const bad: unknown[] = [
@@ -145,6 +147,7 @@ describe("tooltip boundary", () => {
             { blocks: [{ type: "list", items: [{ text: "x", color: "red" }] }] }, { blocks: [{ type: "list", items: ["a\nb"] }] },
             { blocks: [{ type: "tags", tags: [] }] }, { blocks: [{ type: "tags", tags: ["x".repeat(25)] }] }, { blocks: [{ type: "tags", tags: Array.from({ length: 9 }, () => "x") }] },
             { blocks: [{ type: "tags", tags: [{ text: "x", color: "red" }] }] }, { blocks: [{ type: "tags", tags: [{ text: "x", color: "url(x)" }] }] },
+            ...["\u061c", "\u00ad", "\u034f", "\u180e", "\u3164", "\ufff9", "\u{e0041}", "\u2029", "\r"].map(mark => ({ footer: `a${mark}b` })),
             { footer: "" }, { footer: "two\nlines" }, { footer: "x".repeat(301) }, { footer: [{ text: "a\u202eb" }] }, { footer: [] }, { footer: 3 }, { footer: [{ text: "x", accent: "y" }] },
         ];
         for (const extra of bad)

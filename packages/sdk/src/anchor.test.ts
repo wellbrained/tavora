@@ -180,6 +180,15 @@ describe("tooltipShowParams and formatting", () => {
     expect(folded[11]).toEqual({ title: "H", rows: [{ text: "t" }, { text: "F" }] });
   });
 
+  it("keeps a row free for the effect on a Tavora without the effect box, and never throws on content Tavora refuses", () => {
+    const full: TooltipContent = { title: "A", effect: "Shoots", sections: Array.from({ length: 9 }, () => ({ rows: Array.from({ length: 11 }, () => ({ text: "x" })) })), footer: "F" };
+    const sent = tooltipShowParams({ id: "a", at, content: full }, OLD).content;
+    expect(sent.sections!.flatMap((s) => s.rows)).toHaveLength(100);
+    expect(checkTooltip({ id: "a", at, content: sent }).ok).toBe(true);
+    for (const bad of [{ effect: [null] }, { blocks: [{ type: "list", items: [null] }] }, { blocks: [{ type: "tags", tags: [null] }] }, { sections: {}, footer: "F" }, { footer: [null] }, { blocks: [null, { type: "list" }] }])
+      expect(() => tooltipShowParams({ id: "a", at, content: { title: "A", ...(bad as object) } as TooltipContent }, OLDER)).not.toThrow();
+  });
+
   it("is used by the memory host's show", async () => {
     const { createMemoryHost } = await import("./testing.js");
     const { sdk, host } = createMemoryHost({ version: OLDER });

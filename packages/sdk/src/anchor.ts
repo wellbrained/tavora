@@ -105,19 +105,22 @@ function unitFallback(content: TooltipContent, unit: boolean): TooltipContent {
 type Section = NonNullable<TooltipContent["sections"]>[number];
 
 /** The runs' text, without their emphasis. */
-const runText = (runs: string | readonly TooltipEffectRun[]): string => (typeof runs === "string" ? runs : runs.map((run) => run.text).join(""));
+const runText = (runs: string | readonly TooltipEffectRun[]): string => (typeof runs === "string" ? runs : runs.map((run) => run?.text ?? "").join(""));
 
 /**
  * For a Tavora without formatting: runs keep their text and accent, but not `strong` and `italic`; `blocks` and `footer`
  * become sections after the module's own, of plain rows (see `blockSections`), as many as Tavora takes.
  */
 function withoutFormatting(content: TooltipContent): TooltipContent {
-  const emphasis = Array.isArray(content.effect) && content.effect.some((run) => run.strong !== undefined || run.italic !== undefined);
+  const emphasis = Array.isArray(content.effect) && content.effect.some((run) => run?.strong !== undefined || run?.italic !== undefined);
   if (!emphasis && content.blocks === undefined && content.footer === undefined) return content;
   const { blocks, footer, ...out } = content;
-  if (emphasis) out.effect = (content.effect as TooltipEffectRun[]).map(({ strong: _strong, italic: _italic, ...run }) => run);
+  if (emphasis) out.effect = (content.effect as TooltipEffectRun[]).map((run) => (run && typeof run === "object" ? (({ strong: _strong, italic: _italic, ...rest }) => rest)(run) : run));
   const extra = [...(Array.isArray(blocks) ? blockSections(blocks) : []), ...(typeof footer === "string" || Array.isArray(footer) ? [{ rows: [{ text: runText(footer) }] }] : [])];
-  return extra.length ? { ...out, sections: appendSections(out.sections ?? [], extra) } : out;
+  // Sections that aren't a list are the module's mistake: Tavora refuses them, so nothing is added to them. A Tavora
+  // without the effect box takes the effect as one more row (withEffectRow), so a row is kept free for it.
+  if (!extra.length || (out.sections !== undefined && !Array.isArray(out.sections))) return out;
+  return { ...out, sections: appendSections(out.sections ?? [], extra, out.effect === undefined ? 0 : 1) };
 }
 
 /**
@@ -134,8 +137,8 @@ function blockSections(blocks: readonly TooltipBlock[]): Section[] {
     }
     const rows: Section["rows"] =
       block?.type === "text" ? [{ text: block.text ?? runText(block.runs ?? []) }]
-      : block?.type === "list" && Array.isArray(block.items) ? block.items.map((item) => (typeof item === "string" ? { text: item } : { text: item.text, ...(item.meta ? { status: item.meta } : {}) }))
-      : block?.type === "tags" && Array.isArray(block.tags) ? [{ text: block.tags.map((tag) => (typeof tag === "string" ? tag : tag.text)).join(" · ") }]
+      : block?.type === "list" && Array.isArray(block.items) ? block.items.map((item) => (typeof item === "string" ? { text: item } : { text: item?.text, ...(item?.meta ? { status: item.meta } : {}) }))
+      : block?.type === "tags" && Array.isArray(block.tags) ? [{ text: block.tags.map((tag) => (typeof tag === "string" ? tag : tag?.text)).join(" · ") }]
       : [];
     if (!out.length) out.push({ rows: [] });
     out[out.length - 1]!.rows.push(...rows);
@@ -147,11 +150,12 @@ function blockSections(blocks: readonly TooltipBlock[]): Section[] {
 const MAX_SECTIONS = 12, MAX_SECTION_ROWS = 60, MAX_ROWS = 100;
 
 /**
- * `extra` after `sections`, within what Tavora takes: when there's no room for all of them, the last ones go together
- * into one, or into the module's last section when it already has 12; rows past the limits are left out.
+ * `extra` after `sections`, within what Tavora takes, with `keep` rows left free: when there's no room for all of
+ * them, the last ones go together into one, or into the module's last section when it already has 12; rows past the
+ * limits are left out.
  */
-function appendSections(sections: readonly Section[], extra: Section[]): Section[] {
-  let left = MAX_ROWS - sections.reduce((n, section) => n + (Array.isArray(section?.rows) ? section.rows.length : 0), 0);
+function appendSections(sections: readonly Section[], extra: Section[], keep: number): Section[] {
+  let left = MAX_ROWS - keep - sections.reduce((n, section) => n + (Array.isArray(section?.rows) ? section.rows.length : 0), 0);
   const room = MAX_SECTIONS - sections.length;
   let add = extra;
   if (add.length > room) {
