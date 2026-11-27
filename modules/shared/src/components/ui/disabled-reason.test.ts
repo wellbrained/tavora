@@ -334,7 +334,7 @@ describe("menu items with a reason", () => {
       render: () => h(DropdownMenu, { open: true, modal: false }, () => [
         h(DropdownMenuTrigger, null, () => "Menu"),
         h(DropdownMenuContent, null, () => [
-          h(DropdownMenuRadioGroup, { modelValue: value.value, "onUpdate:modelValue": (next: string) => { value.value = next; picked(next) } }, () => [
+          h(DropdownMenuRadioGroup, { modelValue: value.value, "onUpdate:modelValue": (next: unknown) => { value.value = String(next); picked(next) } }, () => [
             h(DropdownMenuRadioItem, { value: "coal" }, () => "Coal"),
             h(DropdownMenuRadioItem, { value: "fuel", disabled: true, disabledReason: REASON }, () => "Fuel"),
             h(DropdownMenuRadioItem, { value: "plain", disabled: true }, () => "Plain"),
