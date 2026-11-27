@@ -330,6 +330,9 @@ export const en = {
 
   "ex.popovers.WithField": "Popover with a field",
   "ex.popovers.WithField.note": "Escape or a click outside closes it.",
+  "ex.popovers.NoFocus": "Popover that keeps the focus",
+  "ex.popovers.NoFocus.note": "Type, then use the arrow keys and Enter. The cursor stays in the field, and clicking the field doesn't close the list.",
+  "ex.popovers.NoFocus.rule": "A panel that only shows something next to a field or a board takes focus=\"none\"; places a click may land on without closing it go in dismiss-ignore.",
 
   "ex.hovercards.Pinnable": "Pin a card",
   "ex.hovercards.Pinnable.note": "Hover the name or Tab to it. Click it to pin the card.",
@@ -1068,6 +1071,9 @@ export const de: Record<TextKey, string> = {
 
   "ex.popovers.WithField": "Popover mit einem Feld",
   "ex.popovers.WithField.note": "Escape oder ein Klick daneben schließt es.",
+  "ex.popovers.NoFocus": "Popover, der den Fokus lässt",
+  "ex.popovers.NoFocus.note": "Tippe, dann nimm die Pfeiltasten und Enter. Der Cursor bleibt im Feld, und ein Klick ins Feld schließt die Liste nicht.",
+  "ex.popovers.NoFocus.rule": "Ein Panel, das nur etwas neben einem Feld oder Brett zeigt, bekommt focus=\"none\"; Stellen, auf die man klicken darf, ohne es zu schließen, kommen in dismiss-ignore.",
 
   "ex.hovercards.Pinnable": "Karte anheften",
   "ex.hovercards.Pinnable.note": "Fahr über den Namen oder geh mit Tab hin. Klick darauf, um die Karte anzuheften.",
