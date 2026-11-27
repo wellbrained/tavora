@@ -1088,7 +1088,7 @@ export type { HostAction, HostActionType } from "./host-actions";
 /** `id` is set when the action created something (a workspace, a folder). */
 /** One entry of a module's menu, as the main process checked it (the SDK's MenuEntry). */
 export type ModuleMenuEntry =
-  | { type: "item"; id: string; label: string; hint?: string; color?: string; checked?: boolean; radio?: boolean; disabled?: boolean; danger?: boolean }
+  | { type: "item"; id: string; label: string; hint?: string; color?: string; checked?: boolean; radio?: boolean; disabled?: boolean; disabledReason?: string; danger?: boolean }
   | { type: "separator" }
   | { type: "heading"; label: string }
   | { type: "submenu"; label: string; color?: string; disabled?: boolean; items: ModuleMenuEntry[] };

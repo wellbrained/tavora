@@ -198,7 +198,7 @@ export { AUDIO_TYPES, BLOB_ID, BLOB_TYPES, DEFAULT_THEME_FONT, OVERLAY_FONT_PATH
 const MENU_TIMEOUT_MS = 60 * 60_000;
 
 /** Version of this SDK package, sent to the host during the handshake. */
-export const SDK_VERSION = "0.4.15";
+export const SDK_VERSION = "0.4.16";
 
 /**
  * The oldest Tavora that has everything this SDK version offers, worked out from the table of calls
@@ -1204,7 +1204,7 @@ async function createClient(port: MessagePort, requestTimeoutMs: number): Promis
       getLanguage: () => call("ui.getLanguage"),
       onLanguageChange: (fn) => on("ui.language", fn),
       // The user may take their time choosing.
-      showMenu: async (request) => call("ui.showMenu", menuParams(request), MENU_TIMEOUT_MS),
+      showMenu: async (request) => call("ui.showMenu", menuParams(request, host.host.version), MENU_TIMEOUT_MS),
       tooltip: {
         show: async request => call("ui.tooltip.show",tooltipShowParams(request,host.host.version)),
         move: async anchor => { await call("ui.tooltip.move",tooltipParams(anchor,host.host.version)); },

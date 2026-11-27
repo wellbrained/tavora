@@ -728,6 +728,42 @@ describe("menus, tooltips and Discord pictures", () => {
     expect(await sdk.ui.showMenu({ at, items: Array.from({ length: 100 }, (_, index) => item("x".repeat(80), `a${index}`)) })).toBe("a");
   });
 
+  it("takes why an item is off: one line of up to 120 characters, only on a switched-off item", async () => {
+    const { sdk, host } = createMemoryHost();
+    const at = { x: 0, y: 0 };
+    const off = (disabledReason: unknown) => ({ ...item(), disabled: true, disabledReason }) as never;
+    for (const bad of ["x".repeat(121), "  ", "", "two\nlines", "tab\there", " ", 5]) {
+      expect(await failure(sdk.ui.showMenu({ at, items: [off(bad)] }))).toMatchObject({ code: "INVALID_PARAMS" });
+    }
+    expect(await failure(sdk.ui.showMenu({ at, items: [{ ...item(), disabledReason: "In use" }] }))).toMatchObject({ code: "INVALID_PARAMS" });
+    expect(await failure(sdk.ui.showMenu({ at, items: [{ ...item(), disabled: false, disabledReason: "In use" }] }))).toMatchObject({ code: "INVALID_PARAMS" });
+    const items = [off("x".repeat(120)), { ...item("B", "b"), radio: true, checked: false, disabled: true, disabledReason: "Already used by another line." }];
+    await sdk.ui.showMenu({ at, items });
+    expect(host.calls["ui.showMenu"]?.at(-1)).toEqual({ at, items });
+  });
+
+  it("makes the reason the hint on a Tavora without reasons, and leaves it out where there is a hint", async () => {
+    const { sdk, host } = createMemoryHost({ version: "0.25.67" });
+    expect(sdk.supports("ui.showMenu.disabledReason")).toBe(false);
+    const at = { x: 0, y: 0 };
+    await sdk.ui.showMenu({
+      at,
+      items: [
+        { ...item(), disabled: true, disabledReason: "In use" },
+        { ...item("B", "b"), disabled: true, hint: "Ctrl+B", disabledReason: "In use" },
+        { type: "submenu", label: "More", items: [{ ...item("C", "c"), disabled: true, disabledReason: "This one is already used by another line, so pick another." }] },
+      ],
+    });
+    expect(host.calls["ui.showMenu"]).toEqual([{
+      at,
+      items: [
+        { ...item(), disabled: true, hint: "In use" },
+        { ...item("B", "b"), disabled: true, hint: "Ctrl+B" },
+        { type: "submenu", label: "More", items: [{ ...item("C", "c"), disabled: true, hint: "This one is already used by a…" }] },
+      ],
+    }]);
+  });
+
   it("refuses a tooltip or skin Tavora refuses", async () => {
     const { sdk } = createMemoryHost();
     const at = { x: 0, y: 0 };

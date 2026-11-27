@@ -1,5 +1,5 @@
 import { TavoraError } from "./index.js";
-import { supportsCall, type MenuRequest, type TooltipAnchor, type TooltipContent, type TooltipRequest, type TooltipSkin } from "./protocol.js";
+import { supportsCall, type MenuEntry, type MenuRequest, type TooltipAnchor, type TooltipContent, type TooltipRequest, type TooltipSkin } from "./protocol.js";
 
 /** What a menu or tooltip is for: an element (its box is read when you call) or a box you measured yourself. */
 export type AnchorTarget = Element | { x: number; y: number; width?: number; height?: number };
@@ -26,11 +26,27 @@ function missing(): never {
   throw new TavoraError({ code: "INVALID_PARAMS", message: "Give an anchor (the element the menu is for) or at" });
 }
 
-/** The wire form: the element's box as `at` (the host adds the gap). */
-export function menuParams(request: MenuOptions): MenuRequest {
+/**
+ * The wire form: the element's box as `at` (the host adds the gap). An older Tavora than `ui.showMenu.disabledReason`
+ * refuses an item's `disabledReason`, and with it the whole menu, so there it becomes the item's hint when it has none
+ * (cut to the 30 characters a hint may have) and is left out otherwise.
+ */
+export function menuParams(request: MenuOptions, hostVersion: string): MenuRequest {
   const { anchor, at, ...rest } = request;
-  if (anchor) return { ...rest, at: box(anchor) };
-  return at ? { ...rest, at } : missing();
+  const params = supportsCall(hostVersion, "ui.showMenu.disabledReason") ? rest : { ...rest, items: withoutReasons(rest.items) };
+  if (anchor) return { ...params, at: box(anchor) };
+  return at ? { ...params, at } : missing();
+}
+
+/** For a Tavora without reasons on menu items: each reason becomes the hint of a switched-off item that has none. */
+function withoutReasons(items: MenuEntry[]): MenuEntry[] {
+  if (!Array.isArray(items)) return items;
+  return items.map((entry) => {
+    if (entry?.type === "submenu" && Array.isArray(entry.items)) return { ...entry, items: withoutReasons(entry.items) };
+    if (entry?.type !== "item" || entry.disabledReason === undefined) return entry;
+    const { disabledReason, ...item } = entry;
+    return item.disabled && item.hint === undefined && typeof disabledReason === "string" && disabledReason.trim() ? { ...item, hint: cut(disabledReason.trim(), 30) } : item;
+  });
 }
 
 /** The tooltip's point: next to the element, at the middle of its right edge, never on top of it. */

@@ -165,10 +165,11 @@ A module can keep pictures, PDF files and sounds that are too big for a document
 - **Only after the user did something:** call it from the click, right-click or key press that asked for it (within 2 seconds); each press opens one menu, otherwise `PERMISSION_DENIED`. One menu shows at a time: a new one closes the last, and Esc, a click elsewhere or switching workspaces closes it too. It resolves with the chosen item's `id`, or `null`.
 - **Where:** pass the element the menu is for as `anchor` (the button for a dropdown, the right-clicked row for a context menu); the SDK reads its box when you call. On the wire that box is `at`, in your panel's CSS pixels from its top left corner (`getBoundingClientRect()` values: `{ x, y, width, height }`), and `at` still works if you have no element. The menu opens next to it, never on top of it or at the pointer. `side` (`"bottom"`, `"top"`, `"right"`, `"left"`; default bottom) and `align` (`"start"`, `"center"`, `"end"`; default start) say where it opens when there is room; Tavora keeps it inside the window.
 - **What:** `items` is a list of entries:
-  - `{ type: "item", id, label, hint?, color?, checked?, radio?, disabled?, danger? }`: `id` is what you get back (unique in the menu, up to 64 letters, digits, `.`, `_`, `:` or `-`). `hint` is small text on the right, such as a shortcut. `color` adds a dot: `#rgb`/`#rrggbb`, a colour function of numbers such as `oklch(0.7 0.17 150)`, or `transparent` for an empty ring. `checked` shows a check mark (a dot with `radio`); in a list where any item sets it, the others keep the column so labels line up. `danger` makes it red.
+  - `{ type: "item", id, label, hint?, color?, checked?, radio?, disabled?, disabledReason?, danger? }`: `id` is what you get back (unique in the menu, up to 64 letters, digits, `.`, `_`, `:` or `-`). `hint` is small text on the right, such as a shortcut. `color` adds a dot: `#rgb`/`#rrggbb`, a colour function of numbers such as `oklch(0.7 0.17 150)`, or `transparent` for an empty ring. `checked` shows a check mark (a dot with `radio`); in a list where any item sets it, the others keep the column so labels line up. `danger` makes it red.
+  - **Say why an item is off** with `disabledReason` next to `disabled: true`: a short sentence on one line, up to 120 characters ("Already used by another line."). The item stays reachable with the pointer and the arrow keys, shows the reason in a tooltip beside it (screen readers read it too) and can't be picked. A disabled item without a reason is skipped, as before. A reason on an item that is on, or with a line break, is `INVALID_PARAMS`. Tavora 0.25.68 and newer: check `sdk.supports("ui.showMenu.disabledReason")`. On an older Tavora the SDK shows the reason as the item's `hint` when it has none (cut to 30 characters) and leaves it out otherwise; a raw caller leaves it out itself.
   - `{ type: "separator" }` and `{ type: "heading", label }`.
   - `{ type: "submenu", label, color?, disabled?, items }`: one level only; its items hold no further submenus.
-- **Text only:** labels are plain text (at most 80 characters, hints 30), never HTML, and a menu holds at most 100 entries, submenus included. Anything else is `INVALID_PARAMS`. There are no sliders or other controls in menus; keep those in your page.
+- **Text only:** labels are plain text (at most 80 characters, hints 30, reasons 120), never HTML, and a menu holds at most 100 entries, submenus included. Anything else is `INVALID_PARAMS`. There are no sliders or other controls in menus; keep those in your page.
 
 ```ts
 button.addEventListener("click", async () => {
@@ -177,6 +178,7 @@ button.addEventListener("click", async () => {
     align: "end",
     items: [
       { type: "item", id: "rename", label: "Rename", hint: "F2" },
+      { type: "item", id: "pin", label: "Pin", disabled: true, disabledReason: "Already pinned." },
       { type: "submenu", label: "Color", items: [{ type: "item", id: "red", label: "Red", color: "#e5675a", radio: true, checked: true }] },
       { type: "separator" },
       { type: "item", id: "delete", label: "Delete", danger: true },
@@ -625,7 +627,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 | `discord.command` | 15 s, answers and events up to 512 KB; 32 subscriptions per panel |
 | `leaderboards.submit` | 50 results per call and 30 KB of body, which depends on the board's kind; the service keeps 10,000 results per account and module and takes 60 requests a minute per account and module |
 | `leaderboards.top` | 100 lines |
-| `ui.showMenu` | one menu per click or key press, 100 entries, labels 80 characters, hints 30 |
+| `ui.showMenu` | one menu per click or key press, 100 entries, labels 80 characters, hints 30, reasons 120 on one line |
 | `overlay.publish` | 16 KB of state per overlay, 200 overlays per module and workspace; keys up to 64 letters, digits, `-` and `_` |
 | `hotkeys` | 100 per module and workspace; labels 60 characters on one line; targets like overlay keys |
 

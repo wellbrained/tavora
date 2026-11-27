@@ -51,6 +51,7 @@ const decimals = ref("2");
         <DropdownMenuRadioGroup v-model="sort">
           <DropdownMenuRadioItem value="recent">Recently changed</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="name">Name</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="size" disabled disabled-reason="Only for notes with files.">Size</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive"><Trash2 /> Delete note</DropdownMenuItem>

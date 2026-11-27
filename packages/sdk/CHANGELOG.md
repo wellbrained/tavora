@@ -1,3 +1,10 @@
+## 0.4.16
+
+A switched-off menu item can say why. It comes with the next Tavora (`MENU_DISABLED_REASON_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `MenuEntry` items take `disabledReason` next to `disabled: true`: one line of up to 120 characters (`LIMITS.maxMenuReason`). Tavora keeps the item reachable with the pointer and the arrow keys, shows the reason in a tooltip beside it and to screen readers, and doesn't let it be picked. A reason on an item that is on, or with a line break or another control character, is `INVALID_PARAMS`.
+- An older Tavora refuses the new key, and with it the whole menu, so the SDK shows the reason as the item's `hint` there when it has none (cut to 30 characters) and leaves it out otherwise. `sdk.supports("ui.showMenu.disabledReason")` tells which case you are in; the memory host does the same.
+
 ## 0.4.15
 
 The memory host checks a few more things as Tavora does. `MIN_TAVORA` stays (Tavora 0.21.43).

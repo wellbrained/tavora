@@ -1267,7 +1267,7 @@ export function createMemoryHost(options: MemoryHostOptions = {}): { sdk: Tavora
       onThemeChange: (fn) => on("ui.theme", fn),
       getLanguage: () => call("ui.getLanguage"),
       onLanguageChange: (fn) => on("ui.language", fn),
-      showMenu: async (request) => call("ui.showMenu", menuParams(request)),
+      showMenu: async (request) => call("ui.showMenu", menuParams(request, shared.version)),
       tooltip: {
         show: async (request) => call("ui.tooltip.show", tooltipShowParams(request, shared.version)),
         move: async (anchor) => void (await call("ui.tooltip.move", tooltipParams(anchor, shared.version))),

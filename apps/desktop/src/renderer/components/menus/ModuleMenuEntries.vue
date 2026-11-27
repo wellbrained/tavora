@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The entries of a module's menu (ui.showMenu), as the main process checked them: text only, a
 // colour dot when the module gave a CSS colour, a check for ticked entries and the kit's radio look for single choices, a hint on the right.
+// A switched-off entry with a reason stays reachable and shows the reason beside it (the kit's `disabledReason`).
 import { Check } from "@lucide/vue";
 import { computed } from "vue";
 import {
@@ -48,6 +49,7 @@ const rows = computed<Row[]>(() => {
         :key="choice.index"
         :value="choice.entry.id"
         :disabled="choice.entry.disabled"
+        :disabled-reason="choice.entry.disabledReason"
         :data-testid="`module-menu-item-${choice.entry.id}`"
         @select="emit('choose', choice.entry.id)"
       >
@@ -72,6 +74,7 @@ const rows = computed<Row[]>(() => {
     <DropdownMenuItem
       v-else
       :disabled="entry.disabled"
+      :disabled-reason="entry.disabledReason"
       :variant="entry.danger ? 'destructive' : 'default'"
       :role="entry.checked === undefined ? undefined : 'menuitemcheckbox'"
       :aria-checked="entry.checked"

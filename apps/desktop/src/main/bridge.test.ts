@@ -1048,6 +1048,17 @@ describe("ui.showMenu", () => {
     expect(shown).toEqual([menu]);
   });
 
+  it("passes on why an entry is off, and refuses a reason on more than one line or on an entry that is on", async () => {
+    const shown: unknown[] = [];
+    const p = await connected({ ...makeContext(), showMenu: async (checked) => (shown.push(checked.request), null) });
+    const off = { type: "item", id: "coal", label: "Coal", radio: true, checked: false, disabled: true, disabledReason: "Already used by another line." };
+    expect(await call(p, "ui.showMenu", { ...menu, items: [off] })).toMatchObject({ ok: true, result: null });
+    expect(shown).toEqual([{ ...menu, items: [off] }]);
+    expect(await call(p, "ui.showMenu", { ...menu, items: [{ ...off, disabledReason: "Two\nlines" }] })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(await call(p, "ui.showMenu", { ...menu, items: [{ ...off, disabled: undefined }] })).toMatchObject({ ok: false, error: { code: "INVALID_PARAMS" } });
+    expect(shown).toHaveLength(1);
+  });
+
   it("refuses a menu that is not well formed before the host sees it", async () => {
     const shown: unknown[] = [];
     const p = await connected({ ...makeContext(), showMenu: async (checked) => (shown.push(checked), null) });

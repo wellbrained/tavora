@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.115",
+    "date": "2026-11-27",
+    "notes": [
+      "Menus › Dropdown shows a choice that is off and says why."
+    ]
+  },
+  {
     "version": "0.1.114",
     "date": "2026-11-27",
     "notes": [

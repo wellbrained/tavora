@@ -5,7 +5,7 @@ import { installTitleTooltips } from "../../title-tooltips"
 import { Button } from "./button"
 import { Checkbox } from "./checkbox"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./context-menu"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "./dropdown-menu"
 import { Input } from "./input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select"
 import { Switch, SwitchField } from "./switch"
@@ -325,6 +325,50 @@ describe("menu items with a reason", () => {
     row("Pin").focus()
     await wait()
     expect(tooltip()?.textContent).toContain(REASON)
+  })
+
+  it("a radio choice with a reason is reached, says why and can't be picked", async () => {
+    const picked = vi.fn()
+    const value = ref("coal")
+    mount(defineComponent({
+      render: () => h(DropdownMenu, { open: true, modal: false }, () => [
+        h(DropdownMenuTrigger, null, () => "Menu"),
+        h(DropdownMenuContent, null, () => [
+          h(DropdownMenuRadioGroup, { modelValue: value.value, "onUpdate:modelValue": (next: string) => { value.value = next; picked(next) } }, () => [
+            h(DropdownMenuRadioItem, { value: "coal" }, () => "Coal"),
+            h(DropdownMenuRadioItem, { value: "fuel", disabled: true, disabledReason: REASON }, () => "Fuel"),
+            h(DropdownMenuRadioItem, { value: "plain", disabled: true }, () => "Plain"),
+            h(DropdownMenuRadioItem, { value: "gas" }, () => "Gas"),
+          ]),
+        ]),
+      ]),
+    }))
+    await wait(20)
+    const choice = (name: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitemradio]")].find((el) => el.textContent?.trim() === name)!
+    const fuel = choice("Fuel")
+    expect(fuel.hasAttribute("data-disabled")).toBe(false)
+    expect(fuel.getAttribute("aria-disabled")).toBe("true")
+    expect(fuel.getAttribute("aria-description")).toBe(REASON)
+    expect(choice("Plain").getAttribute("data-disabled")).toBe("")
+
+    choice("Coal").focus()
+    press(choice("Coal"), "ArrowDown")
+    await wait()
+    expect(document.activeElement).toBe(fuel)
+    expect(tooltip()?.textContent).toContain(REASON)
+    expect(tooltip()?.getAttribute("data-side")).not.toBe("bottom")
+
+    press(fuel, "Enter")
+    press(fuel, " ")
+    fuel.click()
+    await wait(20)
+    expect(picked).not.toHaveBeenCalled()
+    expect(value.value).toBe("coal")
+
+    press(fuel, "ArrowDown")
+    expect(document.activeElement).toBe(choice("Gas"))
+    press(choice("Gas"), "Enter")
+    expect(picked).toHaveBeenCalledWith("gas")
   })
 
   it("a context menu row works the same", async () => {
