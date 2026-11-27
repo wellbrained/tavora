@@ -160,6 +160,12 @@ themes; anything hard-coded breaks in one of them.
   the inner one the step nearest to the outer radius minus the gap between them, so the corners run parallel. Only
   where it shows: from a gap of 8 px on, or when the inner part has no fill of its own, any step works. Don't change
   existing kit controls for it.
+- **Pill padding**: a kit control whose corners come close to a full round (a user's corner near 16) makes room for
+  its round ends by itself: the text gets more room and a leading icon sits evenly in the curve; below that nothing
+  changes (`modules/shared/src/pill.css`). A kit control with `rounded-full` gets it too. A pill of your own takes the
+  `tavora-pill` class, its height and padding as `[--pill-height:…] [--pill-pad:…]` (with a leading icon or dot also
+  `[--pill-pad-icon:…] [--pill-icon:…]`, with a border `[--pill-border:1px]`) and its side padding from
+  `px-(--pill-px)` and `pl-(--pill-px-icon)`, never extra padding by eye.
 - **Depth**: areas separate by a surface step and a 1 px `border-border`. Shadows only on floating layers and on the kit's Primary and Secondary buttons (a faint
   top light, Primary also a hairline contact shadow); both come from the kit. A floating layer of your own takes an
   elevation step (`modules/shared/src/elevation.css`), never `shadow-sm|md|lg` or a `box-shadow` of your own:

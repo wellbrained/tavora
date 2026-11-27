@@ -547,7 +547,7 @@ const emptySlot = EmptySlot as unknown as VueComponent;
       <!-- While this workspace's game runs. Overlays have their own Start / Stop on the right. -->
       <span
         v-if="view.workspaceRunning"
-        class="text-success border-success/40 bg-success/10 flex flex-none items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium"
+        class="tavora-pill text-success border-success/40 bg-success/10 flex flex-none items-center gap-1.5 rounded-full border py-0.5 pr-(--pill-px) pl-(--pill-px-icon) text-xs font-medium [--pill-border:1px] [--pill-height:calc(1lh+--spacing(1)+2px)] [--pill-icon:--spacing(1.5)] [--pill-pad-icon:--spacing(2.5)] [--pill-pad:--spacing(2.5)]"
         :title="t('rail.running', { name: workspace?.name ?? '' })"
         data-testid="workspace-running"
       >

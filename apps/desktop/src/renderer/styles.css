@@ -12,6 +12,8 @@
 @import "../../../../modules/shared/src/details.css";
 /* How each part looks in a style other than Classic (shared with the modules). */
 @import "../../../../modules/shared/src/looks.css";
+/* Round ends: the padding and icon inset of a control that turns into a pill (shared with the modules). */
+@import "../../../../modules/shared/src/pill.css";
 /* The shared controls (@tavora/official-ui) use Tailwind classes too. */
 @source "../../../../modules/shared/src/components";
 

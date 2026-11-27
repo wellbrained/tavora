@@ -146,6 +146,8 @@
 /* Keycap: a key with a top light and a bottom edge that it presses into. */
 :root[data-look-buttons="keycap"] .tavora-button {
   border-radius: var(--radius-sm);
+  /* Each corner a look draws is also told to pill.css (--pill-corner), so a near-round control gets its pill padding. */
+  --pill-corner: var(--radius-sm);
   &:is([data-variant="secondary"], [data-variant="outline"]) {
     background: linear-gradient(color-mix(in srgb, white 7%, var(--secondary)), var(--secondary));
     border: var(--style-border-width, 1px) solid color-mix(in srgb, var(--foreground) 10%, var(--border));
@@ -168,6 +170,7 @@
 /* Capsule: rounded (the style's own corner, not a full pill), light and slightly see-through. */
 :root[data-look-buttons="capsule"] .tavora-button:not([data-slot="action-tile"]) {
   border-radius: var(--radius-lg);
+  --pill-corner: var(--radius-lg);
   /* Pickers are left out: they look like the style's fields (below). */
   &:is([data-variant="secondary"], [data-variant="outline"]):not([aria-haspopup="listbox"], [role="combobox"]) {
     background: color-mix(in srgb, var(--card) 72%, transparent);
@@ -193,6 +196,7 @@
 :root[data-look-inputs="inset"] {
   & :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
     border-radius: var(--radius-sm);
+    --pill-corner: var(--radius-sm);
     border-width: var(--style-border-width, 1px);
     /* A bare field (an in-place title) takes the corners, not the sunk fill. */
     &:not(:where([data-variant="bare"])) {
@@ -224,6 +228,7 @@
 :root[data-look-inputs="capsule"] {
   & :is([data-slot="input"], [data-slot="select-trigger"], [data-slot="combobox-anchor"], [data-slot="combobox-input"], [data-slot="slider-input"], [data-slot="number-field"]) {
     border-radius: var(--radius-lg);
+    --pill-corner: var(--radius-lg);
   }
   & [data-slot="textarea"] {
     border-radius: calc(var(--radius) + 4px);
@@ -463,12 +468,14 @@
 
 :root[data-look-inputs="inset"] .tavora-button[aria-haspopup="listbox"] {
   border-radius: var(--radius-sm);
+  --pill-corner: var(--radius-sm);
   border: var(--style-border-width, 1px) solid var(--border);
   background: color-mix(in srgb, black 5%, var(--background));
   box-shadow: var(--style-sink);
 }
 :root[data-look-inputs="capsule"] .tavora-button[aria-haspopup="listbox"] {
   border-radius: var(--radius-lg);
+  --pill-corner: var(--radius-lg);
   border-color: transparent;
   background: color-mix(in srgb, var(--foreground) 5%, var(--background));
   box-shadow: none;
@@ -522,12 +529,15 @@
 :root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) {
   & :is([data-slot="toggle"], [data-slot="toggle-group"]) {
     border-radius: var(--radius-lg);
+    --pill-corner: var(--radius-lg);
   }
   & [data-slot="toggle-group"][data-variant="ghost"] > * {
     border-radius: var(--radius-lg);
+    --pill-corner: var(--radius-lg);
   }
   & [data-slot="toggle-group"]:not([data-variant="ghost"]) > * {
     border-radius: 0;
+    --pill-corner: 0px;
     &:first-child { border-radius: var(--radius-lg) 0 0 var(--radius-lg); }
     &:last-child { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
   }

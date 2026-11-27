@@ -1,0 +1,48 @@
+/* Pill padding. A fully round end eats part of the padding (the text looks closer to the end than it is), and an icon
+   at that end sits off centre. Near a full round the kit makes up for both: the padding on a text end grows by what the
+   curve takes (0.2146 × r, r = the corner, at most half the height), and an icon end moves toward an even gap all
+   round ((height − icon) / 2), never closer than 6 px to the edge. Below 85 % of a full round (corner up to
+   0.425 × height) nothing changes at all: the outputs are exactly the inputs. 85 %, not less: Liquid Glass's own
+   radius (10) already rounds an xs button (24 px high) to 83 %, and every style's and theme's default stays as it was.
+
+   A pill-shaped control carries `tavora-pill`, sets the inputs (Tailwind arbitrary properties) and takes its side
+   paddings from the outputs: `px-(--pill-px)` on text ends, `pl-(--pill-px-icon)` on the end with an icon or dot.
+   Inputs: --pill-height (outer height), --pill-pad (today's padding on a text end), --pill-pad-icon (today's padding on
+   the icon end), --pill-icon (icon or dot width), --pill-border (border width). The corner comes from the element's own
+   `rounded-*` class below, and a style that redraws the corners (looks.css) sets --pill-corner with them.
+   Registered and not inherited, so a pill inside a pill (a badge in a button) never takes its parent's values. */
+@property --pill-height { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --pill-corner { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --pill-pad { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --pill-pad-icon { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --pill-icon { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --pill-border { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --pill-step { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --pill-shift { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --pill-px { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --pill-px-icon { syntax: "<length>"; inherits: false; initial-value: 0px; }
+
+.tavora-pill {
+  /* Above 0 only near a full round. Lengths can't be divided into a yes or no, so the clamps below use it as a step:
+     a big positive number lets the change through, 0 or less keeps it at 0. */
+  --pill-step: calc((var(--pill-corner) - var(--pill-height) * 0.425) * 4096);
+  /* Text end: what the curve takes. */
+  --pill-px: calc(var(--pill-pad) + clamp(0px, var(--pill-step), min(var(--pill-corner), var(--pill-height) / 2) * 0.2146));
+  /* Icon end, measured from the outer edge: from where it is today to an even gap, at least 6 px (or today's, if closer). */
+  --pill-shift: calc(
+    max((var(--pill-height) - var(--pill-icon)) / 2, min(var(--pill-pad-icon) + var(--pill-border), 6px))
+    - var(--pill-pad-icon) - var(--pill-border)
+  );
+  --pill-px-icon: calc(
+    var(--pill-pad-icon)
+    + clamp(0px, var(--pill-step), max(var(--pill-shift), 0px))
+    + clamp(min(var(--pill-shift), 0px), -1 * var(--pill-step), 0px)
+  );
+}
+
+/* The corner the element draws, from its kit corner class (after the caller's own wins in `cn`). No class: square. */
+.tavora-pill.rounded-sm { --pill-corner: var(--radius-sm); }
+.tavora-pill.rounded-md { --pill-corner: var(--radius-md); }
+.tavora-pill.rounded-lg { --pill-corner: var(--radius-lg); }
+.tavora-pill.rounded-xl { --pill-corner: var(--radius-xl); }
+.tavora-pill.rounded-full { --pill-corner: 9999px; }

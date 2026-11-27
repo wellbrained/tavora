@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.123",
+    "date": "2026-11-28",
+    "notes": [
+      "The Buttons page shows round ends: the same controls at your corners and at 16."
+    ]
+  },
+  {
     "version": "0.1.122",
     "date": "2026-11-28",
     "notes": [

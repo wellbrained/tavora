@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.99",
+    "date": "2026-11-28",
+    "notes": [
+      "Round buttons, toggles, tags and fields give their text a bit more room at the ends."
+    ]
+  },
+  {
     "version": "0.1.98",
     "date": "2026-11-28",
     "notes": [

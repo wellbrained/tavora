@@ -55,7 +55,7 @@ const variants = cva(
         danger:
           "bg-destructive/10 text-destructive hover:bg-destructive/25 hover:text-destructive dark:bg-destructive/15 dark:hover:bg-destructive/30",
         outline:
-          "border bg-background shadow-xs hover:border-input hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] hover:text-accent-foreground dark:bg-input/10 dark:border-input dark:hover:bg-input/25",
+          "border [--pill-border:1px] bg-background shadow-xs hover:border-input hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] hover:text-accent-foreground dark:bg-input/10 dark:border-input dark:hover:bg-input/25",
         secondary:
           "bg-secondary text-secondary-foreground shadow-[inset_0_1px_0_color-mix(in_srgb,white_5%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--secondary))] " + PRESS,
         ghost:
@@ -64,11 +64,13 @@ const variants = cva(
         bare: BARE,
       },
       // Heights follow the style's control height (32 px in Classic and without a host); a caller's own height wins.
+      // The sizes with text are pills near a full round (pill.css): the side paddings come from --pill-px (text end) and
+      // --pill-px-icon (icon end), which are exactly the --pill-pad and --pill-pad-icon given here below that.
       size: {
-        "default": "h-[var(--style-control-height,32px)] px-3 py-1.5",
-        "xs": "h-[calc(var(--style-control-height,32px)-8px)] gap-1 rounded-md px-2 text-xs [&_svg:not([class*='size-'])]:size-3 [&_svg:not([class*='size-'])]:stroke-2",
-        "sm": "h-[calc(var(--style-control-height,32px)-4px)] rounded-md gap-1.5 px-3",
-        "lg": "h-[calc(var(--style-control-height,32px)+8px)] rounded-md px-6",
+        "default": "tavora-pill h-[var(--style-control-height,32px)] px-(--pill-px) py-1.5 [--pill-height:var(--style-control-height,32px)] [--pill-pad:--spacing(3)] [--pill-pad-icon:--spacing(2.5)] [--pill-icon:--spacing(4)]",
+        "xs": "tavora-pill h-[calc(var(--style-control-height,32px)-8px)] gap-1 rounded-md px-(--pill-px) text-xs [&_svg:not([class*='size-'])]:size-3 [&_svg:not([class*='size-'])]:stroke-2 [--pill-height:calc(var(--style-control-height,32px)-8px)] [--pill-pad:--spacing(2)] [--pill-pad-icon:--spacing(1.5)] [--pill-icon:--spacing(3)]",
+        "sm": "tavora-pill h-[calc(var(--style-control-height,32px)-4px)] rounded-md gap-1.5 px-(--pill-px) [--pill-height:calc(var(--style-control-height,32px)-4px)] [--pill-pad:--spacing(3)] [--pill-pad-icon:--spacing(2.5)] [--pill-icon:--spacing(4)]",
+        "lg": "tavora-pill h-[calc(var(--style-control-height,32px)+8px)] rounded-md px-(--pill-px) [--pill-height:calc(var(--style-control-height,32px)+8px)] [--pill-pad:--spacing(6)] [--pill-pad-icon:--spacing(4)] [--pill-icon:--spacing(4)]",
         "icon": "size-[var(--style-control-height,32px)]",
         "icon-xs": "size-[calc(var(--style-control-height,32px)-8px)] rounded-md [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='size-'])]:stroke-2",
         "icon-sm": "size-[calc(var(--style-control-height,32px)-4px)]",
@@ -111,23 +113,24 @@ export function buttonVariants(props: ButtonVariants = {}): string {
 }
 
 // A button with an icon and text has 2px less room on the icon side, so it looks balanced (on lg the sides are 16px
-// and 18px). The icon is taken to lead; one after the text says so with `data-icon="end"`. Left out when the caller
-// sets its own padding (`px-0`, `pl-2`…), so a narrow or icon-only button keeps the padding it asked for.
+// and 18px): the icon side takes --pill-px-icon, from the size's --pill-pad-icon. The icon is taken to lead; one after
+// the text says so with `data-icon="end"`. Left out when the caller sets its own padding (`px-0`, `pl-2`…), so a narrow
+// or icon-only button keeps the padding it asked for.
 // Written out in full: Tailwind only finds class names that appear in the source as plain strings.
 export const BUTTON_ICON_PADDING: Partial<Record<NonNullable<ButtonVariants["size"]>, string>> = {
-  default: "has-[>svg:not([data-icon=end])]:pl-2.5 has-[>svg[data-icon=end]]:pr-2.5",
-  xs: "has-[>svg:not([data-icon=end])]:pl-1.5 has-[>svg[data-icon=end]]:pr-1.5",
-  sm: "has-[>svg:not([data-icon=end])]:pl-2.5 has-[>svg[data-icon=end]]:pr-2.5",
-  lg: "has-[>svg:not([data-icon=end])]:pl-4 has-[>svg:not([data-icon=end])]:pr-4.5 has-[>svg[data-icon=end]]:pl-4.5 has-[>svg[data-icon=end]]:pr-4",
+  default: "has-[>svg:not([data-icon=end])]:pl-(--pill-px-icon) has-[>svg[data-icon=end]]:pr-(--pill-px-icon)",
+  xs: "has-[>svg:not([data-icon=end])]:pl-(--pill-px-icon) has-[>svg[data-icon=end]]:pr-(--pill-px-icon)",
+  sm: "has-[>svg:not([data-icon=end])]:pl-(--pill-px-icon) has-[>svg[data-icon=end]]:pr-(--pill-px-icon)",
+  lg: "has-[>svg:not([data-icon=end])]:pl-(--pill-px-icon) has-[>svg[data-icon=end]]:pr-(--pill-px-icon) has-[>svg]:[--pill-pad:--spacing(4.5)]",
 }
 
 // The same lighter icon side for a button with an `action`, whose content sits one level down (it can't be found with
 // `has-[>svg]`): the button checks itself whether its content starts with an icon.
 export const ACTION_ICON_PADDING: Partial<Record<NonNullable<ButtonVariants["size"]>, string>> = {
-  default: "pl-2.5",
-  xs: "pl-1.5",
-  sm: "pl-2.5",
-  lg: "pl-4 pr-4.5",
+  default: "pl-(--pill-px-icon)",
+  xs: "pl-(--pill-px-icon)",
+  sm: "pl-(--pill-px-icon)",
+  lg: "pl-(--pill-px-icon) [--pill-pad:--spacing(4.5)]",
 }
 
 /** A class split at the colons outside brackets: its variants (`max-[400px]`, `has-[>svg:not(.a)]`, `[&:hover]`…), then the utility. */

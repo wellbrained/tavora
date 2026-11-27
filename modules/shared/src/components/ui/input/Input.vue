@@ -6,7 +6,7 @@ import { useSoftDisabled } from "../../../lib/soft-disabled"
 import { controlSize, type ControlSize } from "../../../lib/control-size"
 import { cn } from "../../../lib/utils"
 import { useFieldControl } from "../field/use-field-control"
-import { BARE_FIELD, INPUT_SIZE, inputLook } from "./look"
+import { BARE_FIELD, INPUT_PILL, INPUT_SIZE, inputLook } from "./look"
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{
@@ -48,6 +48,6 @@ const field = useFieldControl({ element: () => element.value, value: () => model
     v-bind="{ ...soft.attrs(), ...field.attrs() }"
     :disabled="soft.disabled()"
     :readonly="soft.soft() || undefined"
-    :class="cn(...inputLook, INPUT_SIZE[controlSize(props.size)], props.variant === 'bare' && BARE_FIELD, props.class)"
+    :class="cn(...inputLook, INPUT_SIZE[controlSize(props.size)], INPUT_PILL[controlSize(props.size)], props.variant === 'bare' && BARE_FIELD, props.class)"
   >
 </template>

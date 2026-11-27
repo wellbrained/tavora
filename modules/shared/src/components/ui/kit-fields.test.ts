@@ -109,15 +109,16 @@ describe("Badge numbers", () => {
     const root = await mount(() => h(Badge, { numeric: true, size: "sm" }, () => "12"))
     const badge = root.querySelector("[data-slot=badge]")!
     expect(badge.classList.contains("tabular-nums")).toBe(true)
-    expect(badge.classList.contains("px-1")).toBe(true)
-    expect(badge.classList.contains("px-1.5")).toBe(false)
+    // Its sides (more only near a full round, pill.css): 4 px, not the default's 6.
+    expect(badge.classList.contains("[--pill-pad:--spacing(1)]")).toBe(true)
+    expect(badge.classList.contains("[--pill-pad:--spacing(1.5)]")).toBe(false)
   })
 
   it("is unchanged without them", async () => {
     const root = await mount(() => h(Badge, null, () => "New"))
     const badge = root.querySelector("[data-slot=badge]")!
     expect(badge.classList.contains("tabular-nums")).toBe(false)
-    expect(badge.classList.contains("px-1.5")).toBe(true)
+    expect(badge.classList.contains("[--pill-pad:--spacing(1.5)]")).toBe(true)
   })
 })
 

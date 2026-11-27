@@ -27,3 +27,18 @@
 [data-off] :is([data-slot="number-field"], [data-slot="tab-strip"], [data-slot="zoom-pane"], [data-slot="tile-map"]) :is(button, input):disabled {
   opacity: 1;
 }
+
+/* The Round ends example (buttons/Pills.vue): the controls inside at a corner of 16, the largest a user can pick. The
+   corner steps are worked out again here, as on :root, by the active style's rule (theme.css, looks.css). */
+.playground-radius-16 {
+  --radius: 16px;
+  --radius-sm: var(--style-radius-sm, calc(var(--radius) - 4px));
+  --radius-md: var(--style-radius-md, calc(var(--radius) - 2px));
+  --radius-lg: var(--radius);
+  --radius-xl: var(--style-radius-xl, calc(var(--radius) + 4px));
+}
+:root[data-style]:not([data-style="tavora.classic"]) .playground-radius-16 {
+  --style-radius-sm: max(0px, calc(var(--radius) * 0.5));
+  --style-radius-md: max(0px, calc(var(--radius) * 0.75));
+  --style-radius-xl: calc(var(--radius) * 1.5);
+}

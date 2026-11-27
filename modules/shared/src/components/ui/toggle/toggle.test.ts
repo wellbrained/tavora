@@ -46,7 +46,9 @@ describe("Toggle", () => {
     expect(button.textContent).toBe("Pin")
     expect(classes(button)).not.toContain("w-[var(--style-control-height,32px)]")
     expect(classes(button)).toContain("min-w-[var(--style-control-height,32px)]")
-    expect(classes(button)).toContain("px-3")
+    // Its sides: 12 px, more only near a full round (pill.css).
+    expect(classes(button)).toContain("px-(--pill-px)")
+    expect(classes(button)).toContain("[--pill-pad:--spacing(3)]")
   })
 
   it("keeps its label as name and tooltip when the words are short for it", async () => {

@@ -4,9 +4,10 @@ import { cva } from "class-variance-authority"
 export { default as Badge } from "./Badge.vue"
 
 // Small chips use the 4 px radius from the style guide. The status variants
-// tint with Tavora's extra tokens; gold stays for the one that matters.
+// tint with Tavora's extra tokens; gold stays for the one that matters. Near a full round the ends get pill padding
+// (pill.css); the height is one line plus the padding and border (a caller without the border sets --pill-border to 0).
 export const badgeVariants = cva(
-  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap [&>svg]:pointer-events-none [&>svg]:size-3 [&>svg]:stroke-2",
+  "tavora-pill px-(--pill-px) has-[>svg:first-child]:pl-(--pill-px-icon) [--pill-height:calc(1lh+--spacing(1)+2*var(--pill-border))] [--pill-pad:--spacing(1.5)] [--pill-pad-icon:--spacing(1.5)] [--pill-icon:--spacing(3)] [--pill-border:1px] inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-sm border py-0.5 text-xs font-medium whitespace-nowrap [&>svg]:pointer-events-none [&>svg]:size-3 [&>svg]:stroke-2",
   {
     variants: {
       variant: {
@@ -21,7 +22,7 @@ export const badgeVariants = cva(
       /** `sm`: tight padding, for a count beside a label or in a corner. */
       size: {
         default: "",
-        sm: "px-1 py-0 leading-4",
+        sm: "py-0 leading-4 [--pill-height:calc(1lh+2*var(--pill-border))] [--pill-pad:--spacing(1)] [--pill-pad-icon:--spacing(1)]",
       },
       /** Digits of one width, so a changing number doesn't make the badge jump. */
       numeric: {

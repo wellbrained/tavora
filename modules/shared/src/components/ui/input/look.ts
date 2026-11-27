@@ -19,3 +19,10 @@ export const INPUT_SIZE = {
   default: "",
   lg: "h-[calc(var(--style-control-height,32px)+8px)] px-4",
 } as const
+
+/** Input's side padding per size, which grows near a full round (pill.css). After `INPUT_SIZE`, so it takes the place of its `px-*`. */
+export const INPUT_PILL = {
+  sm: "tavora-pill px-(--pill-px) [--pill-border:1px] [--pill-height:calc(var(--style-control-height,32px)-4px)] [--pill-pad:--spacing(2.5)]",
+  default: "tavora-pill px-(--pill-px) [--pill-border:1px] [--pill-height:var(--style-control-height,32px)] [--pill-pad:--spacing(3)]",
+  lg: "tavora-pill px-(--pill-px) [--pill-border:1px] [--pill-height:calc(var(--style-control-height,32px)+8px)] [--pill-pad:--spacing(4)]",
+} as const

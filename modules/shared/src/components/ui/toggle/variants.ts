@@ -11,7 +11,9 @@ import { SCALE_PRESS } from "../button"
  */
 export const toggleVariants = cva(
   [
-    "relative inline-flex flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium outline-none",
+    "tavora-pill relative inline-flex flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium outline-none",
+    // Near a full round the ends get pill padding (pill.css): --pill-px on a text end, --pill-px-icon beside a leading icon.
+    "px-(--pill-px) has-[>svg:first-child]:pl-(--pill-px-icon) [--pill-border:1px] [--pill-icon:--spacing(4)]",
     "text-muted-foreground hover:bg-[color-mix(in_srgb,var(--foreground)_10%,var(--accent))] hover:text-foreground",
     "data-[state=on]:bg-primary/15 data-[state=on]:text-primary data-[state=on]:hover:bg-primary/20 data-[state=on]:hover:text-primary",
     "aria-disabled:cursor-default aria-disabled:data-[state=off]:hover:bg-transparent aria-disabled:data-[state=off]:hover:text-muted-foreground aria-disabled:data-[state=on]:hover:bg-primary/15",
@@ -28,9 +30,9 @@ export const toggleVariants = cva(
         ghost: "border-transparent",
       },
       size: {
-        sm: "h-[calc(var(--style-control-height,32px)-4px)] min-w-[calc(var(--style-control-height,32px)-4px)] px-2.5 has-[>svg:first-child]:pl-2",
-        default: "h-[var(--style-control-height,32px)] min-w-[var(--style-control-height,32px)] px-3 has-[>svg:first-child]:pl-2.5",
-        lg: "h-[calc(var(--style-control-height,32px)+8px)] min-w-[calc(var(--style-control-height,32px)+8px)] gap-2 px-4 has-[>svg:first-child]:pl-3.5",
+        sm: "h-[calc(var(--style-control-height,32px)-4px)] min-w-[calc(var(--style-control-height,32px)-4px)] [--pill-height:calc(var(--style-control-height,32px)-4px)] [--pill-pad:--spacing(2.5)] [--pill-pad-icon:--spacing(2)]",
+        default: "h-[var(--style-control-height,32px)] min-w-[var(--style-control-height,32px)] [--pill-height:var(--style-control-height,32px)] [--pill-pad:--spacing(3)] [--pill-pad-icon:--spacing(2.5)]",
+        lg: "h-[calc(var(--style-control-height,32px)+8px)] min-w-[calc(var(--style-control-height,32px)+8px)] gap-2 [--pill-height:calc(var(--style-control-height,32px)+8px)] [--pill-pad:--spacing(4)] [--pill-pad-icon:--spacing(3.5)]",
       },
       iconOnly: {
         true: "px-0 has-[>svg:first-child]:pl-0",

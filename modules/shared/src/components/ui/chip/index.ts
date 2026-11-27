@@ -8,8 +8,10 @@ export { default as Chip } from "./Chip.vue"
 // guide's 12 px, so sm is only shorter. A chip with a × keeps less room on its right, where the × brings its own.
 // Height, padding, icons and the × are in em: a text size from the scale given by class (text-sm, text-base, text-lg)
 // grows the whole chip with it. At the default text they come out at 16, 20 and 24 px.
+// Near a full round the ends get pill padding (pill.css): what comes before the word (an icon, a dot, the toggle's check)
+// takes --pill-px-icon; a × keeps its own tight end.
 export const chipVariants = cva(
-  "inline-flex w-fit max-w-full shrink-0 items-center overflow-hidden rounded-sm border border-transparent font-medium whitespace-nowrap transition-colors disabled:opacity-(--disabled-opacity) data-disabled:opacity-(--disabled-opacity) [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "tavora-pill px-(--pill-px) has-[>:first-child:not(.truncate)]:pl-(--pill-px-icon) [--pill-border:1px] inline-flex w-fit max-w-full shrink-0 items-center overflow-hidden rounded-sm border border-transparent font-medium whitespace-nowrap transition-colors disabled:opacity-(--disabled-opacity) data-disabled:opacity-(--disabled-opacity) [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -21,9 +23,9 @@ export const chipVariants = cva(
         info: "bg-info/15 text-info",
       },
       size: {
-        sm: "h-[1.3334em] gap-[0.1667em] px-[0.3334em] text-xs leading-none [&_svg]:size-[0.8334em]",
-        default: "h-[1.6667em] gap-[0.3334em] px-[0.5em] text-xs leading-none [&_svg]:size-[1em]",
-        lg: "h-[1.8462em] gap-[0.3077em] px-[0.6154em] text-sm leading-none [&_svg]:size-[1.0770em]",
+        sm: "h-[1.3334em] gap-[0.1667em] text-xs leading-none [&_svg]:size-[0.8334em] [--pill-height:1.3334em] [--pill-pad:0.3334em] [--pill-pad-icon:0.3334em] [--pill-icon:0.8334em]",
+        default: "h-[1.6667em] gap-[0.3334em] text-xs leading-none [&_svg]:size-[1em] [--pill-height:1.6667em] [--pill-pad:0.5em] [--pill-pad-icon:0.5em] [--pill-icon:1em]",
+        lg: "h-[1.8462em] gap-[0.3077em] text-sm leading-none [&_svg]:size-[1.0770em] [--pill-height:1.8462em] [--pill-pad:0.6154em] [--pill-pad-icon:0.6154em] [--pill-icon:1.0770em]",
       },
       removable: { true: "", false: "" },
     },
