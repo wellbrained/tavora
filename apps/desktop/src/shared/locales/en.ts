@@ -2473,7 +2473,7 @@ export const en = {
   "connections.aiAccounts.other": "{count} accounts",
   "connections.leaderboards.one": "1 module offers leaderboards.",
   "connections.leaderboards.other": "{count} modules offer leaderboards.",
-  "overlays.group.overGame": "Over your game",
+  "overlays.group.overGame": "In game",
   "overlays.group.onStream": "On stream",
   "streaming.links.count.one": "1 link in use.",
   "streaming.links.count.other": "{count} links in use.",

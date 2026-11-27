@@ -318,7 +318,7 @@ test("an item's settings use Tavora's settings layout: the panel, the overlay an
 
     // Where it shows: over the game (set on the Overlay page) and on stream (the OBS link).
     await click(app, "page-game");
-    await expect.poll(() => everything()).toContain("Not over your game");
+    await expect.poll(() => everything()).toContain("Off in your game");
     await shotOfPanel(app, "settings-in-game.png");
     await click(app, "page-stream");
     await expect.poll(() => everything()).toContain("Copy OBS link");
