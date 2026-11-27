@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.93",
+    "date": "2026-11-27",
+    "notes": [
+      "A menu entry that's off shows why in its row, not in a tooltip."
+    ]
+  },
+  {
     "version": "0.2.92",
     "date": "2026-11-27",
     "notes": [

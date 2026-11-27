@@ -2086,8 +2086,9 @@ export type MenuEntry =
       disabled?: boolean;
       /**
        * Why it is off, with `disabled: true`: a short sentence on one line, at most 120 characters ("Already used by
-       * another line."). The entry stays reachable by the pointer and the arrow keys, shows the reason in a tooltip beside
-       * it and to screen readers, and can't be picked. Without it a disabled entry is skipped. Needs
+       * another line."). The entry stays reachable by the pointer and the arrow keys, shows the reason in its row where
+       * the hint sits (instead of the hint, cut with "…" when long; screen readers get all of it), and can't be picked.
+       * Without it a disabled entry is skipped. Needs
        * `sdk.supports("ui.showMenu.disabledReason")`: on an older Tavora the SDK shows it as the `hint` when the entry has
        * none (cut to 30 characters), and leaves it out otherwise.
        */

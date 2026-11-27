@@ -1,5 +1,5 @@
 import { useAttrs, watchPostEffect } from "vue"
-import { REASON_ATTRIBUTE, SIDE_ATTRIBUTE } from "../title-tooltips"
+import { REASON_ATTRIBUTE } from "../title-tooltips"
 
 /**
  * A switched-off control that can say why. A native `disabled` control gets no pointer events and no focus, so its tooltip
@@ -34,8 +34,11 @@ export interface SoftDisabledOptions {
   dataDisabled?: boolean
   /** Stop the pointer going down too (default). A text field leaves it alone, so its text can still be selected and copied. */
   pointer?: boolean
-  /** Where the reason opens when there is room. A menu row asks for `right`, so it does not cover the rows below. */
-  side?: "left" | "right"
+  /**
+   * The control shows the reason itself (a menu row shows it where its hint sits): no tooltip then, only the screen
+   * reader's description.
+   */
+  shownInside?: boolean
 }
 
 /** Off, and with something to say about it (a reason, or a title or `hinted` on a button). */
@@ -81,8 +84,8 @@ export function useSoftDisabled(input: () => SoftDisabledInput, options: SoftDis
         ...attrs,
         "aria-disabled": "true",
         ...(options.dataDisabled === false ? {} : { "data-disabled": "" }),
-        ...(reason ? { [REASON_ATTRIBUTE]: reason, "aria-description": reason } : {}),
-        ...(reason && options.side ? { [SIDE_ATTRIBUTE]: options.side } : {}),
+        ...(reason && !options.shownInside ? { [REASON_ATTRIBUTE]: reason } : {}),
+        ...(reason ? { "aria-description": reason } : {}),
         onClickCapture: stop,
         ...(options.pointer === false ? {} : { onPointerdownCapture: stop, onMousedownCapture: stop }),
         onKeydownCapture: stopKey,

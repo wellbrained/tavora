@@ -5,7 +5,7 @@ import { installTitleTooltips } from "../../title-tooltips"
 import { Button } from "./button"
 import { Checkbox } from "./checkbox"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./context-menu"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "./dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuShortcut, DropdownMenuTrigger } from "./dropdown-menu"
 import { Input } from "./input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select"
 import { Switch, SwitchField } from "./switch"
@@ -274,10 +274,21 @@ describe("menu items with a reason", () => {
       ]),
     })
   }
-  const row = (name: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent?.trim() === name)!
+  /** A row's label: its text without the reason it shows. */
+  const label = (el: Element) => [...el.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE || (node instanceof Element && !node.matches("[data-slot=menu-reason]"))).map((node) => node.textContent).join("").trim()
+  const row = (name: string, role = "menuitem") => [...document.querySelectorAll<HTMLElement>(`[role=${role}]`)].find((el) => label(el) === name)!
+  const shown = (el: Element) => el.querySelector("[data-slot=menu-reason]")
   const press = (element: Element, key: string) => element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }))
 
-  it("a dropdown row is reached with the arrow keys, shows the reason beside it and can't be chosen", async () => {
+  /** A row with a reason shows it where the hint sits, hidden from screen readers, who get it as the description. */
+  function showsReason(el: Element) {
+    expect(shown(el)?.textContent).toBe(REASON)
+    expect(shown(el)?.getAttribute("aria-hidden")).toBe("true")
+    expect(el.getAttribute("aria-description")).toBe(REASON)
+    expect(el.hasAttribute("data-tavora-reason")).toBe(false)
+  }
+
+  it("a dropdown row is reached with the arrow keys, shows the reason in the row and can't be chosen", async () => {
     const selected = vi.fn()
     mount(dropdown(selected))
     await wait(20)
@@ -286,14 +297,15 @@ describe("menu items with a reason", () => {
     expect(pin.getAttribute("aria-disabled")).toBe("true")
     // A disabled row with no reason is still skipped.
     expect(row("Plain").getAttribute("data-disabled")).toBe("")
+    expect(shown(row("Plain"))).toBeNull()
+    showsReason(pin)
 
     row("First").focus()
     press(row("First"), "ArrowDown")
     await wait()
     expect(document.activeElement).toBe(pin)
-    expect(tooltip()?.textContent).toContain(REASON)
-    expect(tooltip()?.getAttribute("data-side")).not.toBe("bottom")
-    expect(pin.getAttribute("aria-describedby")).toBe(tooltip()?.id)
+    // The reason is in the row already: no tooltip repeats it.
+    expect(tooltip()).toBeNull()
 
     press(pin, "Enter")
     press(pin, " ")
@@ -308,23 +320,32 @@ describe("menu items with a reason", () => {
     expect(selected).toHaveBeenCalledWith("last")
   })
 
-  it("a dropdown row shows the reason on hover", async () => {
+  it("a dropdown row opens no tooltip on hover", async () => {
     mount(dropdown(() => {}))
     await wait(20)
     hover(row("Pin"))
     await wait()
-    expect(tooltip()?.textContent).toContain(REASON)
+    expect(tooltip()).toBeNull()
+    showsReason(row("Pin"))
   })
 
-  it("a row's reason stays when the menu moves its focus to the row under the pointer", async () => {
-    mount(dropdown(() => {}))
+  it("the reason takes the place of the row's hint", async () => {
+    mount(defineComponent({
+      render: () => h(DropdownMenu, { open: true, modal: false }, () => [
+        h(DropdownMenuTrigger, null, () => "Menu"),
+        h(DropdownMenuContent, null, () => [
+          h(DropdownMenuItem, { disabled: true, disabledReason: REASON }, () => ["Pin", h(DropdownMenuShortcut, null, () => "Ctrl+P")]),
+          h(DropdownMenuItem, null, () => ["Copy", h(DropdownMenuShortcut, null, () => "Ctrl+C")]),
+        ]),
+      ]),
+    }))
     await wait(20)
-    row("First").focus()
-    hover(row("Pin"))
-    // What Reka does on a pointer move: focus goes to the row, so it leaves the one that had it.
-    row("Pin").focus()
-    await wait()
-    expect(tooltip()?.textContent).toContain(REASON)
+    const [pin, copy] = document.querySelectorAll<HTMLElement>("[role=menuitem]")
+    expect(pin!.hasAttribute("data-reason")).toBe(true)
+    expect(pin!.className).toContain("[&[data-reason]_[data-slot$=menu-shortcut]]:hidden")
+    expect(shown(pin!)?.textContent).toBe(REASON)
+    expect(copy!.hasAttribute("data-reason")).toBe(false)
+    expect(shown(copy!)).toBeNull()
   })
 
   it("a radio choice with a reason is reached, says why and can't be picked", async () => {
@@ -344,19 +365,18 @@ describe("menu items with a reason", () => {
       ]),
     }))
     await wait(20)
-    const choice = (name: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitemradio]")].find((el) => el.textContent?.trim() === name)!
+    const choice = (name: string) => row(name, "menuitemradio")
     const fuel = choice("Fuel")
     expect(fuel.hasAttribute("data-disabled")).toBe(false)
     expect(fuel.getAttribute("aria-disabled")).toBe("true")
-    expect(fuel.getAttribute("aria-description")).toBe(REASON)
+    showsReason(fuel)
     expect(choice("Plain").getAttribute("data-disabled")).toBe("")
 
     choice("Coal").focus()
     press(choice("Coal"), "ArrowDown")
     await wait()
     expect(document.activeElement).toBe(fuel)
-    expect(tooltip()?.textContent).toContain(REASON)
-    expect(tooltip()?.getAttribute("data-side")).not.toBe("bottom")
+    expect(tooltip()).toBeNull()
 
     press(fuel, "Enter")
     press(fuel, " ")
@@ -391,7 +411,8 @@ describe("menu items with a reason", () => {
     press(row("First"), "ArrowDown")
     await wait()
     expect(document.activeElement).toBe(pin)
-    expect(tooltip()?.textContent).toContain(REASON)
+    showsReason(pin)
+    expect(tooltip()).toBeNull()
     press(pin, "Enter")
     pin.click()
     expect(selected).not.toHaveBeenCalled()

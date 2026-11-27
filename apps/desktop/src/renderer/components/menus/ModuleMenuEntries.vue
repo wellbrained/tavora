@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The entries of a module's menu (ui.showMenu), as the main process checked them: text only, a
 // colour dot when the module gave a CSS colour, a check for ticked entries and the kit's radio look for single choices, a hint on the right.
-// A switched-off entry with a reason stays reachable and shows the reason beside it (the kit's `disabledReason`).
+// A switched-off entry with a reason stays reachable and shows the reason where the hint sits (the kit's `disabledReason`).
 import { Check } from "@lucide/vue";
 import { computed } from "vue";
 import {
@@ -55,7 +55,7 @@ const rows = computed<Row[]>(() => {
       >
         <span v-if="choice.entry.color" class="size-3 flex-none rounded-full border" :style="{ background: choice.entry.color }" aria-hidden="true" />
         <span class="min-w-0 truncate">{{ choice.entry.label }}</span>
-        <DropdownMenuShortcut v-if="choice.entry.hint" class="tracking-normal">{{ choice.entry.hint }}</DropdownMenuShortcut>
+        <DropdownMenuShortcut v-if="choice.entry.hint && !choice.entry.disabledReason" class="tracking-normal">{{ choice.entry.hint }}</DropdownMenuShortcut>
       </DropdownMenuRadioItem>
     </DropdownMenuRadioGroup>
     <template v-else>
@@ -86,7 +86,7 @@ const rows = computed<Row[]>(() => {
       </span>
       <span v-if="entry.color" class="size-3 flex-none rounded-full border" :style="{ background: entry.color }" aria-hidden="true" />
       <span class="min-w-0 truncate">{{ entry.label }}</span>
-      <DropdownMenuShortcut v-if="entry.hint" class="tracking-normal">{{ entry.hint }}</DropdownMenuShortcut>
+      <DropdownMenuShortcut v-if="entry.hint && !entry.disabledReason" class="tracking-normal">{{ entry.hint }}</DropdownMenuShortcut>
     </DropdownMenuItem>
     </template>
     </template>
