@@ -68,6 +68,10 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     // Removing it here would make that later update invisible to MutationObserver.
     suppressed.add(element);
     element.setAttribute("title", "");
+    say(element, value);
+  }
+  /** Gives a screen reader the hint, as the element's name or its description. */
+  function say(element: Element, value: string) {
     const more = element.getAttribute(DESCRIPTION_ATTRIBUTE)?.trim();
     if (element.hasAttribute("data-tooltip-label") || (!element.hasAttribute("aria-label") && !element.textContent?.trim())) {
       element.setAttribute("aria-label", value);
@@ -156,11 +160,19 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
   doc.addEventListener("focusout", blur, true);
   doc.addEventListener("pointerdown", down, true);
   doc.addEventListener("keydown", key, true);
-  // A title that changes, appears or goes away; nothing else in the page matters here.
+  // A title or its second line that changes, appears or goes away; nothing else in the page matters here.
   const observer = new MutationObserver(records => {
     for (const record of records) {
       if (record.type !== "attributes" || !(record.target instanceof Element)) continue;
       const element = record.target;
+      // A second line that changes under a title already taken over (a cut value, say) is said and shown again.
+      if (record.attributeName === DESCRIPTION_ATTRIBUTE) {
+        const kept = element.getAttribute("data-tavora-tooltip");
+        if (!kept || element.getAttribute("title")) continue;
+        say(element, kept);
+        if (current === element && !element.getAttribute(REASON_ATTRIBUTE)) state.description = element.getAttribute(DESCRIPTION_ATTRIBUTE)?.trim() || undefined;
+        continue;
+      }
       if (suppressed.delete(element)) continue;
       const value = element.getAttribute("title");
       if (value?.trim()) {
@@ -174,7 +186,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
       }
     }
   });
-  observer.observe(doc.body, { subtree: true, attributes: true, attributeFilter: ["title"] });
+  observer.observe(doc.body, { subtree: true, attributes: true, attributeFilter: ["title", DESCRIPTION_ATTRIBUTE] });
   const dispose = () => {
     hide();
     observer.disconnect();

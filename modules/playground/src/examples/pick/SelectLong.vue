@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Ellipsis } from "@lucide/vue";
+import { Ellipsis, Plus } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@tavora/official-ui/components/ui/select";
 import { ref } from "vue";
@@ -14,7 +14,7 @@ const LONG = "Ice Shot Deadeye Leveling Guide for the whole campaign";
   <div class="flex w-full max-w-md flex-col items-start gap-3">
     <!-- In a row of controls the value stays on one line; hover or focus the field to read it whole. -->
     <div class="flex w-full items-center gap-1.5" data-testid="select-long-row">
-      <Button variant="outline">Add</Button>
+      <Button variant="outline"><Plus /> Add</Button>
       <Select v-model="build">
         <SelectTrigger class="flex-1" aria-label="Build">
           <SelectValue />

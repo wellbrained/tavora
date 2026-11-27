@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { createApp, defineComponent, h, nextTick, ref, type App } from "vue"
+import { installTitleTooltips } from "../../../title-tooltips"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "."
 import { choiceLabelsKey, pickedLabel } from "./empty"
 
@@ -158,6 +159,29 @@ describe("Select shows a long value", () => {
     await tick()
     expect(trigger(root).getAttribute("title")).toBe("World")
     expect(trigger(root).getAttribute("data-tooltip-description")).toBe(LONG)
+  })
+
+  it("keeps what a screen reader hears under that hint up to date", async () => {
+    const dispose = installTitleTooltips(document)
+    try {
+      const label = ref(LONG)
+      const root = long({ title: "World", "aria-label": "World" }, {}, {}, label)
+      await tick()
+      trigger(root).dispatchEvent(new Event("pointerover", { bubbles: true }))
+      await tick()
+      expect(trigger(root).getAttribute("aria-description")).toBe(LONG)
+
+      label.value = `${LONG}, umbenannt`
+      await tick()
+      expect(trigger(root).getAttribute("aria-description")).toBe(`${LONG}, umbenannt`)
+
+      cut.value = false
+      label.value = "Kurz"
+      await tick()
+      expect(trigger(root).getAttribute("aria-description")).toBeNull()
+    } finally {
+      dispose()
+    }
   })
 
   it("does not repeat a value the trigger's own hint already says", async () => {
