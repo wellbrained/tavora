@@ -5,6 +5,7 @@
 import { Tooltip, TooltipRows, useTooltip, type TooltipRow } from "@tavora/official-ui";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { HoverRow } from "@tavora/official-ui/components/ui/hover-row";
+import { Meter } from "@tavora/official-ui/components/ui/meter";
 import { StatStrip, StatTile } from "@tavora/official-ui/components/ui/stat-tile";
 
 interface Skill {
@@ -39,7 +40,7 @@ const totals = { title: "Runs", rows: [{ label: "Won", value: "18" }, { label: "
           <Badge variant="outline">Lv {{ skill.level }}</Badge>
           <span class="text-muted-foreground ml-auto tabular-nums">{{ skill.damage }}</span>
         </div>
-        <div class="bg-muted h-1.5 overflow-hidden rounded-full"><div class="bg-primary h-full" :style="{ width: skill.share * 100 + '%' }" /></div>
+        <Meter :model-value="skill.share * 100" :aria-label="skill.name" />
       </HoverRow>
     </ul>
     <StatStrip>

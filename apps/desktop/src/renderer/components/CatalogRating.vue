@@ -5,7 +5,7 @@
 import { ChevronDown, MessageSquareText } from "@lucide/vue";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
-import { Progress } from "@tavora/official-ui/components/ui/progress";
+import { Meter } from "@tavora/official-ui/components/ui/meter";
 import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { computed } from "vue";
@@ -54,7 +54,7 @@ const rows = computed(() =>
       <ul class="space-y-1.5 px-2 pb-2">
         <li v-for="row in rows" :key="row.stars" class="grid grid-cols-[3.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 text-xs">
           <span class="text-muted-foreground">{{ t("catalog.rating.stars", { count: row.stars }) }}</span>
-          <Progress :model-value="row.percent" :aria-label="t('catalog.rating.stars', { count: row.stars })" />
+          <Meter :model-value="row.percent" :aria-label="t('catalog.rating.stars', { count: row.stars })" />
           <span class="text-muted-foreground text-right tabular-nums"><CountTo :value="row.percent" :format="(n) => t('catalog.rating.percent', { percent: n })" /></span>
         </li>
       </ul>

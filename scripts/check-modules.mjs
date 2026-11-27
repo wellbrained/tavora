@@ -514,6 +514,7 @@ const RAW_ELEMENTS = {
   details: "Collapsible or Expandable",
   textarea: "Textarea",
   progress: "Progress",
+  meter: "Meter",
   dialog: "Dialog",
 };
 const RAW_INPUTS = { range: "Slider or SliderField", checkbox: "Checkbox, Switch or SwitchField", radio: "RadioGroup", color: "ColorPicker" };
@@ -526,7 +527,7 @@ const ATTRS = `(?:[^>"']|"[^"]*"|'[^']*')*`;
 function templateChecks(code, ctx) {
   const out = [];
   out.push(...colors(code, slotFree(code)));
-  for (const m of matches(/<(button|select|table|details|textarea|progress|dialog)(?=[\s>/])/g, code)) {
+  for (const m of matches(/<(button|select|table|details|textarea|progress|meter|dialog)(?=[\s>/])/g, code)) {
     out.push({ index: m.index, rule: "kit-control", message: `raw <${m[1]}>: use ${RAW_ELEMENTS[m[1]]}` });
   }
   for (const m of matches(new RegExp(`<input\\b(${ATTRS})>`, "g"), code)) {

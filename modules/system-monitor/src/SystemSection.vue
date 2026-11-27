@@ -5,7 +5,7 @@
 import { Cpu, Gpu, List } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { Progress } from "@tavora/official-ui/components/ui/progress";
+import { Meter, type MeterTone } from "@tavora/official-ui/components/ui/meter";
 import { computed } from "vue";
 import { degrees, driveTone, megahertz, percent, size, speed, temperatureTone, usedPercent, watts, type DriveTone } from "./format";
 import { language, t } from "./i18n";
@@ -92,6 +92,13 @@ const drives = computed(() => {
     const total = live?.totalBytes ?? known?.totalBytes ?? null;
     const free = live?.freeBytes ?? null;
     const missing = live ? !live.connected : known === undefined;
+    const used = usedPercent(free, total);
+    const text =
+      free === null
+        ? ""
+        : total
+          ? t("drive.free", { free: size(free, lang.value), total: size(total, lang.value) })
+          : t("drive.freeOnly", { free: size(free, lang.value) });
     return {
       id,
       label: known?.label ?? "",
@@ -100,26 +107,18 @@ const drives = computed(() => {
       total,
       free,
       tone: driveTone(free, total),
-      used: usedPercent(free, total),
-      text:
-        free === null
-          ? ""
-          : total
-            ? t("drive.free", { free: size(free, lang.value), total: size(total, lang.value) })
-            : t("drive.freeOnly", { free: size(free, lang.value) }),
+      used,
+      text,
+      // The bar shows what is used; a drive of unknown size has no share to tell.
+      spoken: free !== null && total ? t("drive.used", { percent: percent(used, lang.value) }) : text,
       io: live && live.connected ? `${t("drive.read", { speed: speed(live.readBytesPerSec, lang.value) })} · ${t("drive.write", { speed: speed(live.writeBytesPerSec, lang.value) })}` : "",
     };
   });
 });
 
-const BAR_TONE: Record<DriveTone, string> = {
-  ok: "",
-  warning: "[&>[data-slot=progress-indicator]]:bg-warning",
-  danger: "[&>[data-slot=progress-indicator]]:bg-destructive",
-};
+// Neutral unless a drive is low (driveTone also counts the free gigabytes, so it isn't a limit on the share alone).
+const BAR_TONE: Record<DriveTone, MeterTone> = { ok: "muted", warning: "warning", danger: "destructive" };
 const TEXT_TONE: Record<DriveTone, string> = { ok: "", warning: "text-warning", danger: "text-destructive" };
-// No animation on values: a bar jumps to its new place. Neutral unless a drive is low.
-const BAR = "[&>[data-slot=progress-indicator]]:transition-none [&>[data-slot=progress-indicator]]:bg-muted-foreground";
 const CARD = "bg-card text-card-foreground flex flex-col gap-1.5 rounded-lg border p-2.5";
 const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase";
 </script>
@@ -189,7 +188,7 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
           <span v-else :class="cn('flex-none text-xs tabular-nums', TEXT_TONE[drive.tone])" data-testid="drive-free">{{ drive.text }}</span>
         </div>
         <template v-if="!drive.missing && drive.loaded">
-          <Progress :model-value="drive.used" :class="cn(BAR, BAR_TONE[drive.tone])" :aria-label="`${drive.id} ${drive.text}`" />
+          <Meter :model-value="drive.used" :tone="BAR_TONE[drive.tone]" :aria-label="`${drive.id} ${drive.text}`" :value-text="drive.spoken" />
           <p class="text-muted-foreground text-xs tabular-nums" data-testid="drive-io">{{ drive.io }}</p>
         </template>
       </section>

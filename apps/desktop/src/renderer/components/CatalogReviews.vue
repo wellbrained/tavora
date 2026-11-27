@@ -14,7 +14,7 @@ import { useOptimistic, useOptimisticKeyed } from "@tavora/official-ui/optimisti
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { useTask } from "@tavora/official-ui/use-task";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
-import { Progress } from "@tavora/official-ui/components/ui/progress";
+import { Meter } from "@tavora/official-ui/components/ui/meter";
 import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { formatDate, formatNumber, t } from "../i18n";
@@ -243,7 +243,7 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
         <ul class="max-w-80 space-y-1.5">
           <li v-for="row in rows" :key="row.stars" class="grid grid-cols-[3.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 text-xs">
             <span class="text-muted-foreground">{{ t("catalog.rating.stars", { count: row.stars }) }}</span>
-            <Progress :model-value="row.percent" :aria-label="t('catalog.rating.stars', { count: row.stars })" />
+            <Meter :model-value="row.percent" :aria-label="t('catalog.rating.stars', { count: row.stars })" />
             <span class="text-muted-foreground text-right tabular-nums"><CountTo :value="row.percent" :format="(n) => t('catalog.rating.percent', { percent: n })" /></span>
           </li>
         </ul>
