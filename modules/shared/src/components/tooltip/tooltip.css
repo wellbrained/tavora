@@ -83,7 +83,7 @@
    in plain CSS like the badge. */
 .tavora-tooltip[data-pinned]{pointer-events:auto}
 .tavora-tooltip[data-pinned] .tavora-tooltip-head,.tavora-tooltip[data-pinned] .tavora-item-card-name,.tavora-tooltip[data-pinned] .tavora-item-card-heading,.tavora-tooltip[data-pinned] .tavora-tooltip-art-text{padding-right:24px}
-.tavora-tooltip-close{position:absolute;top:6px;right:6px;z-index:1;display:grid;place-items:center;box-sizing:border-box;width:24px;height:24px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--tavora-tooltip-muted);cursor:pointer;transition:background-color var(--duration-press,100ms) var(--ease-out-strong,ease-out),color var(--duration-press,100ms) var(--ease-out-strong,ease-out)}
+.tavora-tooltip-close{position:absolute;top:6px;right:6px;z-index:1;display:grid;place-items:center;box-sizing:border-box;width:24px;height:24px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--tavora-tooltip-muted);cursor:pointer;transition:background-color var(--duration-press,100ms) var(--ease-out-strong,cubic-bezier(.23,1,.32,1)),color var(--duration-press,100ms) var(--ease-out-strong,cubic-bezier(.23,1,.32,1))}
 .tavora-tooltip-close:hover{background:color-mix(in srgb,var(--tavora-tooltip-text) 10%,transparent);color:var(--tavora-tooltip-text)}
 .tavora-tooltip-close:focus-visible{outline:2px solid var(--ring,#e0a243);outline-offset:1px}
 .tavora-tooltip-close svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
@@ -115,8 +115,8 @@
    the tokens above; an ItemCard sets them to its own colours and padding (item-card.css), so a part looks right in both. */
 .tavora-tooltip-heading{margin:8px 0 2px;font-size:var(--tavora-panel-tooltip-small-size);font-weight:500;line-height:1.35;color:var(--tavora-tooltip-subtle)}
 .tavora-tooltip-heading:first-child,.tavora-tooltip hr+:is(.tavora-tooltip-heading,.tavora-tooltip-text,.tavora-tooltip-tags,.tavora-tooltip-list,.tavora-tooltip-icons){margin-top:0}
-.tavora-tooltip p.tavora-tooltip-text,.tavora-tooltip-text{margin:6px 0 0;font-size:var(--tavora-panel-tooltip-text-size);line-height:1.45;color:var(--tavora-tooltip-text);white-space:pre-wrap}
-.tavora-tooltip p.tavora-tooltip-text:first-child,.tavora-tooltip-text:first-child{margin-top:0}
+.tavora-tooltip p:where(.tavora-tooltip-text),.tavora-tooltip-text{margin:6px 0 0;font-size:var(--tavora-panel-tooltip-text-size);line-height:1.45;color:var(--tavora-tooltip-text);white-space:pre-wrap}
+.tavora-tooltip p:where(.tavora-tooltip-text:first-child),.tavora-tooltip-text:first-child{margin-top:0}
 .tavora-tooltip p.tavora-tooltip-text[data-tone=muted],.tavora-tooltip-text[data-tone=muted]{color:var(--tavora-tooltip-muted)}
 .tavora-tooltip p.tavora-tooltip-text[data-size=small],.tavora-tooltip-text[data-size=small]{font-size:var(--tavora-panel-tooltip-small-size)}
 .tavora-tooltip-text[data-box]{padding:6px 8px;border:1px solid var(--tavora-tooltip-line);border-radius:6px;background:var(--tavora-tooltip-box)}

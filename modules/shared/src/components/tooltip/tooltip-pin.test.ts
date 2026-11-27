@@ -168,3 +168,15 @@ describe("Tooltip maxHeight", () => {
     tall.mockRestore()
   })
 })
+
+describe("pinning from the keyboard", () => {
+  it("pins a target that isn't a control with Enter, and Enter again closes it", async () => {
+    const { tip, targets } = await mount({ pin: true }, ["Bow"])
+    targets[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    expect(tip.pinned).toBe(true)
+    expect(tip.pinnedTarget).toBe(targets[0])
+    targets[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    expect(tip.props.open).toBe(false)
+    expect(tip.pinnedTarget).toBeNull()
+  })
+})

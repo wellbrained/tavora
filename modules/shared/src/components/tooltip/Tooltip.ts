@@ -158,7 +158,8 @@ export default defineComponent({
       if (!props.open) { if (!closing.value) ready.value = false; return; }
       // A card of its own height is placed as if the window were that tall, so it scrolls from there.
       const viewport = { width: innerWidth, height: innerHeight }, side = props.side, max = tooltipMaxWidth(props.width);
-      const cap = (placed: ReturnType<typeof tooltipPlacement>) => props.maxHeight && props.maxHeight > 0 ? { ...placed, maxHeight: Math.min(placed.maxHeight, Math.max(40, props.maxHeight)) } : placed;
+      const own = props.maxHeight && props.maxHeight > 0 ? Math.max(40, props.maxHeight) : Infinity;
+      const cap = (placed: ReturnType<typeof tooltipPlacement>) => ({ ...placed, maxHeight: Math.min(placed.maxHeight, own) });
       position.value = cap(tooltipPlacement(anchor(), 0, 0, viewport, side, max, props.bare, props.align));
       // Measured at its full height first.
       scrolls.value = false;
@@ -172,7 +173,7 @@ export default defineComponent({
         // fractional width can lay out a hair narrower and break a word.
         const box = getComputedStyle(card.value), rect = card.value.getBoundingClientRect();
         const measured = { width: Math.ceil(parseFloat(box.width) || rect.width), height: Math.ceil(parseFloat(box.height) || rect.height) };
-        const placed = cap(tooltipPlacement(anchor(), measured.width, Math.min(measured.height, props.maxHeight && props.maxHeight > 0 ? Math.max(40, props.maxHeight) : measured.height), viewport, side, max, props.bare, props.align));
+        const placed = cap(tooltipPlacement(anchor(), measured.width, Math.min(measured.height, own), viewport, side, max, props.bare, props.align));
         position.value = placed;
         height = measured.height;
         if (placed.width >= measured.width) break;

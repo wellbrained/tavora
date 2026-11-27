@@ -85,7 +85,7 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     // An `aria-description` somebody else set (the author, or a control's reason for being off) is theirs, and stays.
     if (element.hasAttribute(REASON_ATTRIBUTE) || (now !== null && described.get(element) !== now)) return void described.delete(element);
     // A hint that only repeats the name adds nothing; its description, if any, still does.
-    const text = name.includes(hint) ? more : more ? `${value}. ${more}` : value;
+    const text = name.includes(hint) ? more : more ? `${value}${/[.!?…]$/.test(hint) ? "" : "."} ${more}` : value;
     if (!text) return forgetDescription(element);
     element.setAttribute("aria-description", text);
     described.set(element, text);
