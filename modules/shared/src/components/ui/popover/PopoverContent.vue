@@ -24,7 +24,7 @@ const props = withDefaults(
       class?: HTMLAttributes["class"];
       /** `none`: the panel never takes the focus, so typing stays in the field. */
       focus?: "content" | "none";
-      /** Places a click or a focus move may land without closing the panel: an element, a ref, a selector or a list. */
+      /** Places a click or a focus move may land without closing the panel: an element, a selector or a list. */
       dismissIgnore?: DismissIgnore;
     }
   >(),
@@ -36,15 +36,14 @@ const delegatedProps = reactiveOmit(props, "class", "focus", "dismissIgnore");
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
 
 // Placed after the forwarded handlers: each one runs the caller's own handler too, once the kit has had its say.
+/** No focus moves in or back out of a `focus="none"` panel. */
+function noAutoFocus(event: Event) {
+  if (props.focus === "none") event.preventDefault();
+}
+
 const handlers = {
-  onOpenAutoFocus(event: Event) {
-    if (props.focus === "none") event.preventDefault();
-    emits("openAutoFocus", event);
-  },
-  onCloseAutoFocus(event: Event) {
-    if (props.focus === "none") event.preventDefault();
-    emits("closeAutoFocus", event);
-  },
+  onOpenAutoFocus: (event: Event) => (noAutoFocus(event), emits("openAutoFocus", event)),
+  onCloseAutoFocus: (event: Event) => (noAutoFocus(event), emits("closeAutoFocus", event)),
   onInteractOutside(event: PointerDownOutsideEvent | FocusOutsideEvent) {
     if (isDismissIgnored(event.detail.originalEvent.target, props.dismissIgnore)) event.preventDefault();
     emits("interactOutside", event);
@@ -64,7 +63,7 @@ const vPanelRole = { mounted: setRole, updated: setRole };
 /** A press on the panel must not move the focus off the field, except onto a field inside the panel. */
 function keepFocus(event: MouseEvent) {
   if (props.focus !== "none") return;
-  if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]")) return;
+  if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
   event.preventDefault();
 }
 </script>

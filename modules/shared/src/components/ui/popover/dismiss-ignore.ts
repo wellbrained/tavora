@@ -5,7 +5,8 @@ type Ignorable = string | Element | ComponentPublicInstance | null | undefined
 
 /**
  * Where a pointer press or a focus move leaves a popover open: an element, a component (a template ref), a CSS selector
- * for the closest match (`"[data-keep-open]"`), a ref or getter of those, or a list of them.
+ * for the closest match (`"[data-keep-open]"`), a getter of those (a ref's `.value` in a template is already one), or a list
+ * of them.
  */
 export type DismissIgnore = MaybeRefOrGetter<Ignorable | readonly Ignorable[]>
 
