@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.116",
+    "date": "2026-11-27",
+    "notes": [
+      "Popovers has an example of a list that stays beside a field while you type."
+    ]
+  },
+  {
     "version": "0.1.115",
     "date": "2026-11-27",
     "notes": [
