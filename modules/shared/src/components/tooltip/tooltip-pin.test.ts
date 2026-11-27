@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createApp, defineComponent, h, nextTick, type App } from "vue"
 import Tooltip from "./Tooltip"
-import { useTooltip, type UseTooltip } from "./use-tooltip"
+import { useTooltip, type UseTooltip, type UseTooltipOptions } from "./use-tooltip"
 
 // A card pinned open in the panel (useTooltip's `pin` without the shared tooltip), and the long press that shows a card
 // on touch.
@@ -19,7 +19,7 @@ afterEach(() => {
 interface Card { name: string }
 
 /** Targets bound with `tip.on(...)` (a span, or a button with `button`) and the panel's one Tooltip. */
-async function mount(options: Parameters<typeof useTooltip>[0], names: string[], target: Record<string, unknown> = {}, as = "span") {
+async function mount(options: UseTooltipOptions, names: string[], target: Record<string, unknown> = {}, as = "span") {
   let tip!: UseTooltip<Card>
   const host = document.createElement("div")
   document.body.append(host)
