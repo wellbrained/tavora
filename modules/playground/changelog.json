@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.117",
+    "date": "2026-11-27",
+    "notes": [
+      "New tooltip examples: your own card from parts, pinning a card, and the Path of Exile look."
+    ]
+  },
+  {
     "version": "0.1.116",
     "date": "2026-11-27",
     "notes": [
