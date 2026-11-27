@@ -136,6 +136,15 @@ It needs a Tavora with `sdk.supports("ui.tooltip.skin")`; on an older one the SD
 puts the effect text into a section row (the card shows in the rich layout), and `defineSkin` does nothing. In a panel, the kit's
 `ItemCard` shows the same card.
 
+Formatting, in every layout, drawn as the kit's panel parts: a run (of the effect, a paragraph or the footer) may be
+`strong` (bold) and `italic`, next to `accent`; `content.blocks` (up to 12) follow the sections: a paragraph
+(`{ type: 'text', text | runs, tone?: 'muted', size?: 'small', box? }`, line breaks kept), a heading, a list
+(`items`, each with an optional `meta` at the right) and tags (`tags`, each with an optional `#rrggbb` colour); and
+`content.footer` is a line across the card's bottom, a text or runs (`[{ text: 'Skill points: ', strong: true },
+{ text: '3' }]`). Their texts are plain: no control characters (a paragraph keeps its line breaks), no invisible or
+reordering marks. On a Tavora without `sdk.supports("ui.tooltip.formatting")` the SDK leaves `strong` and `italic` out
+and turns the blocks and the footer into sections of plain rows.
+
 ```ts
 await tavora.ui.tooltip.defineSkin('chaos', {
   frame: { image: 'dist/assets/frame-chaos.png', slice: [6, 6, 6, 6] },

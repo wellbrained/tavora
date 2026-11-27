@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { skinParams, tooltipParams, tooltipShowParams } from "./anchor.js";
-import { ITEM_CARD_ART_TAGS_TAVORA, ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_COLUMNS_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA, TOOLTIP_ANCHOR_BOX_TAVORA, UNIT_CARD_TAVORA, type TooltipContent } from "./protocol.js";
+import { ITEM_CARD_ART_TAGS_TAVORA, ITEM_CARD_BOX_BORDER_TAVORA, ITEM_CARD_COLUMNS_TAVORA, ITEM_CARD_ICON_TAVORA, ITEM_CARD_PER_TAVORA, ITEM_CARD_TAVORA, MENU_DISABLED_REASON_TAVORA, TOOLTIP_ANCHOR_BOX_TAVORA, TOOLTIP_FORMATTING_TAVORA, UNIT_CARD_TAVORA, checkTooltip, type TooltipContent } from "./protocol.js";
 
 const at = { x: 1, y: 2 };
 const OLD = "0.24.0";
@@ -128,6 +128,68 @@ describe("tooltipShowParams and the tags over the picture", () => {
     const shown = (host.calls["ui.tooltip.show"] as { content: TooltipContent }[])[0]!.content;
     expect("artTags" in shown).toBe(false);
     expect(shown.badges).toEqual(["Troop", "Stone", "Legendary"]);
+  });
+});
+
+describe("tooltipShowParams and formatting", () => {
+  const OLDER = MENU_DISABLED_REASON_TAVORA;
+  const content: TooltipContent = {
+    title: "Multi Shot",
+    layout: "card",
+    effect: [{ text: "Shooting " }, { text: "Regular Arrows", italic: true }, { text: " has a " }, { text: "20%", accent: true, strong: true }, { text: " chance." }],
+    sections: [{ rows: [{ text: "Affix" }] }],
+    blocks: [
+      { type: "text", runs: [{ text: "Flavour", italic: true }], tone: "muted" },
+      { type: "heading", text: "Found in" },
+      { type: "list", items: ["Spire", { text: "Shroud", meta: "Rare" }] },
+      { type: "tags", tags: ["Stone", { text: "Legendary", color: "#e0a243" }] },
+    ],
+    footer: [{ text: "Skill points: ", strong: true }, { text: "3" }],
+  };
+
+  it("sends it as it is to a Tavora that knows it, and a card without it as it is everywhere", () => {
+    expect(tooltipShowParams({ id: "a", at, content }, TOOLTIP_FORMATTING_TAVORA).content).toEqual(content);
+    const plain = { title: "A", effect: [{ text: "12", accent: true }] };
+    expect(tooltipShowParams({ id: "a", at, content: plain }, OLDER).content).toBe(plain);
+  });
+
+  it("keeps the text and accents but not bold and italic, and makes the blocks and the footer sections, on an older Tavora", () => {
+    const sent = tooltipShowParams({ id: "a", at, content }, OLDER).content;
+    expect(sent).toEqual({
+      title: "Multi Shot",
+      layout: "card",
+      effect: [{ text: "Shooting " }, { text: "Regular Arrows" }, { text: " has a " }, { text: "20%", accent: true }, { text: " chance." }],
+      sections: [{ rows: [{ text: "Affix" }] }, { rows: [{ text: "Flavour" }] }, { title: "Found in", rows: [{ text: "Spire" }, { text: "Shroud", status: "Rare" }, { text: "Stone · Legendary" }] }, { rows: [{ text: "Skill points: 3" }] }],
+    });
+    // What it sends is what that Tavora takes, and the caller's content stays as it was.
+    expect(checkTooltip({ id: "a", at, content: sent }).ok).toBe(true);
+    expect(content.blocks).toHaveLength(4);
+    expect((content.effect as { italic?: boolean }[])[1]!.italic).toBe(true);
+  });
+
+  it("keeps to the 12 sections and 100 rows an older Tavora takes", () => {
+    const full: TooltipContent = { title: "A", sections: Array.from({ length: 12 }, () => ({ rows: Array.from({ length: 8 }, () => ({ text: "x" })) })), blocks: [{ type: "list", items: Array.from({ length: 20 }, (_, i) => `l${i}`) }], footer: "Corrupted" };
+    const sent = tooltipShowParams({ id: "a", at, content: full }, OLDER).content;
+    expect(sent.sections).toHaveLength(12);
+    expect(sent.sections!.flatMap((s) => s.rows)).toHaveLength(100);
+    expect(sent.sections![11]!.rows.slice(8).map((r) => r.text)).toEqual(["l0", "l1", "l2", "l3"]);
+    expect(checkTooltip({ id: "a", at, content: sent }).ok).toBe(true);
+    const eleven: TooltipContent = { title: "A", sections: Array.from({ length: 11 }, () => ({ rows: [{ text: "x" }] })), blocks: [{ type: "heading", text: "H" }, { type: "text", text: "t" }], footer: "F" };
+    const folded = tooltipShowParams({ id: "a", at, content: eleven }, OLDER).content.sections!;
+    expect(folded).toHaveLength(12);
+    expect(folded[11]).toEqual({ title: "H", rows: [{ text: "t" }, { text: "F" }] });
+  });
+
+  it("is used by the memory host's show", async () => {
+    const { createMemoryHost } = await import("./testing.js");
+    const { sdk, host } = createMemoryHost({ version: OLDER });
+    expect(sdk.supports("ui.tooltip.formatting")).toBe(false);
+    await sdk.ui.tooltip.show({ id: "a", at, content });
+    const shown = (host.calls["ui.tooltip.show"] as { content: TooltipContent }[])[0]!.content;
+    expect("blocks" in shown || "footer" in shown).toBe(false);
+    const latest = createMemoryHost();
+    await latest.sdk.ui.tooltip.show({ id: "a", at, content });
+    expect((latest.host.calls["ui.tooltip.show"] as { content: TooltipContent }[])[0]!.content).toEqual(content);
   });
 });
 

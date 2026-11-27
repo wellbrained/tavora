@@ -718,8 +718,9 @@ These need a Tavora with `ui.tooltip.defineSkin` (its version is in the table ab
   (hidden from screen readers); the label stays the stat's name. `icon` needs a Tavora with
   `sdk.supports("ui.tooltip.propertyIcon")`: an older one refuses the unknown key, and with it the whole tooltip, so
   the SDK leaves it out there (a raw caller does that itself).
-- `content.effect` is a text (up to 1,000 characters) or up to 40 runs `{ text, accent? }` (1,000 characters in all);
-  `accent: true` runs take the accent colour.
+- `content.effect` is a text (up to 1,000 characters) or up to 40 runs `{ text, accent?, strong?, italic? }` (1,000
+  characters in all); `accent: true` runs take the accent colour, and bold and italic ones need
+  [formatting](#formatting).
 - `content.skin` names one of the module's skins; only the card and unit layouts wear it. A name that isn't defined shows the
   plain card, without an error.
 - `ui.tooltip.defineSkin({ name, skin })` defines or replaces a skin for every panel of the module, until Tavora
@@ -784,6 +785,49 @@ These need a Tavora with `sdk.supports("ui.tooltip.unit")` (`UNIT_CARD_TAVORA` i
 - On an older Tavora the SDK leaves `layout` and `skin` out of `ui.tooltip.show`, puts the `effect` text into a
   section row (first section, plain text), and `defineSkin` does nothing (`sdk.supports("ui.tooltip.skin")` tells); a raw caller checks the version itself, since an older Tavora
   rejects the unknown keys.
+
+### Formatting
+
+These need a Tavora with `sdk.supports("ui.tooltip.formatting")` (`TOOLTIP_FORMATTING_TAVORA` in `@tavora/sdk/protocol`).
+They work in every layout and look, and are drawn as the kit's panel parts of the same name, in the card's own colours
+and sizes, so a card looks the same in a panel (`ItemCard`, `ItemTooltip`) and here.
+
+- A run (of `effect`, a paragraph or the footer) may be `strong: true` (bold) and `italic: true` (slanted, the game's
+  names or quotes), next to `accent`. A "\n" in an effect or a paragraph is a line break.
+- `content.blocks` are up to 12 parts after the sections (in the card layout before the requirements, in the unit
+  layout before the icon row):
+  - `{ type: "text", text?, runs?, tone?, size?, box? }`: a paragraph (`TooltipText`), `text` or up to 40 `runs` (not
+    both), up to 1,000 characters. `tone: "muted"` is the softer text, `size: "small"` the small size, `box: true` the
+    effect box around it.
+  - `{ type: "heading", text }`: a small heading over the part under it (`TooltipHeading`), up to 100 characters.
+  - `{ type: "list", items }`: up to 20 lines with bullets (`TooltipList`), each a text (up to 300 characters) or
+    `{ text, meta? }`, `meta` (up to 40) a short value at the right.
+  - `{ type: "tags", tags }`: up to 8 tags in the badge look (`TooltipTags`), each a text (up to 24 characters) or
+    `{ text, color? }`, `color` `#rrggbb` only, for its text and edge.
+- `content.footer` is a line across the card's bottom, under a line, above Tavora's own footer (`TooltipFooter`): a text
+  or up to 40 runs, up to 300 characters, on one line (it wraps when long). A bold label: `[{ text: "Skill points: ",
+  strong: true }, { text: "3" }]`.
+- Texts in blocks and the footer are plain: a line break only in a paragraph, and no other control characters, no
+  zero-width marks and none of the marks that reorder text. Anything else is `INVALID_PARAMS`.
+- On an older Tavora, which refuses the unknown keys and with them the whole tooltip, the SDK leaves `strong` and
+  `italic` out (the text stays) and turns `blocks` and `footer` into sections after the module's own: a heading becomes
+  the title of the rows under it, a paragraph one row, a list's lines rows with `meta` as their status, tags one row
+  ("Stone · Legendary"), the footer a last section of one row; within the 12 sections and 100 rows that Tavora takes. A
+  raw caller does that itself.
+
+```ts
+await tavora.ui.tooltip.show({
+  id: "skill:multi-shot",
+  anchor: element,
+  content: {
+    title: "Multi Shot",
+    layout: "card",
+    effect: [{ text: "Shooting " }, { text: "Regular Arrows", italic: true }, { text: " has a " }, { text: "20%", accent: true }, { text: " chance." }],
+    blocks: [{ type: "text", runs: [{ text: "Practice makes the arrow fly true.", italic: true }], tone: "muted" }],
+    footer: [{ text: "Skill points: ", strong: true }, { text: "3" }],
+  },
+});
+```
 
 The neutral look draws with Tavora's own colours and follows the user's theme; `tone` and the affix
 colours are ignored there. The `poe` look is the gold, brown and purple one of Path of Exile 2 item

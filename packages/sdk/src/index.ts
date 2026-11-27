@@ -3,7 +3,7 @@
 import { menuParams, skinParams, tooltipParams, tooltipShowParams, type MenuOptions, type TooltipMoveOptions, type TooltipShowOptions } from "./anchor.js";
 import { takeTestSdk } from "./test-slot.js";
 import type { TooltipSkin } from "./tooltip-types.js";
-export type { TooltipAnchor, TooltipRequest, TooltipContent, TooltipSkin, TooltipEffectRun, TooltipIcon, TooltipArtTag } from "./tooltip-types.js";
+export type { TooltipAnchor, TooltipRequest, TooltipContent, TooltipSkin, TooltipEffectRun, TooltipTextRun, TooltipBlock, TooltipIcon, TooltipArtTag } from "./tooltip-types.js";
 export type { AnchorTarget, MenuOptions, TooltipMoveOptions, TooltipShowOptions } from "./anchor.js";
 // Protocol reference: apps/docs/reference/protocol.md.
 

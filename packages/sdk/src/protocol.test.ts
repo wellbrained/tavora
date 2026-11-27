@@ -63,6 +63,8 @@ describe("supports", () => {
     expect(latest.supports("ui.tooltip.columns")).toBe(true);
     expect(old.supports("ui.tooltip.artTags")).toBe(false);
     expect(latest.supports("ui.tooltip.artTags")).toBe(true);
+    expect(old.supports("ui.tooltip.formatting")).toBe(false);
+    expect(latest.supports("ui.tooltip.formatting")).toBe(true);
     await expect(old.storage.compareAndSet("k", null, 1)).rejects.toMatchObject({ code: "UNKNOWN_METHOD" });
   });
 });

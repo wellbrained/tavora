@@ -7,7 +7,8 @@
 // default slot to build a card of your own that still wears the layout's look and the skin.
 // `look: "poe"` (the Path of Exile 2 look) and its rarity colours (`tone`) are drawn as the shared tooltip draws them, in
 // the card and rich layouts and without a skin; the rich layout has the shared tooltip's sizes and its requirements under
-// the picture, so a card looks the same in the panel as above the workspace.
+// the picture, so a card looks the same in the panel as above the workspace. The parts after the sections (`blocks`) and
+// the footer line (`footer`) are the kit's tooltip parts, as the shared tooltip draws them.
 import type { TooltipContent } from "@tavora/sdk"
 import { computed, onBeforeUnmount, ref, watch, type CSSProperties } from "vue"
 import { ITEM_CARD_TYPE, TOOLTIP_TYPE, UNIT_CARD_TYPE } from "../../tooltip/typography"
@@ -15,7 +16,9 @@ import type { ItemCardSkin } from "."
 import { inlineValue, layoutOf, skinColored, tagBadges } from "./content"
 import ItemCardArt from "./parts/ItemCardArt.vue"
 import ItemCardBar from "./parts/ItemCardBar.vue"
+import ItemCardBlocks from "./parts/ItemCardBlocks.vue"
 import ItemCardEffect from "./parts/ItemCardEffect.vue"
+import ItemCardFooter from "./parts/ItemCardFooter.vue"
 import ItemCardIcons from "./parts/ItemCardIcons.vue"
 import ItemCardName from "./parts/ItemCardName.vue"
 import ItemCardPips from "./parts/ItemCardPips.vue"
@@ -121,7 +124,9 @@ const style = computed<CSSProperties>(() => {
         <ItemCardEffect :content="content" />
         <ItemCardStats :content="content" />
         <ItemCardSections :content="content" />
+        <ItemCardBlocks :content="content" />
         <ItemCardRequirements :content="content" :label="requiresLabel" />
+        <ItemCardFooter :content="content" />
       </template>
       <template v-else-if="layout === 'unit'">
         <!-- A game unit as the game shows it: the portrait sticks out at the top left over the title bar and the body. -->
@@ -132,7 +137,9 @@ const style = computed<CSSProperties>(() => {
           <ItemCardEffect :content="content" unit />
           <ItemCardUnitStats :content="content" />
           <ItemCardSections :content="content" />
+          <ItemCardBlocks :content="content" />
           <ItemCardIcons :content="content" />
+          <ItemCardFooter :content="content" />
           <ItemCardPips :content="content" />
         </div>
       </template>
@@ -153,8 +160,10 @@ const style = computed<CSSProperties>(() => {
             <div v-for="(p, i) in content.properties" :key="i"><span>{{ p.label ? `${p.label}: ` : "" }}</span><span class="tavora-item-card-prop-value">{{ inlineValue(p) }}</span></div>
           </div>
           <ItemCardSections :content="content" />
+          <ItemCardBlocks :content="content" />
         </div>
       </div>
+      <ItemCardFooter v-if="layout === 'rich'" :content="content" />
     </slot>
   </article>
 </template>

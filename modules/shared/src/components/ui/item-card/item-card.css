@@ -11,6 +11,14 @@
 .tavora-item-card>.tavora-tooltip-art{margin-bottom:0}
 .tavora-item-card>.tavora-tooltip-footer{margin-top:0}
 .tavora-item-card>.tavora-tooltip-heading+*{margin-top:-6px}
+/* A text in the effect box's look takes the box's text colour, which a skin keeps readable there (as above the workspace). */
+.tavora-item-card .tavora-tooltip-text[data-box]{color:var(--ic-box-text)}
+.tavora-item-card[data-skinned] :is(.tavora-tooltip-text[data-box],.tavora-tooltip-badge){border-radius:0}
+/* The rich layout's own padding, for the footer line across its bottom. */
+.tavora-item-card[data-layout=rich]{--tavora-tooltip-pad-x:14px;--tavora-tooltip-pad-y:15px}
+/* In a unit's body the footer is a line over its last row, inside the body's padding. */
+.tavora-item-card-unit-body>.tavora-tooltip-footer{margin:0;padding:6px 0 0}
+.tavora-item-card-unit-body>:is(.tavora-tooltip-text,.tavora-tooltip-heading,.tavora-tooltip-tags,.tavora-tooltip-list){margin-top:0;margin-bottom:0}
 .tavora-item-card[data-colors]{--ic-surface:var(--skin-surface);--ic-text:var(--skin-text);--ic-muted:var(--skin-muted);--ic-accent:var(--skin-accent);--ic-box:var(--skin-box);--ic-box-text:var(--skin-box-text);--ic-line:color-mix(in srgb,var(--skin-muted) 35%,var(--skin-surface));--ic-art:color-mix(in srgb,var(--skin-text) 6%,var(--skin-surface))}
 .tavora-item-card[data-skinned]{border-radius:0}
 .tavora-item-card[data-framed]{border-style:solid;border-image-repeat:stretch}

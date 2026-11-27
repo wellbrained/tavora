@@ -1,3 +1,13 @@
+## 0.4.17
+
+Formatting in the shared tooltip, drawn as the kit's panel parts, so a card looks the same in a panel and above the workspace. It comes with the next Tavora (`TOOLTIP_FORMATTING_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).
+
+- `TooltipEffectRun` (now also `TooltipTextRun`) takes `strong` and `italic` next to `accent`, in the effect, a paragraph and the footer.
+- `TooltipContent.blocks` (`TooltipBlock`, up to 12): parts after the sections, a paragraph (`text` or `runs`, `tone: "muted"`, `size: "small"`, `box`; line breaks kept), a heading, a list (`items`, each with an optional `meta`) and tags (`tags`, each with an optional `#rrggbb` colour).
+- `TooltipContent.footer`: a line across the card's bottom, a text or runs, up to 300 characters on one line.
+- The shared check (`checkTooltip`) takes them with their limits, and refuses control characters (but a line break in a paragraph), zero-width marks and the marks that reorder text in blocks and the footer.
+- An older Tavora refuses the new keys, and with them the whole tooltip, so the SDK leaves `strong` and `italic` out there and turns the blocks and the footer into sections of plain rows (within the 12 sections and 100 rows it takes). `sdk.supports("ui.tooltip.formatting")` tells which case you are in; the memory host does the same.
+
 ## 0.4.16
 
 A switched-off menu item can say why. It comes with the next Tavora (`MENU_DISABLED_REASON_TAVORA` in `protocol.ts`; the number is given when it merges), so `MIN_TAVORA` stays (Tavora 0.21.43).

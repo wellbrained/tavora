@@ -15,6 +15,8 @@ export { default as ItemCardBar } from "./parts/ItemCardBar.vue"
 export { default as ItemCardUnitStats } from "./parts/ItemCardUnitStats.vue"
 export { default as ItemCardIcons } from "./parts/ItemCardIcons.vue"
 export { default as ItemCardPips } from "./parts/ItemCardPips.vue"
+export { default as ItemCardBlocks } from "./parts/ItemCardBlocks.vue"
+export { default as ItemCardFooter } from "./parts/ItemCardFooter.vue"
 export { fromBundle, layoutOf, type ItemCardLayout } from "./content"
 
 /**

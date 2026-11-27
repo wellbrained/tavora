@@ -297,6 +297,59 @@ describe("tooltip preload", () => {
         expect(plain.querySelector(".effect")).toBeNull();
         expect(plain.querySelector("section li .text")!.textContent).toBe("Adds 1 to 2");
     });
+
+    const formatted: TooltipContent = {
+        title: "Multi Shot",
+        effect: [{ text: "Shooting " }, { text: "Regular Arrows", italic: true }, { text: " has a " }, { text: "20%", accent: true, strong: true }, { text: " chance.\n\nMore." }],
+        sections: [{ rows: [{ text: "Affix" }] }],
+        blocks: [
+            { type: "text", runs: [{ text: "A flavour line", italic: true }], tone: "muted", size: "small" },
+            { type: "text", text: "<b>In a box</b>", box: true },
+            { type: "heading", text: "Found in" },
+            { type: "list", items: ["Spire", { text: "Shroud", meta: "Rare" }] },
+            { type: "tags", tags: ["Stone", { text: "Legendary", color: "#e0a243" }, { text: "Odd", color: "red" }] },
+        ],
+        footer: [{ text: "Skill points: ", strong: true }, { text: "3" }],
+    };
+    /** A part as a short line: its tag, its kit class and data attributes, and its markup inside. */
+    const describePart = (el: Element) => `${el.tagName.toLowerCase()}.${el.className}${Array.from(el.attributes).filter(a => a.name.startsWith("data-")).map(a => `[${a.name}=${a.value}]`).join("")} ${el.innerHTML}`;
+
+    it("draws bold and italic runs in the effect as the kit does, and keeps them text", () => {
+        const effect = render(formatted).querySelector(".effect")!;
+        expect(effect.innerHTML).toBe('Shooting <em>Regular Arrows</em> has a <span class="accent"><strong>20%</strong></span> chance.\n\nMore.');
+    });
+
+    it("draws the blocks after the sections in the kit parts' markup, and the footer above Tavora's own", () => {
+        for (const layout of ["rich", "card"] as const) {
+            const el = render({ ...formatted, layout });
+            const parts = Array.from(el.querySelectorAll(".tavora-tooltip-text, .tavora-tooltip-heading, .tavora-tooltip-list, .tavora-tooltip-tags"));
+            expect(parts.map(describePart)).toEqual([
+                "p.tavora-tooltip-text[data-tone=muted][data-size=small] <em>A flavour line</em>",
+                "p.tavora-tooltip-text[data-box=] &lt;b&gt;In a box&lt;/b&gt;",
+                "h4.tavora-tooltip-heading Found in",
+                "ul.tavora-tooltip-list <li><span>Spire</span></li><li><span>Shroud</span><span>Rare</span></li>",
+                'ul.tavora-tooltip-tags <li class="tavora-tooltip-badge">Stone</li><li class="tavora-tooltip-badge" style="color: rgb(224, 162, 67); border-color: rgb(224, 162, 67);">Legendary</li><li class="tavora-tooltip-badge">Odd</li>',
+            ]);
+            // After the sections, in the same column.
+            expect(parts[0]!.previousElementSibling!.tagName).toBe("SECTION");
+            const footer = el.querySelector("footer.tavora-tooltip-footer")!;
+            expect(footer.innerHTML).toBe("<strong>Skill points: </strong>3");
+            expect(footer.parentElement).toBe(el);
+            expect(footer.nextElementSibling!.className).toBe("footer");
+        }
+    });
+
+    it("draws a unit's blocks after its sections and its footer at the end of its body", () => {
+        const el = render({ ...formatted, layout: "unit", footer: "Corrupted" });
+        const body = el.querySelector(".u-body")!;
+        expect(Array.from(body.children).map(c => c.className)).toEqual(["u-effect", "", "tavora-tooltip-text", "tavora-tooltip-text", "tavora-tooltip-heading", "tavora-tooltip-list", "tavora-tooltip-tags", "tavora-tooltip-footer"]);
+        expect(body.querySelector(".tavora-tooltip-footer")!.textContent).toBe("Corrupted");
+    });
+
+    it("draws neither without them", () => {
+        const el = render(card);
+        expect(el.querySelector("[class^=tavora-tooltip]")).toBeNull();
+    });
 });
 
 // The window comes into sight once, at the card's final size: the page says which size is final, and when it drew there.

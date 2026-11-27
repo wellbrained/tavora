@@ -1,5 +1,5 @@
 import { ipcRenderer } from "electron";
-import type { TooltipContent, TavoraTheme } from "@tavora/sdk/protocol";
+import type { TooltipBlock, TooltipContent, TooltipEffectRun, TavoraTheme } from "@tavora/sdk/protocol";
 import { footerTexts } from "../shared/tooltip-footer";
 /** A module's skin as the host checked it, its files read in as data: URLs (main/tooltip-skin.ts). */
 interface Skin {
@@ -85,15 +85,87 @@ function applySkin(card: HTMLElement, skin: Skin | undefined) {
     body.classList.toggle("pixel", !!skin?.pixelArt);
     return frame;
 }
-/** The effect box: plain text runs, the accent ones in a span of their own. */
+/**
+ * Runs of text as the kit's parts draw them (renderRuns in tooltip/parts.ts): the text as text, an italic run in an
+ * `em`, a bold one in a `strong`, an accented one in a span of its own around them.
+ */
+function runNodes(runs: readonly TooltipEffectRun[]): Node[] {
+    return runs.map(run => {
+        let out: Node = document.createTextNode(run.text);
+        for (const [on, tag, className] of [[run.italic, "em", undefined], [run.strong, "strong", undefined], [run.accent, "span", "accent"]] as const) {
+            if (!on)
+                continue;
+            const wrap = node(tag, undefined, className);
+            wrap.append(out);
+            out = wrap;
+        }
+        return out;
+    });
+}
+/** One text or runs, as nodes. */
+function textNodes(text: string | readonly TooltipEffectRun[]): Node[] {
+    return typeof text === "string" ? [document.createTextNode(text)] : runNodes(text);
+}
+/** The effect box: the text, or its runs with their accent, bold and italic. */
 function effectBox(effect: NonNullable<TooltipContent["effect"]>, className = "effect") {
     const box = node("div", undefined, className);
-    if (typeof effect === "string")
-        box.textContent = effect;
-    else
-        for (const run of effect)
-            box.append(run.accent ? node("span", run.text, "accent") : document.createTextNode(run.text));
+    box.append(...textNodes(effect));
     return box;
+}
+/**
+ * The parts after the sections (`blocks`), in the markup and classes of the kit's panel parts (TooltipText,
+ * TooltipHeading, TooltipList, TooltipTags), so the page's copy of their rules draws them the same. A tag's colour is
+ * checked again before it reaches a style. A part this page doesn't know is left out.
+ */
+function blockParts(blocks: readonly TooltipBlock[]): HTMLElement[] {
+    const parts: HTMLElement[] = [];
+    for (const block of blocks) {
+        if (block.type === "text") {
+            const p = node("p", undefined, "tavora-tooltip-text");
+            p.append(...textNodes(block.runs ?? block.text ?? ""));
+            if (block.tone === "muted")
+                p.dataset.tone = "muted";
+            if (block.size === "small")
+                p.dataset.size = "small";
+            if (block.box)
+                p.dataset.box = "";
+            parts.push(p);
+        }
+        else if (block.type === "heading")
+            parts.push(node("h4", block.text, "tavora-tooltip-heading"));
+        else if (block.type === "list") {
+            const list = node("ul", undefined, "tavora-tooltip-list");
+            for (const item of block.items) {
+                const { text, meta } = typeof item === "string" ? { text: item, meta: undefined } : item;
+                const li = node("li");
+                li.append(node("span", text));
+                if (meta)
+                    li.append(node("span", meta));
+                list.append(li);
+            }
+            parts.push(list);
+        }
+        else if (block.type === "tags") {
+            const tags = node("ul", undefined, "tavora-tooltip-tags");
+            for (const tag of block.tags) {
+                const { text, color } = typeof tag === "string" ? { text: tag, color: undefined } : tag;
+                const li = node("li", text, "tavora-tooltip-badge");
+                if (color && HEX.test(color)) {
+                    li.style.color = color;
+                    li.style.borderColor = color;
+                }
+                tags.append(li);
+            }
+            parts.push(tags);
+        }
+    }
+    return parts;
+}
+/** The module's line across the card's bottom (`footer`), as the kit's TooltipFooter draws it. */
+function footerPart(footer: NonNullable<TooltipContent["footer"]>) {
+    const el = node("footer", undefined, "tavora-tooltip-footer");
+    el.append(...textNodes(footer));
+    return el;
 }
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, className?: string) { const el = document.createElement(tag); if (text !== undefined)
     el.textContent = text; if (className)
@@ -156,6 +228,8 @@ function draw(data: Data) {
     }
     if (cardLayout) {
         renderCard(card, c, de);
+        if (c.footer)
+            card.append(footerPart(c.footer));
         const footer = node("div", undefined, "footer");
         footer.append(...footerTexts(data.source, data, de).map(t => node("span", t)));
         card.append(footer);
@@ -197,6 +271,10 @@ function draw(data: Data) {
     if (c.effect)
         details.append(effectBox(c.effect));
     appendRows(details, c);
+    if (c.blocks?.length)
+        details.append(...blockParts(c.blocks));
+    if (c.footer)
+        card.append(footerPart(c.footer));
     const footer = node("div", undefined, "footer");
     footer.append(...footerTexts(data.source, data, de).map(t => node("span", t)));
     card.append(footer);
@@ -272,6 +350,8 @@ function renderCard(card: HTMLElement, c: TooltipContent, de: boolean) {
         item.append(stats(c.properties, c.perHeading, c.columns));
     const { properties: _stats, ...rows } = c;
     appendRows(item, rows);
+    if (c.blocks?.length)
+        item.append(...blockParts(c.blocks));
     // Requirements come last, as rows like the properties, under their own heading.
     if (c.requirements?.length) {
         const section = node("section", undefined, "card-requirements");
@@ -418,6 +498,8 @@ function renderUnit(card: HTMLElement, c: TooltipContent, close: HTMLButtonEleme
     }
     if (c.sections?.length)
         appendRows(body, { title: c.title, sections: c.sections });
+    if (c.blocks?.length)
+        body.append(...blockParts(c.blocks));
     if (c.icons?.length) {
         const row = node("div", undefined, "u-icons");
         for (const i of c.icons) {
@@ -441,6 +523,8 @@ function renderUnit(card: HTMLElement, c: TooltipContent, close: HTMLButtonEleme
         }
         body.append(row);
     }
+    if (c.footer)
+        body.append(footerPart(c.footer));
     if (c.pips) {
         const pips = node("div", undefined, "u-pips");
         pips.setAttribute("role", "img");

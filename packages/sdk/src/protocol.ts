@@ -1808,6 +1808,66 @@ const tooltipImage = (v: unknown, icon = false): string => {
   if (!TOOLTIP_IMAGE_PATH.test(image) || (icon && !TOOLTIP_ICON_PATH.test(image)) || image.split("/").includes("..")) invalid(TOOLTIP_INVALID);
   return image;
 };
+/** What a block's or the footer's text may not hold: control characters (but a line break where it may have one), zero-width marks and the marks that reorder text. */
+const TOOLTIP_NOT_PLAIN = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/;
+/** Plain text of 1 to `max` characters, with line breaks only where `breaks` says. */
+const plainText = (v: unknown, max: number, breaks: boolean): string => {
+  const text = tooltipText(v, max);
+  return TOOLTIP_NOT_PLAIN.test(text) || (!breaks && text.includes("\n")) ? invalid(TOOLTIP_INVALID) : text;
+};
+/**
+ * Runs of text, up to 40 and `max` characters in all, at least one not blank: each in the accent colour, bold or italic.
+ * `plain` checks each run as `plainText` does (with line breaks where `breaks` says); the effect's runs aren't, as before.
+ */
+const tooltipRuns = (v: unknown, max: number, plain: boolean, breaks = true): TooltipEffectRun[] => {
+  let length = 0;
+  const runs = tooltipList(v, 40, (r) => {
+    const run = tooltipObject(r, ["text", "accent", "strong", "italic"]);
+    if (typeof run.text !== "string" || !run.text || (length += run.text.length) > max) invalid(TOOLTIP_INVALID);
+    const text = run.text as string;
+    if (plain && (TOOLTIP_NOT_PLAIN.test(text) || (!breaks && text.includes("\n")))) invalid(TOOLTIP_INVALID);
+    for (const flag of [run.accent, run.strong, run.italic]) if (flag !== undefined && typeof flag !== "boolean") invalid(TOOLTIP_INVALID);
+    return { text, ...(run.accent === true ? { accent: true } : {}), ...(run.strong === true ? { strong: true } : {}), ...(run.italic === true ? { italic: true } : {}) };
+  });
+  return runs.length && runs.some((r) => r.text.trim()) ? runs : invalid(TOOLTIP_INVALID);
+};
+/** A part after the sections (`blocks`): a paragraph, a heading, a list or tags, each by the limits in `TooltipBlock`. */
+const tooltipBlock = (v: unknown): TooltipBlock => {
+  const type = isPlainObject(v) ? v.type : undefined;
+  if (type === "text") {
+    const b = tooltipObject(v, ["type", "text", "runs", "tone", "size", "box"]);
+    if ((b.text === undefined) === (b.runs === undefined)) invalid(TOOLTIP_INVALID);
+    if (b.tone !== undefined && b.tone !== "default" && b.tone !== "muted") invalid(TOOLTIP_INVALID);
+    if (b.size !== undefined && b.size !== "default" && b.size !== "small") invalid(TOOLTIP_INVALID);
+    if (b.box !== undefined && typeof b.box !== "boolean") invalid(TOOLTIP_INVALID);
+    return {
+      type,
+      ...(b.text === undefined ? { runs: tooltipRuns(b.runs, 1000, true) } : { text: plainText(b.text, 1000, true) }),
+      ...(b.tone === "muted" ? { tone: "muted" as const } : {}),
+      ...(b.size === "small" ? { size: "small" as const } : {}),
+      ...(b.box === true ? { box: true } : {}),
+    };
+  }
+  if (type === "heading") return { type, text: plainText(tooltipObject(v, ["type", "text"]).text, 100, false) };
+  if (type === "list") {
+    const items = tooltipList(tooltipObject(v, ["type", "items"]).items, 20, (item) => {
+      if (typeof item === "string") return plainText(item, 300, false);
+      const i = tooltipObject(item, ["text", "meta"]);
+      return { text: plainText(i.text, 300, false), ...(i.meta === undefined ? {} : { meta: plainText(i.meta, 40, false) }) };
+    });
+    return items.length ? { type, items } : invalid(TOOLTIP_INVALID);
+  }
+  if (type === "tags") {
+    const tags = tooltipList(tooltipObject(v, ["type", "tags"]).tags, 8, (tag) => {
+      if (typeof tag === "string") return plainText(tag, 24, false);
+      const t = tooltipObject(tag, ["text", "color"]);
+      if (t.color !== undefined && (typeof t.color !== "string" || !TOOLTIP_HEX.test(t.color))) invalid(TOOLTIP_INVALID);
+      return { text: plainText(t.text, 24, false), ...(t.color === undefined ? {} : { color: t.color as string }) };
+    });
+    return tags.length ? { type, tags } : invalid(TOOLTIP_INVALID);
+  }
+  return invalid(TOOLTIP_INVALID);
+};
 const tooltipIdOf = (v: unknown): string => {
   const id = tooltipText(tooltipObject(v, ["id"]).id, 64);
   return TOOLTIP_ID.test(id) ? id : invalid(TOOLTIP_INVALID);
@@ -1847,7 +1907,7 @@ export function checkTooltip(params: unknown): ParamCheck<TooltipRequest> {
     if (o.pinnable !== undefined && typeof o.pinnable !== "boolean") fail();
     // A card that says it can't be pinned never pins: asking for both is a mistake, not something to guess at.
     if (o.pinnable === false && o.pinned === true) fail();
-    const c = tooltipObject(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "artTags", "requirements", "properties", "perHeading", "columns", "sections", "corner", "icons", "pips"]);
+    const c = tooltipObject(o.content, ["title", "subtitle", "look", "tone", "image", "layout", "effect", "skin", "badges", "artTags", "requirements", "properties", "perHeading", "columns", "sections", "corner", "icons", "pips", "blocks", "footer"]);
     const content: TooltipContent = { title: tooltipText(c.title, 200) };
     if (c.subtitle !== undefined) content.subtitle = tooltipText(c.subtitle, 300);
     if (c.look !== undefined) {
@@ -1863,21 +1923,8 @@ export function checkTooltip(params: unknown): ParamCheck<TooltipRequest> {
       if (!["rich", "card", "unit"].includes(c.layout as string)) fail();
       content.layout = c.layout as NonNullable<TooltipContent["layout"]>;
     }
-    // The card's effect text: one text, or up to 40 runs (some in the accent colour), 1,000 characters in all.
-    if (c.effect !== undefined) {
-      if (typeof c.effect === "string") content.effect = tooltipText(c.effect, 1000);
-      else {
-        let length = 0;
-        const runs = tooltipList(c.effect, 40, (r) => {
-          const run = tooltipObject(r, ["text", "accent"]);
-          if (typeof run.text !== "string" || !run.text || (length += run.text.length) > 1000) fail();
-          if (run.accent !== undefined && typeof run.accent !== "boolean") fail();
-          return { text: run.text as string, ...(run.accent === true ? { accent: true } : {}) };
-        });
-        if (!runs.length || !runs.some((r) => r.text.trim())) fail();
-        content.effect = runs;
-      }
-    }
+    // The card's effect text: one text, or up to 40 runs (in the accent colour, bold or italic), 1,000 characters in all.
+    if (c.effect !== undefined) content.effect = typeof c.effect === "string" ? tooltipText(c.effect, 1000) : tooltipRuns(c.effect, 1000, false);
     if (c.skin !== undefined) {
       if (typeof c.skin !== "string" || !TOOLTIP_SKIN_NAME.test(c.skin)) fail();
       content.skin = c.skin as string;
@@ -1962,6 +2009,13 @@ export function checkTooltip(params: unknown): ParamCheck<TooltipRequest> {
       if (total < 1) fail();
       content.pips = { filled: whole(k.filled, total), total, ...(k.extra === undefined ? {} : { extra: tooltipText(k.extra, 12) }) };
     }
+    // Parts after the sections, as the kit's panel parts draw them, and a footer line. Their texts are plain: no control
+    // characters (a paragraph keeps its line breaks), no invisible marks or marks that reorder text.
+    if (c.blocks !== undefined) {
+      content.blocks = tooltipList(c.blocks, 12, tooltipBlock);
+      if (!content.blocks.length) fail();
+    }
+    if (c.footer !== undefined) content.footer = typeof c.footer === "string" ? plainText(c.footer, 300, false) : tooltipRuns(c.footer, 300, true, false);
     if (JSON.stringify(content).length > 40000) fail();
     return { ...anchor, content, pinned: o.pinned === true, ...(o.pinnable === false ? { pinnable: false } : {}) };
   });
@@ -2107,8 +2161,8 @@ export type MenuEntry =
       items: MenuEntry[];
     };
 
-export type { TooltipContent, TooltipAnchor, TooltipRequest, TooltipSkin, TooltipEffectRun, TooltipIcon, TooltipArtTag } from "./tooltip-types.js";
-import type { TooltipContent, TooltipRequest, TooltipAnchor, TooltipSkin } from "./tooltip-types.js";
+export type { TooltipContent, TooltipAnchor, TooltipRequest, TooltipSkin, TooltipEffectRun, TooltipTextRun, TooltipBlock, TooltipIcon, TooltipArtTag } from "./tooltip-types.js";
+import type { TooltipContent, TooltipRequest, TooltipAnchor, TooltipSkin, TooltipEffectRun, TooltipBlock } from "./tooltip-types.js";
 
 /** What ui.showMenu shows, and where. */
 export interface MenuRequest {
@@ -2364,6 +2418,12 @@ export const ITEM_CARD_ART_TAGS_TAVORA = "0.24.149";
  */
 export const MENU_DISABLED_REASON_TAVORA = "0.25.68";
 /**
+ * The first Tavora with formatting in the shared tooltip (`strong` and `italic` on a run, `blocks` and `footer` on a
+ * tooltip): the one place that number is written. Set it to the version the pull request merges as, right before
+ * merging. Too low, and the SDK sends an older Tavora keys it refuses, and with them the whole tooltip.
+ */
+export const TOOLTIP_FORMATTING_TAVORA = "0.25.72";
+/**
  * The first Tavora that tells a panel whether it is over the game (`panel.isOverGame` and the `panel.overGame` event):
  * the one place that number is written. Set it to the version the pull request merges as, right before merging, then
  * run `pnpm --filter @tavora/docs protocol`. Too low, and a module asks an older Tavora, which answers UNKNOWN_METHOD.
@@ -2533,7 +2593,7 @@ const SDK_CALLS = { "panel.openDialog": "panel.setDialog", "panel.closeDialog": 
  * Params of an existing call that only a newer Tavora knows. An older one rejects the unknown key (INVALID_PARAMS) for the
  * whole call, so the SDK leaves the key out there. They never raise `MIN_TAVORA`.
  */
-export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": ITEM_CARD_TAVORA, "ui.tooltip.per": ITEM_CARD_PER_TAVORA, "ui.tooltip.boxBorder": ITEM_CARD_BOX_BORDER_TAVORA, "ui.tooltip.propertyIcon": ITEM_CARD_ICON_TAVORA, "ui.tooltip.anchorBox": TOOLTIP_ANCHOR_BOX_TAVORA, "ui.tooltip.unit": UNIT_CARD_TAVORA, "ui.tooltip.columns": ITEM_CARD_COLUMNS_TAVORA, "ui.tooltip.artTags": ITEM_CARD_ART_TAGS_TAVORA, "ui.showMenu.disabledReason": MENU_DISABLED_REASON_TAVORA } as const;
+export const FIELD_SINCE = { "ui.tooltip.pinnable": "0.23.91", "ui.tooltip.skin": ITEM_CARD_TAVORA, "ui.tooltip.per": ITEM_CARD_PER_TAVORA, "ui.tooltip.boxBorder": ITEM_CARD_BOX_BORDER_TAVORA, "ui.tooltip.propertyIcon": ITEM_CARD_ICON_TAVORA, "ui.tooltip.anchorBox": TOOLTIP_ANCHOR_BOX_TAVORA, "ui.tooltip.unit": UNIT_CARD_TAVORA, "ui.tooltip.columns": ITEM_CARD_COLUMNS_TAVORA, "ui.tooltip.artTags": ITEM_CARD_ART_TAGS_TAVORA, "ui.showMenu.disabledReason": MENU_DISABLED_REASON_TAVORA, "ui.tooltip.formatting": TOOLTIP_FORMATTING_TAVORA } as const;
 
 /** A protocol call, a param only newer Tavoras know (`ui.tooltip.pinnable`), or one of the SDK calls named differently on the wire (`panel.openDialog`). */
 export type SupportedCall = CallName | keyof typeof SDK_CALLS | keyof typeof FIELD_SINCE;

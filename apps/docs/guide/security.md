@@ -480,6 +480,10 @@ paths are accepted. Image reads stay inside that bundle and are limited to 512 K
 a small icon by the same path rules (PNG or WebP only), read the same way and limited to 64 KB; the page shows it only as a mask in the
 label's colour, and only as a `data:` URL it checks again. A tag over an item card's picture may have a colour of its
 own for its text and edge: `#rrggbb` only, or the tooltip is refused, and the page checks it again before setting it.
+Formatting stays text too: a run of text may be bold, italic or in the accent colour, and the parts after the sections
+(paragraphs, headings, lists, tags) and the footer line are plain text without control characters (a paragraph keeps its
+line breaks), zero-width marks or marks that reorder text, drawn with the page's own markup; a tag there may have a
+colour by the same `#rrggbb` rule as the tags over the picture.
 
 An item card may wear a skin the module defined (`ui.tooltip.defineSkin`). Besides those tag colours, that is the one
 way a module's own colours, a frame picture and a font reach the host's tooltip window, and each is a checked value,

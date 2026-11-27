@@ -109,4 +109,45 @@ describe("tooltip boundary", () => {
         expect(() => checkTooltip({ ...base, box: { x: 0, y: 0, width: 1, height: 1, z: 1 } })).toThrow();
         expect(() => checkTooltip({ ...base, box: [0, 0, 1, 1] })).toThrow();
     });
+    it("takes bold and italic runs in the effect, and leaves false flags out", () => {
+        const effect = [{ text: "Shooting " }, { text: "Regular Arrows", italic: true }, { text: " has a " }, { text: "20%", accent: true, strong: true }, { text: " chance.\n\nMore", strong: false, italic: false }];
+        expect(checkTooltip({ ...base, content: { title: "x", effect } }).content.effect).toEqual([{ text: "Shooting " }, { text: "Regular Arrows", italic: true }, { text: " has a " }, { text: "20%", accent: true, strong: true }, { text: " chance.\n\nMore" }]);
+        for (const run of [{ text: "x", italic: "yes" }, { text: "x", strong: 1 }, { text: "x", underline: true }])
+            expect(() => checkTooltip({ ...base, content: { title: "x", effect: [run] } })).toThrow();
+    });
+    it("takes blocks of text, headings, lists and tags, and a footer, as the kit's parts", () => {
+        const blocks = [
+            { type: "text", runs: [{ text: "A flavour line,\nin italics.", italic: true }], tone: "muted", size: "small" },
+            { type: "text", text: "In a box", box: true },
+            { type: "heading", text: "Found in" },
+            { type: "list", items: ["Ancient Spire", { text: "Shroud", meta: "Rare" }] },
+            { type: "tags", tags: ["Stone", { text: "Legendary", color: "#e0a243" }] },
+        ];
+        const footer = [{ text: "Skill points: ", strong: true }, { text: "3" }];
+        expect(checkTooltip({ ...base, content: { title: "x", blocks, footer } }).content).toEqual({ title: "x", blocks, footer });
+        expect(checkTooltip({ ...base, content: { title: "x", footer: "Corrupted \u00b7 PoB reference" } }).content.footer).toBe("Corrupted \u00b7 PoB reference");
+        // The default tone and size are left out: the kit draws them the same.
+        expect(checkTooltip({ ...base, content: { title: "x", blocks: [{ type: "text", text: "x", tone: "default", size: "default", box: false }] } }).content.blocks).toEqual([{ type: "text", text: "x" }]);
+        for (const key of ["blocks", "footer"])
+            expect(key in checkTooltip(base).content).toBe(false);
+    });
+    it("refuses blocks and footers that are not plain, bounded text", () => {
+        const bad: unknown[] = [
+            { blocks: [] }, { blocks: "text" }, { blocks: Array.from({ length: 13 }, () => ({ type: "heading", text: "x" })) },
+            { blocks: [{ type: "html", text: "<b>x</b>" }] }, { blocks: [{ text: "x" }] }, { blocks: [{ type: "text" }] },
+            { blocks: [{ type: "text", text: "x", runs: [{ text: "x" }] }] }, { blocks: [{ type: "text", text: "x", tone: "loud" }] },
+            { blocks: [{ type: "text", text: "x", size: 12 }] }, { blocks: [{ type: "text", text: "x", box: "yes" }] },
+            { blocks: [{ type: "text", text: "x", style: "color:red" }] }, { blocks: [{ type: "text", text: "x".repeat(1001) }] },
+            { blocks: [{ type: "text", runs: [{ text: "x".repeat(600) }, { text: "y".repeat(401) }] }] }, { blocks: [{ type: "text", runs: [{ text: " " }] }] },
+            { blocks: [{ type: "text", text: "tab\there" }] }, { blocks: [{ type: "text", text: "a\u202eb" }] }, { blocks: [{ type: "text", text: "a\u200bb" }] },
+            { blocks: [{ type: "text", runs: [{ text: "a\u2066b" }] }] }, { blocks: [{ type: "heading", text: "two\nlines" }] }, { blocks: [{ type: "heading", text: "x".repeat(101) }] },
+            { blocks: [{ type: "list", items: [] }] }, { blocks: [{ type: "list", items: Array.from({ length: 21 }, () => "x") }] }, { blocks: [{ type: "list", items: [{ text: "x", meta: "y".repeat(41) }] }] },
+            { blocks: [{ type: "list", items: [{ text: "x", color: "red" }] }] }, { blocks: [{ type: "list", items: ["a\nb"] }] },
+            { blocks: [{ type: "tags", tags: [] }] }, { blocks: [{ type: "tags", tags: ["x".repeat(25)] }] }, { blocks: [{ type: "tags", tags: Array.from({ length: 9 }, () => "x") }] },
+            { blocks: [{ type: "tags", tags: [{ text: "x", color: "red" }] }] }, { blocks: [{ type: "tags", tags: [{ text: "x", color: "url(x)" }] }] },
+            { footer: "" }, { footer: "two\nlines" }, { footer: "x".repeat(301) }, { footer: [{ text: "a\u202eb" }] }, { footer: [] }, { footer: 3 }, { footer: [{ text: "x", accent: "y" }] },
+        ];
+        for (const extra of bad)
+            expect(() => checkTooltip({ ...base, content: { title: "x", ...(extra as object) } }), JSON.stringify(extra)).toThrow();
+    });
 });

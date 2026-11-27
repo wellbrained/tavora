@@ -271,3 +271,44 @@ describe("ItemCard in the PoE look", () => {
     expect(mount({ title: "Plain", properties: [{ label: "A", value: "1" }] }).querySelector(".tavora-item-card-rich-art")).toBeNull()
   })
 })
+
+describe("ItemCard with formatting", () => {
+  const formatted: TooltipContent = {
+    title: "Multi Shot",
+    effect: [{ text: "Shooting " }, { text: "Regular Arrows", italic: true }, { text: " has a " }, { text: "20%", accent: true, strong: true }, { text: " chance." }],
+    sections: [{ rows: [{ text: "Affix" }] }],
+    blocks: [
+      { type: "text", runs: [{ text: "A flavour line", italic: true }], tone: "muted", size: "small" },
+      { type: "heading", text: "Found in" },
+      { type: "list", items: ["Spire", { text: "Shroud", meta: "Rare" }] },
+      { type: "tags", tags: ["Stone", { text: "Legendary", color: "#e0a243" }] },
+    ],
+    footer: [{ text: "Skill points: ", strong: true }, { text: "3" }],
+  }
+  const partSlots = (el: Element) => [...el.querySelectorAll("[data-slot^=tooltip-]")].map((p) => p.getAttribute("data-slot"))
+
+  it("draws bold and italic runs in the effect", () => {
+    expect(mount({ ...formatted, layout: "card" }).querySelector(".tavora-item-card-effect")!.innerHTML).toBe('Shooting <em>Regular Arrows</em> has a <span data-accent=""><strong>20%</strong></span> chance.')
+  })
+
+  it("draws the blocks after the sections and the footer at the bottom, with the kit's parts, in every layout", () => {
+    for (const layout of ["card", "rich", "unit"] as const) {
+      const el = mount({ ...formatted, layout })
+      expect(partSlots(el)).toEqual(["tooltip-text", "tooltip-heading", "tooltip-list", "tooltip-tags", "tooltip-footer"])
+      const text = el.querySelector("[data-slot=tooltip-text]")!
+      expect(text.getAttribute("data-tone")).toBe("muted")
+      expect(text.innerHTML).toBe("<em>A flavour line</em>")
+      expect(text.previousElementSibling!.className).toBe("tavora-item-card-section")
+      expect(el.querySelector("[data-slot=tooltip-footer]")!.innerHTML).toBe("<strong>Skill points: </strong>3")
+      app!.unmount()
+    }
+    // Last in a card and in the rich layout; before the pips in a unit.
+    expect(mount({ ...formatted, layout: "card" }).lastElementChild!.getAttribute("data-slot")).toBe("tooltip-footer")
+    app!.unmount()
+    expect(mount({ ...formatted, layout: "rich" }).lastElementChild!.getAttribute("data-slot")).toBe("tooltip-footer")
+  })
+
+  it("draws neither without them", () => {
+    expect(partSlots(mount(card))).toEqual([])
+  })
+})

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.120",
+    "date": "2026-11-27",
+    "notes": [
+      "The Tooltips page shows a card with bold, italics and a footer, the same in the panel and in Tavora's tooltip."
+    ]
+  },
+  {
     "version": "0.1.119",
     "date": "2026-11-27",
     "notes": [

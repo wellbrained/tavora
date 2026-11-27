@@ -59,9 +59,26 @@ export interface TooltipContent {
     };
     /**
      * The card's effect text, in a box of its own: one plain text, or runs of text where `accent: true` ones take the
-     * accent colour (numbers, keywords). Up to 1,000 characters and 40 runs.
+     * accent colour (numbers, keywords), `strong: true` ones are bold and `italic: true` ones slanted (the game's
+     * emphasis). A "\n" is a line break. Up to 1,000 characters and 40 runs. `strong` and `italic` need
+     * `sdk.supports("ui.tooltip.formatting")`: on an older Tavora the SDK leaves them out (the text stays).
      */
     effect?: string | TooltipEffectRun[];
+    /**
+     * More parts after the sections, drawn like the kit's panel parts of the same name, so a card looks the same in a
+     * panel and here: a paragraph (`"text"`, with runs and line breaks, softer or smaller), a small heading, a list with
+     * bullets and a short value at the right, or a row of tags. Up to 12. Needs `sdk.supports("ui.tooltip.formatting")`:
+     * on an older Tavora the SDK turns them into sections (a heading becomes the title of the rows under it, a list's
+     * `meta` a row's status, tags one row), plain text without bold or italic.
+     */
+    blocks?: TooltipBlock[];
+    /**
+     * A line across the card's bottom, under a line, above Tavora's own footer: a cost, where it comes from, a state
+     * ("Corrupted"). One text or runs (a bold label: `[{ text: "Skill points: ", strong: true }, { text: "3" }]`), up to
+     * 300 characters, on one line (it wraps when it is long). Needs `sdk.supports("ui.tooltip.formatting")`: on an older
+     * Tavora the SDK puts it into a last section, as one plain row.
+     */
+    footer?: string | TooltipEffectRun[];
     /**
      * The name of a skin this module defined with `ui.tooltip.defineSkin`; only the `"card"` and `"unit"` layouts use
      * it. A name that isn't defined (yet) shows the plain card, without an error.
@@ -149,12 +166,53 @@ export interface TooltipIcon {
     /** A badge at its bottom right, e.g. how many stacks ("95"). */
     count?: string;
 }
-/** A run of the card's effect text. */
+/** A run of text: of the card's effect, a `"text"` block or the footer. */
 export interface TooltipEffectRun {
     text: string;
     /** Shown in the accent colour (the skin's, or the theme's primary). */
     accent?: boolean;
+    /** Bold. Needs `sdk.supports("ui.tooltip.formatting")`. */
+    strong?: boolean;
+    /** Slanted, as the game writes a name or a quote. Needs `sdk.supports("ui.tooltip.formatting")`. */
+    italic?: boolean;
 }
+/** A run of text with its emphasis; the kit's `TooltipText` takes the same runs. */
+export type TooltipTextRun = TooltipEffectRun;
+/**
+ * A part of the card after its sections (`blocks`), as the kit's panel parts draw it:
+ * - `"text"`: a paragraph (the kit's `TooltipText`), one `text` or `runs` (not both), up to 1,000 characters and 40
+ *   runs; a "\n" is a line break. `tone: "muted"` is the softer text (a note, a quote), `size: "small"` the small size,
+ *   `box: true` the effect box around it.
+ * - `"heading"`: a small heading over the part under it (`TooltipHeading`), up to 100 characters on one line.
+ * - `"list"`: up to 20 lines with bullets (`TooltipList`), each a text (up to 300 characters) or `{ text, meta }`, `meta`
+ *   (up to 40) a short value at the right (a count, "Common").
+ * - `"tags"`: up to 8 tags in the badge look (`TooltipTags`), each a text (up to 24 characters) or `{ text, color }`,
+ *   `color` "#rrggbb" only, for its text and edge (a game's rarity).
+ * Texts are plain: no control characters (but a line break in a paragraph), invisible or reordering marks.
+ */
+export type TooltipBlock = {
+    type: "text";
+    text?: string;
+    runs?: TooltipEffectRun[];
+    tone?: "default" | "muted";
+    size?: "default" | "small";
+    box?: boolean;
+} | {
+    type: "heading";
+    text: string;
+} | {
+    type: "list";
+    items: (string | {
+        text: string;
+        meta?: string;
+    })[];
+} | {
+    type: "tags";
+    tags: (string | {
+        text: string;
+        color?: string;
+    })[];
+};
 /**
  * A module's own look for its item cards (`ui.tooltip.defineSkin`): checked values, never CSS. Files are
  * bundle-relative paths in the module's own `dist/`, like `image`. Tavora sets every size, keeps the theme font for the

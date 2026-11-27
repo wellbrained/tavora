@@ -1,5 +1,5 @@
 import { TavoraError } from "./index.js";
-import { LIMITS, supportsCall, type MenuEntry, type MenuRequest, type TooltipAnchor, type TooltipContent, type TooltipRequest, type TooltipSkin } from "./protocol.js";
+import { LIMITS, supportsCall, type MenuEntry, type MenuRequest, type TooltipAnchor, type TooltipBlock, type TooltipContent, type TooltipEffectRun, type TooltipRequest, type TooltipSkin } from "./protocol.js";
 
 /** What a menu or tooltip is for: an element (its box is read when you call) or a box you measured yourself. */
 export type AnchorTarget = Element | { x: number; y: number; width?: number; height?: number };
@@ -63,13 +63,15 @@ function point(target: AnchorTarget): TooltipAnchor["at"] {
  * A stat's extra values (`more`) and their `columns` go into `per` before `ui.tooltip.columns`, and with it into the
  * value before `ui.tooltip.per`. Tags over the picture (`artTags`) become badges before `ui.tooltip.artTags`.
  * A unit card (`layout: "unit"`) becomes a plain card before `ui.tooltip.unit`, and a stat's `suffix` goes into its
- * value wherever the unit layout doesn't show it.
+ * value wherever the unit layout doesn't show it. Before `ui.tooltip.formatting`, runs lose `strong` and `italic`, and
+ * `blocks` and `footer` become sections of plain rows.
  */
 export function tooltipShowParams(request: TooltipShowOptions, hostVersion: string): Omit<TooltipShowOptions, "anchor" | "at"> & Pick<TooltipAnchor, "at" | "box"> {
   if (request.pinnable === false && request.pinned === true) throw new TavoraError({ code: "INVALID_PARAMS", message: "A card that is not pinnable can't be pinned" });
   const params = tooltipParams(request, hostVersion);
   if (params.pinnable !== undefined && !supportsCall(hostVersion, "ui.tooltip.pinnable")) delete params.pinnable;
   if (params.content) params.content = unitFallback(params.content, supportsCall(hostVersion, "ui.tooltip.unit"));
+  if (params.content && !supportsCall(hostVersion, "ui.tooltip.formatting")) params.content = withoutFormatting(params.content);
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.propertyIcon")) params.content = withoutIcons(params.content);
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.columns")) params.content = withoutColumns(params.content);
   if (params.content && !supportsCall(hostVersion, "ui.tooltip.per")) params.content = withoutPer(params.content);
@@ -97,6 +99,74 @@ function unitFallback(content: TooltipContent, unit: boolean): TooltipContent {
   const out: TooltipContent = strip ? rest : { ...content };
   if (!unit && isUnit) out.layout = "card";
   if (suffixed) out.properties = content.properties!.map(({ suffix, ...p }) => (suffix === undefined ? p : { ...p, value: (p.value + suffix).slice(0, 300) }));
+  return out;
+}
+
+type Section = NonNullable<TooltipContent["sections"]>[number];
+
+/** The runs' text, without their emphasis. */
+const runText = (runs: string | readonly TooltipEffectRun[]): string => (typeof runs === "string" ? runs : runs.map((run) => run.text).join(""));
+
+/**
+ * For a Tavora without formatting: runs keep their text and accent, but not `strong` and `italic`; `blocks` and `footer`
+ * become sections after the module's own, of plain rows (see `blockSections`), as many as Tavora takes.
+ */
+function withoutFormatting(content: TooltipContent): TooltipContent {
+  const emphasis = Array.isArray(content.effect) && content.effect.some((run) => run.strong !== undefined || run.italic !== undefined);
+  if (!emphasis && content.blocks === undefined && content.footer === undefined) return content;
+  const { blocks, footer, ...out } = content;
+  if (emphasis) out.effect = (content.effect as TooltipEffectRun[]).map(({ strong: _strong, italic: _italic, ...run }) => run);
+  const extra = [...(Array.isArray(blocks) ? blockSections(blocks) : []), ...(typeof footer === "string" || Array.isArray(footer) ? [{ rows: [{ text: runText(footer) }] }] : [])];
+  return extra.length ? { ...out, sections: appendSections(out.sections ?? [], extra) } : out;
+}
+
+/**
+ * The blocks as sections: a heading starts one with it as the title, and the parts after it are its rows (before the
+ * first heading, in a section without one). A paragraph is one row, a list one row per line with its `meta` as the
+ * status, tags one row ("Stone · Legendary"). Sections that end up without rows are left out.
+ */
+function blockSections(blocks: readonly TooltipBlock[]): Section[] {
+  const out: Section[] = [];
+  for (const block of blocks) {
+    if (block?.type === "heading") {
+      out.push({ title: block.text, rows: [] });
+      continue;
+    }
+    const rows: Section["rows"] =
+      block?.type === "text" ? [{ text: block.text ?? runText(block.runs ?? []) }]
+      : block?.type === "list" && Array.isArray(block.items) ? block.items.map((item) => (typeof item === "string" ? { text: item } : { text: item.text, ...(item.meta ? { status: item.meta } : {}) }))
+      : block?.type === "tags" && Array.isArray(block.tags) ? [{ text: block.tags.map((tag) => (typeof tag === "string" ? tag : tag.text)).join(" · ") }]
+      : [];
+    if (!out.length) out.push({ rows: [] });
+    out[out.length - 1]!.rows.push(...rows);
+  }
+  return out.filter((section) => section.rows.length);
+}
+
+/** The sections a tooltip may have (12), the rows of one (60) and of all (100). */
+const MAX_SECTIONS = 12, MAX_SECTION_ROWS = 60, MAX_ROWS = 100;
+
+/**
+ * `extra` after `sections`, within what Tavora takes: when there's no room for all of them, the last ones go together
+ * into one, or into the module's last section when it already has 12; rows past the limits are left out.
+ */
+function appendSections(sections: readonly Section[], extra: Section[]): Section[] {
+  let left = MAX_ROWS - sections.reduce((n, section) => n + (Array.isArray(section?.rows) ? section.rows.length : 0), 0);
+  const room = MAX_SECTIONS - sections.length;
+  let add = extra;
+  if (add.length > room) {
+    const keep = add.slice(0, Math.max(0, room - 1)), folded = add.slice(keep.length);
+    add = [...keep, { ...(folded[0]!.title === undefined ? {} : { title: folded[0]!.title }), rows: folded.flatMap((section) => section.rows) }];
+  }
+  const out = [...sections];
+  for (const section of add) {
+    const last = out.length >= MAX_SECTIONS ? out[out.length - 1] : undefined;
+    const rows = section.rows.slice(0, Math.max(0, Math.min(left, MAX_SECTION_ROWS - (last?.rows.length ?? 0))));
+    left -= rows.length;
+    if (!rows.length) continue;
+    if (last) out[out.length - 1] = { ...last, rows: [...last.rows, ...rows] };
+    else out.push({ ...section, rows });
+  }
   return out;
 }
 
