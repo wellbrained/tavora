@@ -43,3 +43,6 @@ export function pickedLabel(modelValue: unknown, labels: Pick<ChoiceLabels, "get
   const live = values.map((value) => labels.get(value) ?? "")
   return (live.some(Boolean) ? live : fallback).filter(Boolean).join(", ")
 }
+
+/** How the value tells its trigger that it is cut short: the whole value, or "" while all of it shows. */
+export const cutValueKey: InjectionKey<(value: string) => void> = Symbol("select-cut-value")

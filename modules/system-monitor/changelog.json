@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.89",
+    "date": "2026-11-28",
+    "notes": [
+      "A long choice in a list field, like a long graphics card name, stays on one line; hover it to read it all."
+    ]
+  },
+  {
     "version": "0.1.88",
     "date": "2026-11-27",
     "notes": [

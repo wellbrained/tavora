@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { createApp, defineComponent, h, nextTick, ref, type App } from "vue"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "."
 import { choiceLabelsKey, pickedLabel } from "./empty"
 
-// The closed select always shows the current words of the current choice, and a long one wraps between words and
-// ends in an ellipsis instead of being cut in the middle of a word.
+// The closed select always shows the current words of the current choice. A long one ends in an ellipsis on one line
+// (two with `wrap`), and the trigger's tooltip then says it whole.
 
 beforeAll(() => {
   globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver
@@ -89,21 +89,88 @@ describe("Select shows the current label", () => {
 })
 
 describe("Select shows a long value", () => {
-  it("wraps between whole words and clamps with an ellipsis, in a trigger that can grow", async () => {
-    const root = mount(() => h(Select, { modelValue: "a" }, () => [
-      h(SelectTrigger, { class: "w-40" }, () => h(SelectValue)),
-      h(SelectContent, null, () => h(SelectItem, { value: "a" }, () => "Eine ziemlich lange Beschriftung auf Deutsch")),
+  const LONG = "Eine ziemlich lange Beschriftung auf Deutsch"
+  // jsdom has no layout: say how much of the value shows. The e2e suites look at the pixels.
+  const cut = ref(false)
+  const heights = (kind: "scrollHeight" | "clientHeight") => ({
+    configurable: true,
+    get(this: HTMLElement) { return this.parentElement?.dataset.slot !== "select-value" ? 0 : kind === "scrollHeight" && cut.value ? 40 : 20 },
+  })
+  beforeAll(() => {
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", heights("scrollHeight"))
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", heights("clientHeight"))
+  })
+  afterAll(() => {
+    delete (HTMLElement.prototype as { scrollHeight?: number }).scrollHeight
+    delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight
+  })
+  beforeEach(() => { cut.value = true })
+
+  function long(trigger: Record<string, unknown> = {}, value: Record<string, unknown> = {}, select: Record<string, unknown> = {}, label = ref(LONG)) {
+    return mount(() => h(Select, { modelValue: "a", ...select }, () => [
+      h(SelectTrigger, trigger, () => h(SelectValue, value)),
+      h(SelectContent, null, () => h(SelectItem, { value: "a" }, () => label.value)),
     ]))
+  }
+  const text = (root: HTMLElement) => root.querySelector("[data-slot=select-value] > span")!
+  const trigger = (root: HTMLElement) => root.querySelector("[data-slot=select-trigger]")!
+
+  it("stays on one line that ends in an ellipsis, and never holds the field wider than its place", async () => {
+    const root = long({ class: "w-40" })
     await tick()
-    const text = root.querySelector("[data-slot=select-value] > span")!
-    // jsdom has no layout, so check the classes that do the work (the e2e suites look at the pixels).
-    expect(text.className).toContain("line-clamp-2")
-    expect(text.className).toContain("whitespace-normal")
-    expect(text.className).toContain("break-words")
-    expect(text.className).toContain("min-w-0")
-    const trigger = root.querySelector("[data-slot=select-trigger]")!
-    expect(trigger.className).toContain("data-[size=default]:min-h-[var(--style-control-height,32px)]")
-    expect(trigger.className).not.toMatch(/data-\[size=default\]:h-8/)
-    expect(trigger.className).not.toContain("line-clamp-1")
+    expect(text(root).className).toContain("line-clamp-1")
+    expect(text(root).className).toContain("break-all")
+    expect(text(root).className).toContain("whitespace-normal")
+    expect(root.querySelector("[data-slot=select-value]")!.className).toContain("min-w-0")
+    expect(root.querySelector("[data-slot=select-value]")!.hasAttribute("wrap")).toBe(false)
+  })
+
+  it("takes a second line with `wrap`, breaking between words, in a trigger that can grow", async () => {
+    const root = long({ class: "w-40" }, { wrap: true })
+    await tick()
+    expect(text(root).className).toContain("line-clamp-2")
+    expect(text(root).className).toContain("break-words")
+    expect(text(root).className).not.toContain("line-clamp-1")
+    expect(trigger(root).className).toContain("data-[size=default]:min-h-[var(--style-control-height,32px)]")
+    expect(trigger(root).className).not.toMatch(/data-\[size=default\]:h-/)
+    expect(root.querySelector("[data-slot=select-value]")!.hasAttribute("wrap")).toBe(false)
+  })
+
+  it("says the whole value in the trigger's tooltip only while it is cut", async () => {
+    const label = ref(LONG)
+    const root = long({}, {}, {}, label)
+    await tick()
+    expect(trigger(root).getAttribute("title")).toBe(LONG)
+
+    cut.value = false
+    label.value = "Kurz"
+    await tick()
+    expect(trigger(root).hasAttribute("title")).toBe(false)
+
+    cut.value = true
+    label.value = `${LONG}, umbenannt`
+    await tick()
+    expect(trigger(root).getAttribute("title")).toBe(`${LONG}, umbenannt`)
+  })
+
+  it("keeps a hint of the trigger's own first, with the value under it", async () => {
+    const root = long({ title: "World" })
+    await tick()
+    expect(trigger(root).getAttribute("title")).toBe("World")
+    expect(trigger(root).getAttribute("data-tooltip-description")).toBe(LONG)
+  })
+
+  it("does not repeat a value the trigger's own hint already says", async () => {
+    const root = long({ title: LONG })
+    await tick()
+    expect(trigger(root).getAttribute("title")).toBe(LONG)
+    expect(trigger(root).hasAttribute("data-tooltip-description")).toBe(false)
+  })
+
+  it("leaves the tooltip to the reason while the select is off with one", async () => {
+    const root = long({}, {}, { disabled: true, disabledReason: "Sign in first." })
+    await tick()
+    expect(trigger(root).hasAttribute("title")).toBe(false)
+    expect(trigger(root).getAttribute("data-tavora-reason")).toBe("Sign in first.")
   })
 })

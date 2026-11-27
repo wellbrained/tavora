@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.122",
+    "date": "2026-11-28",
+    "notes": [
+      "Pick shows a select with a long choice, on one line and on two."
+    ]
+  },
+  {
     "version": "0.1.121",
     "date": "2026-11-27",
     "notes": [

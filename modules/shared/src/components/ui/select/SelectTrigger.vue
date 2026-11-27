@@ -4,10 +4,10 @@ import type { HTMLAttributes } from "vue"
 import { ChevronsUpDown } from "@lucide/vue"
 import { reactiveOmit } from "@vueuse/core"
 import { SelectIcon, SelectTrigger, useForwardProps } from "reka-ui"
-import { computed, inject } from "vue"
+import { computed, inject, provide, ref } from "vue"
 import { ANY_KEY, useSoftDisabled } from "../../../lib/soft-disabled"
 import { cn } from "../../../lib/utils"
-import { offReasonKey } from "./empty"
+import { cutValueKey, offReasonKey } from "./empty"
 
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(
@@ -32,13 +32,26 @@ const soft = useSoftDisabled(
   // A closed select opens on a click or a key, and also picks by typing letters or the arrows.
   { keys: ANY_KEY },
 )
+
+// A value the field has to cut short shows whole in its tooltip. A hint of the trigger's own stays the first line, with
+// the value under it. Not while off with a reason: the reason is what the tooltip then says.
+const cutValue = ref("")
+provide(cutValueKey, (value) => { cutValue.value = value })
+function withCutValue(attrs: Record<string, unknown>) {
+  const value = cutValue.value
+  if (!value || (reason.value && soft.soft())) return attrs
+  const title = String(attrs.title ?? "")
+  if (!title) return { ...attrs, title: value }
+  if (title.includes(value) || attrs["data-tooltip-description"]) return attrs
+  return { ...attrs, "data-tooltip-description": value }
+}
 </script>
 
 <template>
   <SelectTrigger
     data-slot="select-trigger"
     :data-size="size"
-    v-bind="{ ...forwardedProps, ...soft.attrs() }"
+    v-bind="withCutValue({ ...forwardedProps, ...soft.attrs() })"
     :disabled="soft.disabled()"
     :class="cn(
       'border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*=\'text-\'])]:text-muted-foreground aria-invalid:border-destructive dark:bg-input/10 dark:hover:bg-input/20 flex w-fit items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-1.5 text-sm whitespace-nowrap transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-(--disabled-opacity) aria-disabled:cursor-not-allowed aria-disabled:opacity-(--disabled-opacity) data-[size=default]:min-h-[var(--style-control-height,32px)] data-[size=sm]:min-h-[calc(var(--style-control-height,32px)-4px)] data-[size=lg]:min-h-[calc(var(--style-control-height,32px)+8px)] data-[size=lg]:px-4 data-[size=auto]:min-h-[var(--style-control-height,32px)] data-[size=auto]:py-1.5 data-[size=auto]:pl-1.5 *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=\'size-\'])]:size-4',
