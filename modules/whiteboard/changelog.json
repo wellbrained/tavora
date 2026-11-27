@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.3.92",
+    "date": "2026-11-27",
+    "notes": [
+      "The menus now show in full why Clear, Copy and Save are off.",
+      "A switched-off Clear is no longer red, and it lost its extra tooltip."
+    ]
+  },
+  {
     "version": "0.3.91",
     "date": "2026-11-27",
     "notes": [

@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.1.121",
+    "date": "2026-11-27",
+    "notes": [
+      "The Buttons page shows a bare tile that stays on.",
+      "The Menus page shows a switched-off Clear without red."
+    ]
+  },
+  {
     "version": "0.1.120",
     "date": "2026-11-27",
     "notes": [
