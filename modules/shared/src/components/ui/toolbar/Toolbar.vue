@@ -31,7 +31,8 @@ const props = withDefaults(defineProps<{
 }>(), { orientation: "horizontal", variant: "plain", wrap: false })
 
 const slots = useSlots()
-/** Rows under its tools (a search and filter header). Read while rendering, since a `below` may come and go. */
+/** Rows under its tools (a search and filter header). Read while rendering, since a `below` may come and go: the tools
+ * stay in one element either way (`contents` without rows), or they would all be made anew and lose focus and state. */
 const stacked = () => !!slots.below
 
 // reka-ui sends this (cancelable) event to the toolbar element when Tab brings the focus in.
@@ -139,10 +140,10 @@ function onKeydownCapture(event: KeyboardEvent) {
     :class="cn(toolbarVariants({ variant, orientation, wrap, stacked: stacked() }), props.class)"
     @keydown.capture="onKeydownCapture"
   >
-    <template v-if="stacked()">
-      <div data-slot="toolbar-row" :class="cn('flex min-w-0 items-center gap-1', orientation === 'vertical' && 'flex-col', wrap && 'flex-wrap')"><slot /></div>
-      <slot name="below" />
-    </template>
-    <slot v-else />
+    <div
+      :data-slot="stacked() ? 'toolbar-row' : undefined"
+      :class="stacked() ? cn('flex min-w-0 items-center gap-1', orientation === 'vertical' && 'flex-col', wrap && 'flex-wrap') : 'contents'"
+    ><slot /></div>
+    <slot name="below" />
   </ToolbarRoot>
 </template>

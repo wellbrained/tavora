@@ -12,6 +12,10 @@ import "./hover-card.css"
 import { Button } from "../button"
 import { uiText } from "../text"
 import { injectHoverCard } from "./context"
+import { leaveToolbar } from "../toolbar/context"
+
+// What it holds is not part of a Toolbar around its trigger.
+leaveToolbar()
 
 // The card sits in a portal, so a `class`, `data-testid` or other attribute goes on the card itself.
 defineOptions({ inheritAttrs: false })

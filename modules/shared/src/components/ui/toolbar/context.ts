@@ -1,10 +1,10 @@
 import { computed, getCurrentInstance, inject, onMounted, provide, ref, type ComputedRef, type InjectionKey, type Ref } from "vue"
 
 // How kit controls find the Toolbar they sit in. A `Toolbar` provides this; a kit `Button`, `Toggle`, `ToggleGroup`,
-// `SegmentedControl`, menu trigger or `Separator` under it reads it and joins the toolbar's one Tab stop. A control only
-// joins when its element really is inside that toolbar's element: content a toolbar opens (a popover, a menu, a dialog)
-// is moved to the body and stays out of the arrow keys. A field (search, combobox, slider) keeps its own Tab stop, and
-// calls `leaveToolbar()` so its inner buttons stay out too.
+// `SegmentedControl`, menu trigger or `Separator` under it reads it and joins the toolbar's one Tab stop. Content a
+// toolbar opens (a popover, a menu, a dialog) is moved to the body and stays out of the arrow keys: the kit's overlay
+// contents call `leaveToolbar()`. A field (search, combobox, slider) keeps its own Tab stop, and calls it too, so its
+// inner buttons stay out.
 
 export type ToolbarOrientation = "horizontal" | "vertical"
 
@@ -21,25 +21,28 @@ export function provideToolbar(context: ToolbarContext) {
   provide(TOOLBAR, context)
 }
 
-/** For a control with buttons inside that are not toolbar items of their own (a search field's clear button). */
+/** For a control with buttons inside that are not toolbar items of their own (a search field's clear button), and for
+ * content that opens over the page (a popover, a menu, a dialog). */
 export function leaveToolbar() {
   provide(TOOLBAR, null)
 }
 
 export interface ToolbarJoin {
-  /** Set once mounted, when this control's element is inside the toolbar's element. */
+  /** On from the start under a toolbar; off once mounted when this control's element turns out to be outside it. */
   joined: Readonly<Ref<boolean>>
   /** The toolbar's direction while joined. */
   orientation: ComputedRef<ToolbarOrientation | undefined>
 }
 
 /**
- * Whether this control is an item of a kit Toolbar. It starts out not joined and checks once mounted, so a control
- * the toolbar opens in a popover or a menu (moved to the body) never joins. `element` defaults to the component's own.
+ * Whether this control is an item of a kit Toolbar. It is one from its first render: joining later would swap the
+ * control's element, and a popover or menu trigger around it would keep pointing at the removed one (its popup then
+ * opens at the window's top left). Once mounted it checks that it really is inside the toolbar's element, for content
+ * moved elsewhere without `leaveToolbar()`. `element` defaults to the component's own.
  */
 export function useToolbarJoin(element?: () => Element | null | undefined): ToolbarJoin {
   const context = inject(TOOLBAR, null)
-  const joined = ref(false)
+  const joined = ref(!!context)
   if (context) {
     const instance = getCurrentInstance()
     onMounted(() => {

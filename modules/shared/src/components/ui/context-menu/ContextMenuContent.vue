@@ -8,6 +8,10 @@ import {
   useForwardPropsEmits,
 } from "reka-ui"
 import { cn } from "../../../lib/utils"
+import { leaveToolbar } from "../toolbar/context"
+
+// What it holds is not part of a Toolbar around its trigger.
+leaveToolbar()
 
 defineOptions({
   inheritAttrs: false,

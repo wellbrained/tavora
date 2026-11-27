@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.92",
+    "date": "2026-11-27",
+    "notes": [
+      "Menus now open next to their toolbar button."
+    ]
+  },
+  {
     "version": "0.1.91",
     "date": "2026-11-27",
     "notes": [

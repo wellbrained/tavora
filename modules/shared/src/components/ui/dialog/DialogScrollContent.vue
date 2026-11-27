@@ -17,6 +17,10 @@ import DialogCloseX from "./DialogCloseX.vue"
 import { useDialogDismissal, withoutDismissListener, type DismissEmits, type DismissOptions } from "./dismissal"
 import { provideDialogInstant } from "./instant"
 import { dialogSizeClass, type DialogSize } from "./size"
+import { leaveToolbar } from "../toolbar/context"
+
+// What it holds is not part of a Toolbar around its trigger.
+leaveToolbar()
 
 defineOptions({
   inheritAttrs: false,
