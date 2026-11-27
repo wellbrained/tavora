@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // A card of your own, made of the item card's parts: put them in an ItemCard's slot in any order, with your own markup
-// between them. Each part reads the same content and draws nothing for what the card doesn't have; the card keeps
-// its layout's look and its skin.
+// between them (here the tooltip's freestanding TooltipText for a note). Each part reads the same content and draws
+// nothing for what the card doesn't have; the card keeps its layout's look and its skin.
 import type { TooltipContent } from "@tavora/sdk";
+import { TooltipText } from "@tavora/official-ui";
 import { ItemCard, ItemCardEffect, ItemCardName, ItemCardSections, ItemCardStats, ItemCardType } from "@tavora/official-ui/components/ui/item-card";
 
 const relic: TooltipContent = {
@@ -24,7 +25,7 @@ const relic: TooltipContent = {
       <ItemCardName :content="relic" />
       <ItemCardType :content="relic" />
       <ItemCardStats :content="relic" />
-      <p class="text-muted-foreground text-xs">You have 2 of these.</p>
+      <TooltipText tone="muted" size="small" text="You have 2 of these." />
       <ItemCardEffect :content="relic" />
       <ItemCardSections :content="relic" />
     </ItemCard>

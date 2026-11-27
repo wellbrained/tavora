@@ -1,7 +1,27 @@
-.tavora-tooltip{--tavora-tooltip-surface:color-mix(in srgb,var(--foreground,#f2ece0) 6%,var(--popover,#201c19));--tavora-tooltip-line:color-mix(in srgb,var(--foreground,#f2ece0) 9%,transparent);position:fixed;z-index:1000;pointer-events:none;box-sizing:border-box;padding:10px 12px;border:1px solid var(--tavora-tooltip-line);border-radius:8px;background:var(--tavora-tooltip-surface);color:var(--popover-foreground,var(--foreground,#f2ece0));box-shadow:inset 0 1px 0 #ffffff0a,0 8px 24px #000a,0 2px 6px #0006;font-family:var(--tavora-font-sans,system-ui,sans-serif);font-size:13px;line-height:1.4;overflow-wrap:anywhere}
-.tavora-tooltip .tavora-tooltip-title{font-size:15px;font-weight:600;line-height:1.35;margin:0}
+/* The in-panel tooltip's tokens: its colours, sizes, padding, shadow and layer, set once here and read by every rule
+   below and by its parts (parts.ts). Restyle a card with a class that sets them (a game card's colours), never with a
+   copy of the rules. The hex fallbacks are for a page that has no theme yet; a connected module always has one. The
+   sizes are the panel card's own (title 15, text 13, small 12): the shared tooltip's larger ones are
+   --tavora-tooltip-*-size on :root (typography.ts), so these have their own names. */
+.tavora-tooltip{
+  --tavora-tooltip-text:var(--popover-foreground,var(--foreground,#f2ece0));
+  --tavora-tooltip-surface:color-mix(in srgb,var(--foreground,#f2ece0) 6%,var(--popover,#201c19));
+  --tavora-tooltip-line:color-mix(in srgb,var(--foreground,#f2ece0) 9%,transparent);
+  --tavora-tooltip-muted:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19));
+  --tavora-tooltip-subtle:color-mix(in srgb,var(--foreground,#f2ece0) 60%,var(--popover,#201c19));
+  --tavora-tooltip-faint:color-mix(in srgb,var(--foreground,#f2ece0) 45%,var(--popover,#201c19));
+  --tavora-tooltip-accent:var(--primary,#e0a243);
+  --tavora-tooltip-box:color-mix(in srgb,var(--foreground,#f2ece0) 7%,transparent);
+  --tavora-tooltip-band:color-mix(in srgb,var(--foreground,#f2ece0) 5%,transparent);
+  --tavora-tooltip-badge-line:var(--border,#35302b);
+  --tavora-tooltip-shadow:inset 0 1px 0 #ffffff0a,0 8px 24px #000a,0 2px 6px #0006;
+  --tavora-tooltip-radius:8px;
+  --tavora-tooltip-pad-y:10px;--tavora-tooltip-pad-x:12px;
+  --tavora-panel-tooltip-title-size:15px;--tavora-panel-tooltip-text-size:13px;--tavora-panel-tooltip-small-size:12px;
+  position:fixed;z-index:1000;pointer-events:none;box-sizing:border-box;padding:var(--tavora-tooltip-pad-y) var(--tavora-tooltip-pad-x);border:1px solid var(--tavora-tooltip-line);border-radius:var(--tavora-tooltip-radius);background:var(--tavora-tooltip-surface);color:var(--tavora-tooltip-text);box-shadow:var(--tavora-tooltip-shadow);font-family:var(--tavora-font-sans,system-ui,sans-serif);font-size:var(--tavora-panel-tooltip-text-size);line-height:1.4;overflow-wrap:anywhere}
+.tavora-tooltip .tavora-tooltip-title{font-size:var(--tavora-panel-tooltip-title-size);font-weight:600;line-height:1.35;margin:0}
 /* The card's own text; not a card's inside it (ItemTooltip's item card brings its own). :where adds no weight. */
-.tavora-tooltip p:where(:not([data-slot=item-card] *)){font-size:13px;line-height:1.45;margin:3px 0 0;color:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19))}
+.tavora-tooltip p:where(:not([data-slot=item-card] *)){font-size:var(--tavora-panel-tooltip-text-size);line-height:1.45;margin:3px 0 0;color:var(--tavora-tooltip-muted)}
 .tavora-tooltip p:first-child,.tavora-tooltip-head p{margin-top:0}
 .tavora-tooltip-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .tavora-tooltip-head+p{margin-top:3px}
@@ -11,10 +31,10 @@
 .tavora-tooltip-name{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto}
 .tavora-tooltip-head[data-parts] .tavora-tooltip-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tavora-tooltip-badges{display:inline-flex;align-items:center;gap:4px;flex:none}
-.tavora-tooltip-meta{flex:none;margin-left:auto;font-size:12px;line-height:1.35;white-space:nowrap;color:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19))}
+.tavora-tooltip-meta{flex:none;margin-left:auto;font-size:var(--tavora-panel-tooltip-small-size);line-height:1.35;white-space:nowrap;color:var(--tavora-tooltip-muted)}
 /* The kit's outline Badge (ui/badge/index.ts), in plain CSS so the card needs no Tailwind (React and plain modules show
    it too). Keep the two alike. */
-.tavora-tooltip-badge{display:inline-flex;align-items:center;flex:none;box-sizing:border-box;padding:2px 6px;border:1px solid var(--border,#35302b);border-radius:4px;font-size:12px;font-weight:500;line-height:16px;white-space:nowrap;color:var(--foreground,#f2ece0)}
+.tavora-tooltip-badge{display:inline-flex;align-items:center;flex:none;box-sizing:border-box;padding:2px 6px;border:1px solid var(--tavora-tooltip-badge-line);border-radius:4px;font-size:var(--tavora-panel-tooltip-small-size);font-weight:500;line-height:16px;white-space:nowrap;color:var(--tavora-tooltip-text)}
 .tavora-tooltip[data-tone=warning] .tavora-tooltip-title{color:var(--warning,#e3c75f)}.tavora-tooltip:is([data-tone=destructive],[data-tone=danger]) .tavora-tooltip-title{color:var(--destructive,#e5675a)}
 
 /* The arrow: a square turned on its corner, half hidden behind the card's edge that faces the anchor. */
@@ -26,13 +46,13 @@
 
 /* Shortcut keys: the kit's key caps, small. */
 .tavora-tooltip-keys{display:inline-flex;gap:3px;flex:none}
-.tavora-tooltip kbd{font:12px/1 var(--tavora-font-mono,ui-monospace,monospace);color:color-mix(in srgb,var(--foreground,#f2ece0) 80%,transparent);background:var(--background,#171412);border:1px solid var(--border,#35302b);border-bottom-width:2px;border-radius:4px;padding:3px 5px}
+.tavora-tooltip kbd{font:12px/1 var(--tavora-font-mono,ui-monospace,monospace);color:color-mix(in srgb,var(--tavora-tooltip-text) 80%,transparent);background:var(--background,#171412);border:1px solid var(--tavora-tooltip-badge-line);border-bottom-width:2px;border-radius:4px;padding:3px 5px}
 
 /* A divider runs edge to edge; label and value rows line their numbers up on the right. */
-.tavora-tooltip hr,.tavora-tooltip [data-slot=separator]{width:auto;height:1px;border:0;background:var(--tavora-tooltip-line);margin:8px -12px}
-.tavora-tooltip-rows{display:grid;grid-template-columns:1fr auto;gap:3px 16px;margin:6px 0 0;font-size:13px}
+.tavora-tooltip hr,.tavora-tooltip [data-slot=separator]{width:auto;height:1px;border:0;background:var(--tavora-tooltip-line);margin:8px calc(var(--tavora-tooltip-pad-x) * -1)}
+.tavora-tooltip-rows{display:grid;grid-template-columns:1fr auto;gap:3px 16px;margin:6px 0 0;font-size:var(--tavora-panel-tooltip-text-size)}
 .tavora-tooltip hr+.tavora-tooltip-rows,.tavora-tooltip [data-slot=separator]+.tavora-tooltip-rows{margin-top:0}
-.tavora-tooltip-rows dt{color:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19))}
+.tavora-tooltip-rows dt{color:var(--tavora-tooltip-muted)}
 .tavora-tooltip-rows dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
 .tavora-tooltip-rows dd[data-trend=better]{color:var(--success,#8cbf7f)}.tavora-tooltip-rows dd[data-trend=worse]{color:var(--destructive,#e5675a)}
 /* Several values per row sit a little closer, under right-aligned headings; a unit hangs just after the values, left
@@ -41,29 +61,41 @@
    reaches through it. */
 .tavora-tooltip-rows>div{display:contents}
 .tavora-tooltip-rows[data-columns]{column-gap:12px}
-.tavora-tooltip-rows .tavora-tooltip-rows-heading{text-align:right;font-size:12px;color:color-mix(in srgb,var(--foreground,#f2ece0) 60%,var(--popover,#201c19))}
-.tavora-tooltip-rows .tavora-tooltip-unit{text-align:left;margin-left:-12px;color:color-mix(in srgb,var(--foreground,#f2ece0) 72%,var(--popover,#201c19))}
+.tavora-tooltip-rows .tavora-tooltip-rows-heading{text-align:right;font-size:var(--tavora-panel-tooltip-small-size);color:var(--tavora-tooltip-subtle)}
+.tavora-tooltip-rows .tavora-tooltip-unit{text-align:left;margin-left:-12px;color:var(--tavora-tooltip-muted)}
 .tavora-tooltip-rows[data-columns] .tavora-tooltip-unit{margin-left:-8px}
-.tavora-tooltip-rows dd[data-faint]{color:color-mix(in srgb,var(--foreground,#f2ece0) 45%,var(--popover,#201c19))}
+.tavora-tooltip-rows dd[data-faint]{color:var(--tavora-tooltip-faint)}
 
 /* A card with a surface of its own (ItemTooltip): the tooltip only places it, and lends it its shadow (not to a unit,
    which has a shape of its own and no box around it). */
 .tavora-tooltip[data-bare]{padding:0;border:0;background:transparent;box-shadow:none}
-.tavora-tooltip[data-bare]>[data-slot=item-card]:not([data-layout=unit]){box-shadow:inset 0 1px 0 #ffffff0a,0 8px 24px #000a,0 2px 6px #0006}
+.tavora-tooltip[data-bare]>[data-slot=item-card]:not([data-layout=unit]){box-shadow:var(--tavora-tooltip-shadow)}
 
-/* Taller than the panel (Tooltip.ts holds it to the panel's height): it scrolls. An item card scrolls inside its own
-   surface, so its edge, corners and shadow stay whole. */
+/* Taller than the panel (Tooltip.ts holds it to the panel's height), or than its own `maxHeight`: it scrolls. An item
+   card scrolls inside its own surface, so its edge, corners and shadow stay whole. */
 .tavora-tooltip[data-scrolls]{overflow-y:auto;scrollbar-width:thin}
 .tavora-tooltip[data-bare][data-scrolls]{display:flex;flex-direction:column;overflow:visible}
 .tavora-tooltip[data-bare][data-scrolls]>*{min-height:0;overflow-y:auto;scrollbar-width:thin}
 .tavora-tooltip[data-bare][data-scrolls]>*>*{flex-shrink:0}
 
+/* Pinned (useTooltip's `pin`): it takes the pointer, so you can read it, select its text or follow a link in it, and has
+   a small plain X in its top right corner; the title keeps clear of it. The X is the kit's ghost icon button, drawn here
+   in plain CSS like the badge. */
+.tavora-tooltip[data-pinned]{pointer-events:auto}
+.tavora-tooltip[data-pinned] .tavora-tooltip-head,.tavora-tooltip[data-pinned] .tavora-item-card-name,.tavora-tooltip[data-pinned] .tavora-item-card-heading,.tavora-tooltip[data-pinned] .tavora-tooltip-art-text{padding-right:24px}
+.tavora-tooltip-close{position:absolute;top:6px;right:6px;z-index:1;display:grid;place-items:center;box-sizing:border-box;width:24px;height:24px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--tavora-tooltip-muted);cursor:pointer;transition:background-color var(--duration-press,100ms) var(--ease-out-strong,ease-out),color var(--duration-press,100ms) var(--ease-out-strong,ease-out)}
+.tavora-tooltip-close:hover{background:color-mix(in srgb,var(--tavora-tooltip-text) 10%,transparent);color:var(--tavora-tooltip-text)}
+.tavora-tooltip-close:focus-visible{outline:2px solid var(--ring,#e0a243);outline-offset:1px}
+.tavora-tooltip-close svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+/* On an item card (bare), the X sits on the card's own corner, on a soft backing so it reads over a picture. */
+.tavora-tooltip[data-bare] .tavora-tooltip-close{background:color-mix(in srgb,var(--popover,#201c19) 75%,transparent)}
+
 /* A one-line label: tighter, the text as bright as a title. */
-.tavora-tooltip.compact{padding:6px 10px;border-radius:7px;font-size:13px}
-.tavora-tooltip.compact .tavora-tooltip-title{font-size:13px;line-height:1.3}
-.tavora-tooltip.compact p{font-size:13px;margin-top:2px}
+.tavora-tooltip.compact{--tavora-tooltip-pad-y:6px;--tavora-tooltip-pad-x:10px;border-radius:7px;font-size:var(--tavora-panel-tooltip-text-size)}
+.tavora-tooltip.compact .tavora-tooltip-title{font-size:var(--tavora-panel-tooltip-text-size);line-height:1.3}
+.tavora-tooltip.compact p{font-size:var(--tavora-panel-tooltip-text-size);margin-top:2px}
 .tavora-tooltip.compact p:first-child,.tavora-tooltip.compact .tavora-tooltip-head p{color:inherit;margin-top:0}
-.tavora-tooltip.compact li{font-size:12px}
+.tavora-tooltip.compact li{font-size:var(--tavora-panel-tooltip-small-size)}
 .tavora-tooltip.compact .tavora-tooltip-head{gap:10px}
 
 /* It grows out of its arrow, a little and quickly. Straight away when another tooltip was just open (Tooltip.ts):
@@ -78,3 +110,40 @@
 .tavora-tooltip[data-closing=true]{animation:tavora-tooltip-out 100ms var(--ease-out-strong,cubic-bezier(.23,1,.32,1)) forwards}
 @keyframes tavora-tooltip-out{to{opacity:0;transform:scale(.96)}}
 @media (prefers-reduced-motion:reduce){.tavora-tooltip[data-ready=true]:not([data-instant=true]){animation:tavora-tooltip-fade 100ms linear!important}.tavora-tooltip[data-closing=true]{animation:tavora-tooltip-fade-out 100ms linear forwards!important}@keyframes tavora-tooltip-fade{from{opacity:0}}@keyframes tavora-tooltip-fade-out{to{opacity:0}}}
+
+/* The freestanding parts (parts.ts): pieces you put in a card yourself, in a Tooltip or in an ItemCard's slot. They read
+   the tokens above; an ItemCard sets them to its own colours and padding (item-card.css), so a part looks right in both. */
+.tavora-tooltip-heading{margin:8px 0 2px;font-size:var(--tavora-panel-tooltip-small-size);font-weight:500;line-height:1.35;color:var(--tavora-tooltip-subtle)}
+.tavora-tooltip-heading:first-child,.tavora-tooltip hr+:is(.tavora-tooltip-heading,.tavora-tooltip-text,.tavora-tooltip-tags,.tavora-tooltip-list,.tavora-tooltip-icons){margin-top:0}
+.tavora-tooltip p.tavora-tooltip-text,.tavora-tooltip-text{margin:6px 0 0;font-size:var(--tavora-panel-tooltip-text-size);line-height:1.45;color:var(--tavora-tooltip-text);white-space:pre-wrap}
+.tavora-tooltip p.tavora-tooltip-text:first-child,.tavora-tooltip-text:first-child{margin-top:0}
+.tavora-tooltip p.tavora-tooltip-text[data-tone=muted],.tavora-tooltip-text[data-tone=muted]{color:var(--tavora-tooltip-muted)}
+.tavora-tooltip p.tavora-tooltip-text[data-size=small],.tavora-tooltip-text[data-size=small]{font-size:var(--tavora-panel-tooltip-small-size)}
+.tavora-tooltip-text[data-box]{padding:6px 8px;border:1px solid var(--tavora-tooltip-line);border-radius:6px;background:var(--tavora-tooltip-box)}
+.tavora-tooltip-text [data-accent]{color:var(--tavora-tooltip-accent)}
+.tavora-tooltip-text strong{font-weight:600}
+.tavora-tooltip-tags{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 0;padding:0;list-style:none}
+.tavora-tooltip-tags:first-child{margin-top:0}
+.tavora-tooltip-list{margin:6px 0 0;padding:0;list-style:none;font-size:var(--tavora-panel-tooltip-text-size);line-height:1.6}
+.tavora-tooltip-list:first-child,.tavora-tooltip-heading+.tavora-tooltip-list,.tavora-tooltip-heading+.tavora-tooltip-tags,.tavora-tooltip-heading+.tavora-tooltip-icons{margin-top:0}
+.tavora-tooltip-list li{display:flex;justify-content:space-between;gap:8px}
+.tavora-tooltip-list li>span:first-child{position:relative;min-width:0;padding-left:12px}
+.tavora-tooltip-list li>span:first-child::before{content:"\2022";position:absolute;left:0;color:var(--tavora-tooltip-muted)}
+.tavora-tooltip-list li>span+span{flex:none;color:var(--tavora-tooltip-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tavora-tooltip-icons{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0;padding:0;list-style:none}
+.tavora-tooltip-icons:first-child{margin-top:0}
+.tavora-tooltip-icon{position:relative;display:grid;place-items:center;box-sizing:border-box;width:32px;height:32px;border:1px solid var(--tavora-tooltip-line);border-radius:4px;background:var(--tavora-tooltip-band)}
+.tavora-tooltip-icon img{display:block;width:28px;height:28px;object-fit:contain}
+.tavora-tooltip-icon svg{width:16px;height:16px}
+.tavora-tooltip-icon-count{position:absolute;right:-4px;bottom:-6px;padding:0 3px;border:1px solid var(--tavora-tooltip-line);border-radius:4px;background:var(--tavora-tooltip-surface);font-size:var(--tavora-panel-tooltip-small-size);line-height:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tavora-tooltip-icons:has(.tavora-tooltip-icon-count){padding-bottom:4px}
+/* The art header and the footer run edge to edge, over the card's padding: a band at the top with a picture, the title
+   and a line under it, and a strip at the bottom under a line. */
+.tavora-tooltip-art{display:flex;align-items:center;gap:12px;margin:calc(var(--tavora-tooltip-pad-y) * -1) calc(var(--tavora-tooltip-pad-x) * -1) 8px;padding:12px var(--tavora-tooltip-pad-x);border-bottom:1px solid var(--tavora-tooltip-line);border-radius:inherit;border-bottom-left-radius:0;border-bottom-right-radius:0;background:var(--tavora-tooltip-band)}
+.tavora-tooltip-art-picture{position:relative;flex:none;width:48px;height:48px}
+.tavora-tooltip-art-picture>img{position:absolute;top:50%;left:50%;width:100%;height:auto;max-height:100%;object-fit:contain;transform:translate(-50%,-50%)}
+.tavora-tooltip-art-text{min-width:0;flex:1}
+.tavora-tooltip-art-text h3{margin:0;font-size:var(--tavora-panel-tooltip-title-size);font-weight:600;line-height:1.3;color:var(--tavora-tooltip-text)}
+.tavora-tooltip .tavora-tooltip-art-text p,.tavora-tooltip-art-text p{margin:2px 0 0;font-size:var(--tavora-panel-tooltip-text-size);font-weight:500;line-height:1.35;color:var(--tavora-tooltip-muted)}
+.tavora-tooltip-footer{margin:10px calc(var(--tavora-tooltip-pad-x) * -1) calc(var(--tavora-tooltip-pad-y) * -1);padding:8px var(--tavora-tooltip-pad-x);border-top:1px solid var(--tavora-tooltip-line);font-size:var(--tavora-panel-tooltip-small-size);line-height:1.4;color:var(--tavora-tooltip-muted)}
+.tavora-tooltip-footer strong{font-weight:600;color:var(--tavora-tooltip-text)}

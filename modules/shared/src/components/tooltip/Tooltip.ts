@@ -26,6 +26,9 @@ export function shortcutKeys(shortcut: string): string[] {
 /** A path or address has no spaces to wrap at: let it wrap after each slash instead of inside a word. */
 const wrappable = (text: string) => /\s/.test(text) ? text : text.replace(/([\\/])/g, '$1​');
 
+/** Why a card asks to close: Escape, its X (`close`), the window losing the focus, resizing, or the page scrolling. */
+export type TooltipDismissReason = 'escape' | 'close' | 'blur' | 'resize' | 'scroll';
+
 /** How wide a card may get: `sm` (the default) for a few lines, `md` and `lg` for rows with several columns, or pixels. */
 export type TooltipWidth = 'sm' | 'md' | 'lg' | number;
 const WIDTHS: Record<Exclude<TooltipWidth, number>, number> = { sm: TOOLTIP_MAX_WIDTH, md: 360, lg: 520 };
@@ -100,8 +103,20 @@ export default defineComponent({
     bare: Boolean,
     /** The arrow pointing at the element. ItemTooltip turns it off where it can't take the card's look (a skin, a unit). */
     arrow: { type: Boolean, default: true },
+    /**
+     * The tallest the card gets, in pixels, before it scrolls (with the wheel over it or its element). It never gets
+     * taller than the window either way.
+     */
+    maxHeight: Number,
+    /**
+     * Pinned open (useTooltip's `pin`): the card takes the pointer, so its text can be selected and a link in it used,
+     * shows a close X in its corner, and stays when the window loses the focus. It still closes on Escape, the X, a
+     * resize or the page scrolling; `dismiss` says which.
+     */
+    pinned: Boolean,
   },
-  emits: ['dismiss'],
+  /** `reason`: `escape`, `close` (the X), `blur`, `resize` or `scroll`. */
+  emits: { dismiss: (_reason?: TooltipDismissReason) => true },
   setup(props, { attrs, emit, slots }) {
     const card = ref<HTMLElement | null>(null);
     const position = ref({ left: 0, top: 0, width: 360, side: 'bottom' as TooltipSide, arrow: 0, maxHeight: 0, covers: false });
@@ -141,8 +156,10 @@ export default defineComponent({
       const version = ++generation;
       // A closing card keeps its place while it fades out.
       if (!props.open) { if (!closing.value) ready.value = false; return; }
+      // A card of its own height is placed as if the window were that tall, so it scrolls from there.
       const viewport = { width: innerWidth, height: innerHeight }, side = props.side, max = tooltipMaxWidth(props.width);
-      position.value = tooltipPlacement(anchor(), 0, 0, viewport, side, max, props.bare, props.align);
+      const cap = (placed: ReturnType<typeof tooltipPlacement>) => props.maxHeight && props.maxHeight > 0 ? { ...placed, maxHeight: Math.min(placed.maxHeight, Math.max(40, props.maxHeight)) } : placed;
+      position.value = cap(tooltipPlacement(anchor(), 0, 0, viewport, side, max, props.bare, props.align));
       // Measured at its full height first.
       scrolls.value = false;
       let height = 0;
@@ -150,10 +167,12 @@ export default defineComponent({
       for (let pass = 0; pass < 2; pass++) {
         await nextTick();
         if (version !== generation || !card.value) return;
-        const box = card.value.getBoundingClientRect();
-        // Whole pixels up: a card held to its exact fractional width can lay out a hair narrower and break a word.
-        const measured = { width: Math.ceil(box.width), height: Math.ceil(box.height) };
-        const placed = tooltipPlacement(anchor(), measured.width, measured.height, viewport, side, max, props.bare, props.align);
+        // Its layout box, not its box on the screen: a card placed again while it grows in (a picture that arrived) is
+        // still scaled down a little, and held to that width it would wrap. Whole pixels up: a card held to its exact
+        // fractional width can lay out a hair narrower and break a word.
+        const box = getComputedStyle(card.value), rect = card.value.getBoundingClientRect();
+        const measured = { width: Math.ceil(parseFloat(box.width) || rect.width), height: Math.ceil(parseFloat(box.height) || rect.height) };
+        const placed = cap(tooltipPlacement(anchor(), measured.width, Math.min(measured.height, props.maxHeight && props.maxHeight > 0 ? Math.max(40, props.maxHeight) : measured.height), viewport, side, max, props.bare, props.align));
         position.value = placed;
         height = measured.height;
         if (placed.width >= measured.width) break;
@@ -161,11 +180,14 @@ export default defineComponent({
       scrolls.value = height > position.value.maxHeight;
       ready.value = true;
     }
-    watch(() => [props.open, props.anchor, props.at?.x, props.at?.y, props.side, props.align, props.title, props.description, props.shortcut, props.badge, props.meta, props.divider, props.width], place, { immediate: true });
-    const dismiss = () => emit('dismiss');
-    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss(); };
+    watch(() => [props.open, props.anchor, props.at?.x, props.at?.y, props.side, props.align, props.title, props.description, props.shortcut, props.badge, props.meta, props.divider, props.width, props.maxHeight, props.pinned], place, { immediate: true });
+    const dismiss = (reason: TooltipDismissReason) => emit('dismiss', reason);
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss('escape'); };
     // The card's own scrolling is not the page moving away under it.
-    const scrolled = (event: Event) => { if (!(event.target instanceof Node && card.value?.contains(event.target))) dismiss(); };
+    const scrolled = (event: Event) => { if (!(event.target instanceof Node && card.value?.contains(event.target))) dismiss('scroll'); };
+    // A pinned card stays while you look at another window, and comes back with this one.
+    const blurred = () => { if (!props.pinned) dismiss('blur'); };
+    const resized = () => dismiss('resize');
     // A card that scrolls stays out of the pointer's way (it may lie over its element, which would end the hover), so
     // the wheel over the element or over the card scrolls it. It stays the card's at either end too: the page scrolling
     // would close the card while it is being read.
@@ -185,8 +207,8 @@ export default defineComponent({
       if (on === listening) return;
       listening = on;
       const change = on ? window.addEventListener.bind(window) : window.removeEventListener.bind(window);
-      change('blur', dismiss);
-      change('resize', dismiss);
+      change('blur', blurred);
+      change('resize', resized);
       change('scroll', scrolled, true);
       change('keydown', key, true);
     }
@@ -229,6 +251,12 @@ export default defineComponent({
       if (keys && props.description) return [h('div', { class: 'tavora-tooltip-head' }, [h('p', wrappable(props.description)), keys])];
       return [props.description ? h('p', wrappable(props.description)) : null];
     }
+    /** The pinned card's X: the kit's ghost icon button, in plain markup (React and plain modules show this card too). */
+    function closeButton() {
+      return h('button', { type: 'button', class: 'tavora-tooltip-close', 'data-slot': 'tooltip-close', 'aria-label': uiText.value.close, onClick: () => dismiss('close') }, [
+        h('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' }, [h('path', { d: 'M18 6 6 18M6 6l12 12' })]),
+      ]);
+    }
     /** What you put in the card, under a line when `divider` is on and there is something above and below it. */
     function body() {
       const content = slots.default?.();
@@ -241,10 +269,11 @@ export default defineComponent({
       'data-ready': ready.value && !closing.value ? 'true' : undefined, 'data-instant': instant.value ? 'true' : undefined, 'data-closing': !props.open && closing.value ? 'true' : undefined,
       'data-bare': props.bare ? 'true' : undefined,
       'data-scrolls': scrolls.value ? 'true' : undefined,
+      'data-pinned': props.open && props.pinned ? 'true' : undefined,
       // A picture that arrives makes the card taller: placed again (a load does not bubble, so it is caught on the way in).
       ...(props.open ? { onLoadCapture: () => void place() } : {}),
       class: props.compact ? 'tavora-tooltip compact' : 'tavora-tooltip',
       style: { left: position.value.left + 'px', top: position.value.top + 'px', maxWidth: position.value.width + 'px', maxHeight: scrolls.value ? position.value.maxHeight + 'px' : undefined, '--tavora-tooltip-arrow': position.value.arrow + 'px', visibility: ready.value ? 'visible' : 'hidden' },
-    }), [...head(), ...body(), props.arrow && !position.value.covers && !scrolls.value ? h('span', { class: 'tavora-tooltip-arrow', 'aria-hidden': 'true' }) : null])] : []);
+    }), [...head(), ...body(), props.open && props.pinned ? closeButton() : null, props.arrow && !position.value.covers && !scrolls.value ? h('span', { class: 'tavora-tooltip-arrow', 'aria-hidden': 'true' }) : null])] : []);
   },
 });

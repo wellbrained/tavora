@@ -128,6 +128,32 @@ describe("title hints and screen readers", () => {
     expect(element.getAttribute("aria-description")).toBe("Full text here")
   })
 
+  it("shows a description under the title, and gives it to screen readers", async () => {
+    const button = await add(`<button title="Pin" data-tooltip-description="Keeps the panel on top"></button>`)
+    await settle()
+    expect(button.getAttribute("aria-label")).toBe("Pin")
+    expect(button.getAttribute("aria-description")).toBe("Keeps the panel on top")
+    button.dispatchEvent(new Event("pointerover", { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const card = document.querySelector("[data-slot=tooltip]")!
+    expect(card.querySelector(".tavora-tooltip-title")!.textContent).toBe("Pin")
+    expect(card.querySelector("p")!.textContent).toBe("Keeps the panel on top")
+
+    const named = await add(`<span title="Full path" data-tooltip-description="Opens in the file view">Short</span>`)
+    await settle()
+    expect(named.getAttribute("aria-description")).toBe("Full path. Opens in the file view")
+  })
+
+  it("shows a hint without a description as one line, as before", async () => {
+    const element = await add(`<span title="Full text here">Short</span>`)
+    await settle()
+    element.dispatchEvent(new Event("pointerover", { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const card = document.querySelector("[data-slot=tooltip]")!
+    expect(card.querySelector(".tavora-tooltip-title")).toBeNull()
+    expect(card.querySelector("p")!.textContent).toBe("Full text here")
+  })
+
   it("gives the title back when the layer is removed", async () => {
     const element = await add(`<span title="Full text here">Short</span>`)
     await settle()

@@ -10,7 +10,7 @@ const badges = computed(() => (props.content.image ? (props.content.badges ?? []
 
 <template>
   <div class="tavora-item-card-name">
-    <h3>{{ content.title }}</h3>
+    <h3 :data-tone="content.tone">{{ content.title }}</h3>
     <div v-if="badges.length" class="tavora-item-card-badges">
       <span v-for="(badge, i) in badges" :key="i" class="tavora-item-card-badge">{{ badge }}</span>
     </div>

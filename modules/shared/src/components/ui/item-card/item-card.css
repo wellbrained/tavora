@@ -4,6 +4,13 @@
 .tavora-item-card{--ic-surface:color-mix(in srgb,var(--foreground) 6%,var(--popover));--ic-line:color-mix(in srgb,var(--foreground) 9%,transparent);--ic-text:var(--popover-foreground);--ic-muted:color-mix(in srgb,var(--foreground) 72%,var(--popover));--ic-accent:var(--primary);--ic-box:color-mix(in srgb,var(--foreground) 7%,transparent);--ic-box-text:var(--popover-foreground);--ic-art:color-mix(in srgb,var(--foreground) 5%,transparent);
   box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--ic-line);border-radius:var(--radius-lg);background:var(--ic-surface);color:var(--ic-text);font-family:var(--font-sans);font-size:var(--ic-text-size);line-height:1.45;overflow-wrap:anywhere}
 .tavora-item-card[data-layout=card]{width:280px;max-width:100%}
+/* The tooltip's tokens, set to the card's own: the freestanding parts (tooltip/parts.ts) put in its slot take its colours,
+   sizes and padding (a skin's or the PoE look's too), and the card's gap stands for their margins. */
+.tavora-item-card{--tavora-tooltip-text:var(--ic-text);--tavora-tooltip-muted:var(--ic-muted);--tavora-tooltip-subtle:var(--ic-muted);--tavora-tooltip-faint:color-mix(in srgb,var(--ic-muted) 60%,var(--ic-surface));--tavora-tooltip-accent:var(--ic-accent);--tavora-tooltip-line:var(--ic-line);--tavora-tooltip-surface:var(--ic-surface);--tavora-tooltip-box:var(--ic-box);--tavora-tooltip-band:var(--ic-art);--tavora-tooltip-badge-line:var(--ic-line);--tavora-tooltip-pad-y:12px;--tavora-tooltip-pad-x:12px;--tavora-panel-tooltip-title-size:var(--ic-title-size);--tavora-panel-tooltip-text-size:var(--ic-text-size);--tavora-panel-tooltip-small-size:var(--ic-small-size)}
+.tavora-item-card>:is(.tavora-tooltip-text,.tavora-tooltip-heading,.tavora-tooltip-tags,.tavora-tooltip-list,.tavora-tooltip-icons){margin-top:0;margin-bottom:0}
+.tavora-item-card>.tavora-tooltip-art{margin-bottom:0}
+.tavora-item-card>.tavora-tooltip-footer{margin-top:0}
+.tavora-item-card>.tavora-tooltip-heading+*{margin-top:-6px}
 .tavora-item-card[data-colors]{--ic-surface:var(--skin-surface);--ic-text:var(--skin-text);--ic-muted:var(--skin-muted);--ic-accent:var(--skin-accent);--ic-box:var(--skin-box);--ic-box-text:var(--skin-box-text);--ic-line:color-mix(in srgb,var(--skin-muted) 35%,var(--skin-surface));--ic-art:color-mix(in srgb,var(--skin-text) 6%,var(--skin-surface))}
 .tavora-item-card[data-skinned]{border-radius:0}
 .tavora-item-card[data-framed]{border-style:solid;border-image-repeat:stretch}
@@ -47,7 +54,7 @@
 .tavora-item-card-per-heading{text-align:right;font-size:var(--ic-small-size);color:var(--ic-muted)}
 .tavora-item-card h3{margin:0;font-size:var(--ic-title-size);font-weight:600;line-height:1.3;color:var(--ic-text)}
 .tavora-item-card[data-caps] h3{text-transform:uppercase}
-.tavora-item-card-type,.tavora-item-card-props dt,.tavora-item-card-section>p{color:var(--ic-muted)}
+.tavora-item-card-type,.tavora-item-card-section>p{color:var(--ic-muted)}
 .tavora-item-card p{margin:0}
 .tavora-item-card-badges{display:flex;flex-wrap:wrap;gap:4px}
 .tavora-item-card-badge{font-size:var(--ic-small-size);line-height:1.4;padding:0 5px;border:1px solid var(--ic-line);border-radius:var(--radius-sm);color:var(--ic-muted);white-space:nowrap}
@@ -58,21 +65,59 @@
 .tavora-item-card[data-layout=card][data-box-edge] .tavora-item-card-effect{border:2px solid var(--skin-box-border)}
 .tavora-item-card-effect [data-accent]{color:var(--ic-accent)}
 .tavora-item-card[data-font] h3,.tavora-item-card[data-font] .tavora-item-card-effect{font-family:var(--skin-font),var(--font-sans)}
-.tavora-item-card-props{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin:0}
-.tavora-item-card-props dd{margin:0;font-variant-numeric:tabular-nums}
 .tavora-item-card-section{padding-top:8px;border-top:1px solid var(--ic-line)}
 .tavora-item-card-section>p{margin-bottom:4px}
 .tavora-item-card-section ul{list-style:none;margin:0;padding:0}
 .tavora-item-card-section li{display:flex;justify-content:space-between;gap:8px}
-.tavora-item-card-section li[data-connected]{border-left:2px solid var(--ic-accent);padding-left:8px}
+/* A bullet before each row, a line instead on a connected one (a PoE hybrid affix), as in the shared tooltip. */
+.tavora-item-card-section li>span:first-child{position:relative;min-width:0;padding-left:12px}
+.tavora-item-card-section li>span:first-child::before{content:"\2022";position:absolute;left:0;color:var(--ic-muted)}
+.tavora-item-card-section li[data-connected]{border-left:2px solid var(--ic-accent);padding-left:10px}
+.tavora-item-card-section li[data-connected]>span:first-child{padding-left:0}
+.tavora-item-card-section li[data-connected]>span:first-child::before{content:none}
 /* A row's status stays on one line; the row's own text wraps. */
 .tavora-item-card-section li span+span{color:var(--ic-muted);white-space:nowrap}
+/* The status and the tags after a row: a short word, then tags such as [P1], a little apart. */
+.tavora-item-card-affixes{display:flex;flex:none;align-items:baseline;gap:5px}
+.tavora-item-card-affixes small{font-size:inherit}
 
-/* The rich layout: the picture beside the text. */
-.tavora-item-card-rich{display:flex;gap:12px}
-.tavora-item-card-rich>img{display:block;width:77px;flex:0 0 77px;height:auto;aspect-ratio:58/80;object-fit:contain;border:1px solid var(--ic-line);border-radius:var(--radius-sm);padding:3px;box-sizing:border-box}
-.tavora-item-card-rich>div{display:flex;flex-direction:column;gap:8px;min-width:0;flex:1}
-.tavora-item-card-heading{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+/* The rich layout as the shared tooltip draws it (shared/tooltip-document.ts in the app): as wide as it needs, up to 520 px;
+   the picture with the requirements under it on the left, beside the text; its own sizes and spacing. */
+.tavora-item-card[data-layout=rich]{display:block;width:max-content;min-width:220px;max-width:min(520px,100%);padding:15px 14px}
+.tavora-item-card-rich{display:flex;gap:13px}
+.tavora-item-card-rich-art{flex:0 0 77px;width:77px}
+.tavora-item-card-rich-art>img{display:block;box-sizing:border-box;width:100%;height:auto;aspect-ratio:58/80;object-fit:contain;border:1px solid var(--ic-line);border-radius:var(--radius-sm);padding:3px}
+.tavora-item-card-requirements{margin-top:8px;font-size:var(--ic-meta-size);color:var(--ic-muted)}
+.tavora-item-card-requirements:first-child{margin-top:0}
+.tavora-item-card-requirements>p{margin-bottom:4px}
+.tavora-item-card-requirements dl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px;margin:0}
+.tavora-item-card-requirements dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;color:var(--ic-text)}
+.tavora-item-card-rich-details{min-width:0;flex:1}
+.tavora-item-card-heading{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-right:13px}
+.tavora-item-card[data-layout=rich] .tavora-item-card-type{margin-top:5px}
+.tavora-item-card[data-layout=rich] .tavora-item-card-effect{margin-top:9px;border-radius:6px}
+.tavora-item-card-props{margin-top:9px;line-height:1.75;color:var(--ic-muted)}
+.tavora-item-card-prop-value{color:var(--ic-text);font-variant-numeric:tabular-nums}
+.tavora-item-card[data-layout=rich] .tavora-item-card-section{margin-top:10px;padding-top:9px}
+.tavora-item-card[data-layout=rich] .tavora-item-card-section>p{margin-bottom:5px;font-size:var(--ic-small-size)}
+.tavora-item-card[data-layout=rich] .tavora-item-card-section ul{line-height:1.8;color:var(--ic-text)}
+.tavora-item-card[data-layout=rich] .tavora-item-card-section li{margin:1px 0}
+.tavora-item-card[data-layout=rich] .tavora-item-card-affixes{font-size:var(--ic-meta-size);line-height:2}
+.tavora-item-card[data-layout=rich] .tavora-item-card-badge{padding:1px 5px;background:color-mix(in srgb,var(--foreground) 8%,transparent)}
+
+/* The Path of Exile 2 look (`look: "poe"`), as the shared tooltip draws it: square corners, the game's gold, brown and
+   purple, the rarity colour on the title (`tone`), the affix tags in a typewriter face. Like a skin, it stays the same in
+   every theme but for the surface, which is the theme's background, as above the workspace. */
+/* rules-allow: color, font-family the Path of Exile 2 tooltip's own colours and faces, the same as the shared tooltip's */
+.tavora-item-card[data-look=poe]{--ic-surface:var(--background);--ic-text:var(--foreground);--ic-muted:#aaa398;--ic-accent:#aaaaff;--ic-line:#3a3229;--ic-box:#221c15;--ic-box-text:#eee7d9;--ic-art:color-mix(in srgb,#eee7d9 5%,transparent);border-color:#81613e;border-radius:0;font-family:"Segoe UI",var(--font-sans,sans-serif)}
+/* rules-allow: color the Path of Exile 2 rarity colours */
+.tavora-item-card[data-look=poe] h3[data-tone=normal]{color:#dfd9ce}.tavora-item-card[data-look=poe] h3[data-tone=magic]{color:#a8a5ff}.tavora-item-card[data-look=poe] h3[data-tone=rare]{color:#f0dd79}.tavora-item-card[data-look=poe] h3[data-tone=unique]{color:#e3a274}
+/* rules-allow: color the Path of Exile 2 tooltip's own colours, the same as the shared tooltip's */
+.tavora-item-card[data-look=poe] .tavora-item-card-badge{border-color:#5a4d35;background:#282116;color:#c9b68c}.tavora-item-card[data-look=poe] .tavora-item-card-rich-art>img{border-color:#60543b}.tavora-item-card[data-look=poe] .tavora-item-card-requirements dd{color:#dbccb1}.tavora-item-card[data-look=poe] .tavora-item-card-prop-value{color:#aaaaff}
+/* rules-allow: color, font-family the Path of Exile 2 tooltip's own colours and its typewriter face for affix tags */
+.tavora-item-card[data-look=poe] .tavora-item-card-section>p{color:#9b8b70}.tavora-item-card[data-look=poe] .tavora-item-card-section ul{color:#aaaaff}.tavora-item-card[data-look=poe] .tavora-item-card-section li>span:first-child::before{color:#a08b55}.tavora-item-card[data-look=poe] .tavora-item-card-section li[data-connected]{border-left-color:#9e8550}.tavora-item-card[data-look=poe] .tavora-item-card-section li span+span{color:#b9a67f}.tavora-item-card[data-look=poe] .tavora-item-card-affixes{font-family:Consolas,var(--font-mono,monospace)}.tavora-item-card[data-look=poe] .tavora-item-card-affixes small{font-family:"Segoe UI",var(--font-sans,sans-serif);color:#c9b68c}
+/* rules-allow: color the Path of Exile 2 tooltip's own colours, the same as the shared tooltip's */
+.tavora-item-card[data-look=poe] .tavora-item-card-art-tag{border-color:#5a4d35;background:color-mix(in srgb,var(--background) 82%,transparent)}.tavora-item-card[data-look=poe] .tavora-item-card-effect{border:0;color:#eee7d9}
 
 /* The unit card (`layout: "unit"`): a game unit as the game shows it, like the tooltip page's (shared/tooltip-document.ts
    in the app). The portrait sticks out at the top left over the title bar and the body. The bar takes the skin's `bar`

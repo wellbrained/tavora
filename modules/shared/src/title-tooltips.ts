@@ -15,16 +15,21 @@ export interface TitleTooltipOptions {
 export const REASON_ATTRIBUTE = "data-tavora-reason";
 /** On an element whose hint should open beside it (`left` or `right`) instead of below, such as a menu row that must not be covered. */
 export const SIDE_ATTRIBUTE = "data-tooltip-side";
+/**
+ * On an element with a `title`: a second, softer line under it in the hint ("Pin" over "Keeps the panel on top"). The
+ * title stays a short label; set the description along with it. Screen readers hear it as the element's description.
+ */
+export const DESCRIPTION_ATTRIBUTE = "data-tooltip-description";
 
 /** One readable hover layer for title hints, in official modules and in the host: the compact card below the element, as the rail's.
- * An element's `aria-keyshortcuts` shows beside the hint as key caps. */
+ * An element's `aria-keyshortcuts` shows beside the hint as key caps, and its `data-tooltip-description` as a line under it. */
 export function installTitleTooltips(doc: Document = document, options: TitleTooltipOptions = {}): () => void {
   const existing = installed.get(doc);
   if (existing) return existing;
   const container = doc.createElement("div");
   container.dataset.tooltipLayer = "titles";
   doc.body.append(container);
-  const state = reactive({ open: false, title: "", side: "bottom" as TooltipSide, shortcut: undefined as string | undefined, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
+  const state = reactive({ open: false, title: "", description: undefined as string | undefined, side: "bottom" as TooltipSide, shortcut: undefined as string | undefined, anchor: { left: 0, top: 0, right: 0, bottom: 0 } });
   const id = "tavora-title-tooltip";
   const suppressed = new WeakSet<Element>();
   /** The `aria-description` this layer wrote on an element, so only that is ever changed or taken away. */
@@ -53,7 +58,8 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     }
     current = null;
   }
-  const app = createApp({ render: () => h(Tooltip, { ...state, title: "", description: state.title, id, compact: true, onDismiss: hide }) });
+  // A hint is one line in the title's place; with a description, the title heads it and the description goes under it.
+  const app = createApp({ render: () => h(Tooltip, { ...state, title: state.description ? state.title : "", description: state.description ?? state.title, id, compact: true, onDismiss: hide }) });
   app.mount(container);
 
   function remember(element: Element, value: string) {
@@ -62,23 +68,27 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     // Removing it here would make that later update invisible to MutationObserver.
     suppressed.add(element);
     element.setAttribute("title", "");
+    const more = element.getAttribute(DESCRIPTION_ATTRIBUTE)?.trim();
     if (element.hasAttribute("data-tooltip-label") || (!element.hasAttribute("aria-label") && !element.textContent?.trim())) {
       element.setAttribute("aria-label", value);
       element.setAttribute("data-tooltip-label", "true");
-      forgetDescription(element);
-    } else describe(element, value);
+      if (more) describe(element, more);
+      else forgetDescription(element);
+    } else describe(element, value, more);
   }
   /** An element that has its own name keeps the hint as its description, so a screen reader still gets the full text
    * (a shortened path, say) after the `title` has moved. A hint that only repeats the name adds nothing. */
-  function describe(element: Element, value: string) {
+  function describe(element: Element, value: string, more?: string) {
     const name = (element.getAttribute("aria-label") ?? element.textContent ?? "").replace(/\s+/g, " ").trim();
     const hint = value.replace(/\s+/g, " ").trim();
     const now = element.getAttribute("aria-description");
     // An `aria-description` somebody else set (the author, or a control's reason for being off) is theirs, and stays.
     if (element.hasAttribute(REASON_ATTRIBUTE) || (now !== null && described.get(element) !== now)) return void described.delete(element);
-    if (name.includes(hint)) return forgetDescription(element);
-    element.setAttribute("aria-description", value);
-    described.set(element, value);
+    // A hint that only repeats the name adds nothing; its description, if any, still does.
+    const text = name.includes(hint) ? more : more ? `${value}. ${more}` : value;
+    if (!text) return forgetDescription(element);
+    element.setAttribute("aria-description", text);
+    described.set(element, text);
   }
   function forgetDescription(element: Element) {
     if (described.get(element) === element.getAttribute("aria-description")) element.removeAttribute("aria-description");
@@ -98,6 +108,8 @@ export function installTitleTooltips(doc: Document = document, options: TitleToo
     gone.observe(doc.body, { childList: true, subtree: true });
     if (element.getAttribute("title")) remember(element, element.getAttribute("title")!);
     state.title = title;
+    // A control that is off shows its reason alone; the description belongs to its own hint.
+    state.description = element.getAttribute(REASON_ATTRIBUTE) ? undefined : element.getAttribute(DESCRIPTION_ATTRIBUTE)?.trim() || undefined;
     const side = element.getAttribute(SIDE_ATTRIBUTE);
     state.side = side === "left" || side === "right" || side === "top" ? side : "bottom";
     state.shortcut = element.getAttribute("aria-keyshortcuts") || undefined;
