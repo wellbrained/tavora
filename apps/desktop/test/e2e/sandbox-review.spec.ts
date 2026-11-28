@@ -8,7 +8,7 @@ import { readdir, stat } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { expectModuleText, HOSTILE, inModule, launch, openModule, panels, realClick, VANILLA } from "./harness";
+import { expectModuleText, HOSTILE, inModule, launch, openModule, panels, realClick, VANILLA, waitForShown } from "./harness";
 
 async function hostileReady(app: ElectronApplication): Promise<void> {
   await expect.poll(() => inModule(app, HOSTILE, "typeof window.flood").catch(() => null)).toBe("function");
@@ -135,7 +135,9 @@ test("a module page can't open the system's file or folder picker (security.md, 
   await hostileReady(app);
   await expect.poll(() => inModule(app, HOSTILE, "typeof window.filePickers")).toBe("function");
 
-  // The user's own click on a folder input: cancelled before Chromium opens anything.
+  // The user's own click on a folder input: cancelled before Chromium opens anything. A panel's view takes clicks only
+  // once it is shown, and this page (which never connects) is shown a moment after it loaded.
+  await waitForShown(app, HOSTILE);
   await realClick(app, HOSTILE, '[data-testid="file-input"]');
   await expect.poll(() => inModule<string[]>(app, HOSTILE, "window.realClickSeen")).toEqual(["click:cancelled"]);
 
