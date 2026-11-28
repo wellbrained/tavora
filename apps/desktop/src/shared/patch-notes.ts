@@ -30,409 +30,78 @@ export const PATCH_NOTES: readonly PatchNote[] = [
   {
     version: "0.26.0",
     date: "2026-11-28",
-    title: "New module controls and a new look",
+    title: "Tidier controls and new item cards",
     notes: [
-      "Many small fixes and clearer controls in the app, the modules and the overlays.",
+      "Path of Exile 2 item cards get a new frame: a soft glow in the rarity colour, small diamonds on the corners and fading lines between sections.",
+      "Item cards inside a panel now look the same as Tavora's own tooltip, Path of Exile items too.",
+      "Cards from modules can show bold and italic text, lists, tags and a footer line.",
+      "A card pinned inside a panel has a close button, and Esc takes you back to where you were.",
+      "A card taller than its panel is no longer cut off. Scroll it with the mouse wheel.",
+      "On a touch screen, press and hold something to see its tooltip.",
+      "Settings say plainly whether something shows in your game, and when you see it. Settings > Overlays & Streaming calls its game part In game.",
+      "In the overlay layout settings, \"Mixed\" is now small grey text instead of a badge next to the controls.",
+      "The toolbars at the top of Notes, To-Dos, Clock & Counter, PDF Viewer and Whiteboard look the same, and the arrow keys move along them. A select, switch or search at the start gets a Tab stop too.",
+      "Menus and popovers from a toolbar button no longer jump to the top left corner, and a toolbar's search keeps the focus when results show under it.",
+      "A switched-off menu entry shows why right in its row, in modules' menus too. A switched-off Delete or Clear is no longer red.",
+      "A dialog's message sits under the title row, with the same room whether there's an icon or not.",
+      "Dialogs come in four set widths, so the same kind of dialog is the same size everywhere. Some are a little wider, so labels have room.",
+      "Choices in dialogs are rows you can click anywhere on.",
+      "A long choice in a list field stays on one line and ends in …. Point at it or focus it to read the whole choice.",
+      "A setting's name stays readable: its control moves under it when there's no room beside it.",
+      "With the corners set fully round (Settings > Appearance), buttons, fields, tags and pills give their text a bit more room at the ends.",
+      "Tabs that go on to a second row no longer run over what's below them.",
+      "Theme pictures show again in Settings > Appearance.",
+      "Search (Ctrl+K) shows what you typed in bold.",
+      "Add a game: a game's module count sits at the end of its row, and a game you add by its own name sits under Not on the list.",
+      "To-Dos: click anywhere in the square around the circle to tick a to-do, and a faint tick shows when you hover it. Keep finished to-dos has its switch on the right.",
+      "Whiteboard: its menus show in full why Clear, Copy and Save are off.",
+      "System Monitor: the CPU, graphics and memory cards got a small icon in the corner.",
+      "Titles in Notes and To-Dos, and the browser's address, show an edge when you point at them.",
+      "Rows and tiles in modules can show a card when you point at them or reach them with Tab.",
+      "The side rail, links, list rows, tick rows and cards in the app use Tavora's shared controls, so they look and behave the same everywhere.",
+      "Screen readers read the rating bars and System Monitor's drive bars as amounts, not as something still loading.",
+      "With reduced motion, the line showing where a dragged row will land is clearer.",
+      "On a narrow window, Community modules in the module list no longer leaves an empty line under its name.",
+      "The UI Playground has a new Cards page and a checkbox row.",
+      "Publish: the id step says why an id can't be used, a prefix you already hold is ready at once, and Publish says what's left to fix when you point at it. Its search, checkboxes and buttons match the rest of Tavora.",
+      "Save to project works when your module already lists 100 versions: the oldest one goes.",
+      "Publisher keys can have a short note (Settings > Developer > Publishing), and Tavora's own key is labelled Tavora official. Publish tokens can be renamed, and the token form says what to type and what you get.",
     ],
     prs: [
       { number: 1054, title: "Raise to 0.26.0 for the release" },
-    ],
-  },
-  {
-    version: "0.25.77",
-    date: "2026-11-28",
-    title: "Dialogs and Path of Exile 2 cards",
-    notes: [
-      "A dialog's message now sits under the title row, with the same room whether there's an icon or not.",
-      "Path of Exile 2 item cards get a new frame: a soft glow in the rarity colour, small diamonds on the corners and fading lines between sections.",
-    ],
-    prs: [
       { number: 1053, title: "Kit: dialog header rule B, PoE card frame 4c" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.76",
-    date: "2026-11-28",
-    title: "New frame for Path of Exile 2 item cards",
-    notes: [
-      "Path of Exile 2 item cards get corner pieces in the rarity colour and a diamond on each divider.",
-      "Tabs that go on to a second row no longer run over what's below them.",
-    ],
-    prs: [
       { number: 1051, title: "Kit: corner brackets on PoE item cards, wrapped tabs grow their list" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.75",
-    date: "2026-11-28",
-    title: "Round ends",
-    notes: [
-      "With the corners set fully round (Settings > Appearance), buttons, toggles, tags and fields give their text a bit more room at the ends, and an icon sits evenly in the curve.",
-      "Pills that are always round have a bit more room at their ends too: the Welcome page's quick-start buttons, a workspace's Running label and the small counts on the sidebar and maps.",
-    ],
-    prs: [
       { number: 1050, title: "Kit: pill padding for round ends" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "rail", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.25.74",
-    date: "2026-11-28",
-    title: "Long choices stay on one line",
-    notes: [
-      "A long choice in a list field now stays on one line and ends in …, so a row of fields keeps one height.",
-      "Hover or focus the field to read the whole choice.",
-    ],
-    prs: [
       { number: 1049, title: "Kit: a long Select value stays on one line; `wrap` gives it two" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.73",
-    date: "2026-11-27",
-    title: "Clearer menus and tiles",
-    notes: [
-      "In Hardware and Liquid Glass, the sidebar's Overlays button no longer gets a solid block when its page is open.",
-      "A switched-off Delete or Clear in a menu is no longer red.",
-      "Whiteboard's menus show in full why Clear, Copy and Save are off, and Clear lost its extra tooltip.",
-    ],
-    prs: [
-      { number: 1047, title: "Kit: bare pressed tiles keep their look, off red rows aren't red, module check allows colour fades" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.25.72",
-    date: "2026-11-27",
-    title: "Formatting in item cards",
-    notes: [
-      "Cards from modules can show bold and italic text, lists, tags and a footer line.",
-    ],
-    prs: [
       { number: 1048, title: "SDK 0.4.17: formatting in the shared tooltip (bold, italic, blocks, footer)" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "privacy", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.25.71",
-    date: "2026-11-27",
-    title: "Amount bars",
-    notes: [
-      "Screen readers now read the rating bars and System Monitor's drive bars as amounts, not as something still loading.",
-    ],
-    prs: [
-      { number: 1044, title: "Kit: Meter for amounts; rating bars and drive bars use it" },
-    ],
-    tags: ["calculator", "catalog", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.70",
-    date: "2026-11-27",
-    title: "Menu reasons in the row",
-    notes: [
-      "A switched-off menu entry now shows why right in its row, where its shortcut would be.",
-    ],
-    prs: [
+      { number: 1047, title: "Kit: bare pressed tiles keep their look, off red rows aren't red, module check allows colour fades" },
       { number: 1046, title: "Kit: a menu row shows why it is off in the row, not in a tooltip" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "privacy", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.25.69",
-    date: "2026-11-27",
-    title: "Tooltips you can pin",
-    notes: [
-      "Item cards inside a panel now look the same as Tavora's own tooltip, Path of Exile items too.",
-      "A card pinned inside a panel has a close button, and Esc takes you back to where you were.",
-      "On a touch screen, press and hold something to see its tooltip.",
-    ],
-    prs: [
       { number: 1045, title: "Kit: tooltip leftovers (PoE look, pin in the panel, freestanding parts, tokens)" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.68",
-    date: "2026-11-27",
-    title: "Why a menu entry is off",
-    notes: [
-      "A switched-off entry in a module's menu can now say why: point at it or move to it with the arrow keys.",
-    ],
-    prs: [
+      { number: 1044, title: "Kit: Meter for amounts; rating bars and drive bars use it" },
       { number: 1043, title: "SDK 0.4.16: a reason for switched-off entries in Tavora's menus (ui.showMenu disabledReason)" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "privacy", "publishing", "sdk", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
-  },
-  {
-    version: "0.25.67",
-    date: "2026-11-27",
-    title: "Long names in pickers",
-    notes: [
-      "A choice too long for its button now shows whole when you point at it.",
-    ],
-    prs: [
       { number: 1040, title: "Kit: Picker shows a cut-off choice in its tooltip and takes disabled-reason" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.66",
-    date: "2026-11-27",
-    title: "Narrow settings dialogs",
-    notes: [
-      "A setting's name stays readable: its control moves under it when there's no room beside it.",
-    ],
-    prs: [
       { number: 1039, title: "Kit: a narrow settings row puts its control under the name" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.65",
-    date: "2026-11-27",
-    title: "Clearer in-game texts",
-    notes: [
-      "Settings say plainly whether something shows in your game, and when you see it.",
-      "Settings > Overlays & Streaming calls its game part In game.",
-    ],
-    prs: [
       { number: 1037, title: "Say plainly whether something shows in your game" },
-    ],
-    tags: ["clock-counter"],
-  },
-  {
-    version: "0.25.64",
-    date: "2026-11-27",
-    title: "Tidier overlay layout",
-    notes: [
-      "In the overlay layout settings, \"Mixed\" is now small grey text instead of a badge next to the controls.",
-    ],
-    prs: [
       { number: 1036, title: "Keep badges out of control rows" },
-    ],
-    tags: ["overlays"],
-  },
-  {
-    version: "0.25.63",
-    date: "2026-11-27",
-    title: "Toolbar menus open next to their button",
-    notes: [
-      "Menus and popovers from a toolbar button no longer jump to the top left corner.",
-      "A search field in a toolbar keeps the focus when a row of results or filters appears under it.",
-    ],
-    prs: [
       { number: 1035, title: "Kit Toolbar: popups open next to their button" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.62",
-    date: "2026-11-27",
-    title: "Tab reaches a field at the start of a toolbar",
-    notes: [
-      "A select, switch or search at the start of a tool row now gets a Tab stop.",
-    ],
-    prs: [
       { number: 1033, title: "Kit Toolbar: Tab reaches a field before the first tool" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.61",
-    date: "2026-11-26",
-    title: "Tall cards and drop lines",
-    notes: [
-      "A card taller than its panel is no longer cut off. Scroll it with the mouse wheel.",
-      "With reduced motion, the line showing where a dragged row will land is clearer.",
-    ],
-    prs: [
       { number: 1031, title: "Kit: bare ZoomPane, scrolling tall cards, one drop line, flush Table" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.60",
-    date: "2026-11-26",
-    title: "Icons on the System Monitor cards",
-    notes: [
-      "System Monitor: the CPU, graphics and memory cards got a small icon in the corner.",
-    ],
-    prs: [
       { number: 1030, title: "StatTile for live readings; System Monitor cards on it" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.59",
-    date: "2026-11-26",
-    title: "Cleaner search lists",
-    notes: [
-      "Search (Ctrl+K) shows what you typed in bold.",
-      "In Add a game, a game's module count sits at the end of its row.",
-      "A game you add by its own name sits under Not on the list.",
-    ],
-    prs: [
       { number: 1029, title: "Kit: palette parts for big search lists; search and Add a game move onto them" },
-    ],
-    tags: ["calculator", "clock-counter", "games", "notes", "onboarding", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.58",
-    date: "2026-11-26",
-    title: "Easier ticks",
-    notes: [
-      "To-Dos: click anywhere in the square around the circle to tick a to-do, and a faint tick shows when you hover it.",
-      "To-Dos: Keep finished to-dos has its switch on the right.",
-    ],
-    prs: [
       { number: 1028, title: "SwitchField at the end of the row; bigger tick area in To-Dos" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.57",
-    date: "2026-11-26",
-    title: "Tidier fields and lists",
-    notes: [
-      "Theme pictures show again in Settings > Appearance.",
-      "Titles in Notes and To-Dos, and the browser's address, show an edge when you point at them.",
-      "Choices in dialogs are rows you can click anywhere on.",
-    ],
-    prs: [
       { number: 1027, title: "Kit: bare fields, picture in a Select, Badge numbers, preview align, RadioField" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "publishing", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
-  },
-  {
-    version: "0.25.56",
-    date: "2026-11-26",
-    title: "Clearer id step when publishing",
-    notes: [
-      "The id step names the module's id and why it can't be used.",
-      "A prefix you already hold is ready to use at once, without Check.",
-      "Publish looks off while something is left to fix, and says what when you point at it.",
-    ],
-    prs: [
       { number: 1026, title: "Publish: clearer id step, held prefix ready at once, Publish says why it is off" },
-    ],
-    tags: ["publishing", "website"],
-  },
-  {
-    version: "0.25.55",
-    date: "2026-11-26",
-    title: "Full patch notes",
-    notes: [
-      "Save to project now works when your module already lists 100 versions: the oldest one goes.",
-    ],
-    prs: [
       { number: 1025, title: "Keep module patch notes within their limit; steady the Notes quit test" },
-    ],
-    tags: ["modules", "publishing", "website"],
-  },
-  {
-    version: "0.25.54",
-    date: "2026-11-26",
-    title: "Small fixes in the app",
-    notes: [
-      "On a narrow window, Community modules in the module list no longer leaves an empty line under its name.",
-    ],
-    prs: [
       { number: 1024, title: "Kit: icons on ChoiceCard, a bare Button, and the rail on it" },
-    ],
-    tags: ["accounts", "calculator", "clock-counter", "games", "modules", "notes", "overlays", "pdf-viewer", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.53",
-    date: "2026-11-26",
-    title: "Tidier Notes and To-Dos",
-    notes: [
-      "Search, checkboxes, the description field and buttons match the rest of Tavora.",
-    ],
-    prs: [
       { number: 1023, title: "Notes and To-Dos: move hand-built controls onto the kit" },
-    ],
-    tags: ["notes", "todos"],
-  },
-  {
-    version: "0.25.52",
-    date: "2026-11-26",
-    title: "Same controls in more places",
-    notes: [
-      "The side rail, links, list rows, tick rows and cards in the app now use Tavora's shared controls, so they look and behave the same everywhere.",
-      "Picking an icon for a game in its menu now shows the current choice with the shared highlight instead of a check mark.",
-    ],
-    prs: [
       { number: 1022, title: "App renderer on the kit: rail, links, rows, tick rows, cards" },
-    ],
-    tags: ["accounts", "catalog", "games", "icons", "modules", "onboarding", "overlays", "privacy", "publishing", "rail", "settings", "workspace"],
-  },
-  {
-    version: "0.25.51",
-    date: "2026-11-26",
-    title: "Rows that show a card",
-    notes: [
-      "Rows and tiles in modules can show a card when you point at them or reach them with Tab.",
-    ],
-    prs: [
-      { number: 1019, title: "Kit HoverRow and StatTile hoverable: rows and tiles that show a card but aren't buttons" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.50",
-    date: "2026-11-26",
-    title: "Toolbars that match",
-    notes: [
-      "The toolbars at the top of Notes, To-Dos, Clock & Counter, PDF Viewer and Whiteboard look the same, and the arrow keys move along them.",
-      "The toolbar next to a selected frame on the canvas and the link and picture bars in Notes take your style's look.",
-    ],
-    prs: [
       { number: 1021, title: "Kit Toolbar: bar and floating looks, app and built-in modules on it" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.49",
-    date: "2026-11-26",
-    title: "Cards and checkbox rows in the shared controls",
-    notes: [
-      "The UI Playground has a new Cards page and a checkbox row.",
-    ],
-    prs: [
       { number: 1020, title: "Kit: Card, ChoiceCard, CheckCard and CheckboxField" },
-    ],
-    tags: ["calculator", "clock-counter", "notes", "pdf-viewer", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.48",
-    date: "2026-11-26",
-    title: "Dialogs in four widths",
-    notes: [
-      "Dialogs come in four set widths, so the same kind of dialog is the same size everywhere.",
-      "Some dialogs are a little wider, so labels have room.",
-    ],
-    prs: [
+      { number: 1019, title: "Kit HoverRow and StatTile hoverable: rows and tiles that show a card but aren't buttons" },
       { number: 1018, title: "Dialogs in four widths: size and anchor on DialogContent" },
-    ],
-    tags: ["calculator", "clock-counter", "games", "icons", "notes", "overlays", "pdf-viewer", "privacy", "publishing", "settings", "system-monitor", "todos", "ui-kit", "whiteboard"],
-  },
-  {
-    version: "0.25.47",
-    date: "2026-11-26",
-    title: "Notes on publisher keys",
-    notes: [
-      "Add a short note to each publisher key in Settings > Developer > Publishing, so you know what it is for.",
-      "Tavora's own key is labelled Tavora official.",
-      "Rename a publish token any time.",
-      "The token form now says what to type and what you get.",
-    ],
-    prs: [
       { number: 1017, title: "Publisher keys: a note on each key, renamable tokens, a clearer token form" },
     ],
-    tags: ["accounts", "publishing", "service", "website"],
+    tags: ["accounts", "calculator", "catalog", "clock-counter", "games", "icons", "modules", "notes", "onboarding", "overlays", "pdf-viewer", "privacy", "publishing", "rail", "sdk", "service", "settings", "system-monitor", "todos", "ui-kit", "website", "whiteboard", "workspace"],
   },
   {
     version: "0.25.46",
