@@ -643,12 +643,5 @@
       "Dialogs you open with the keyboard appear instantly.",
       "Toasts wait while the panel is hidden or the game is in front, and slide in and out from their edge."
     ]
-  },
-  {
-    "version": "0.1.19",
-    "date": "2026-11-02",
-    "notes": [
-      "Settings ask Tavora for the usual dialog size through the shared settings parts; nothing looks different."
-    ]
   }
 ]

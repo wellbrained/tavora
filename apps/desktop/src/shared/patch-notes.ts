@@ -28,6 +28,21 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.26.4",
+    date: "2026-11-28",
+    title: "Safer deleting",
+    notes: [
+      "Whiteboard asks before it deletes a board.",
+      "PDF Viewer asks before it deletes a copy whose original is gone.",
+      "Clock & Counter asks before it makes a new OBS link.",
+      "A removed link between counters can be undone, and a deleted counter comes back with its links.",
+    ],
+    prs: [
+      { number: 1059, title: "Ask before deleting what can't be put back in built-in modules" },
+    ],
+    tags: ["clock-counter", "pdf-viewer", "whiteboard"],
+  },
+  {
     version: "0.26.3",
     date: "2026-11-28",
     title: "Safer start",
