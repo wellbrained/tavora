@@ -4,16 +4,27 @@ import path from "node:path";
 import { renameHeld } from "./rename-held";
 
 /**
- * Whether an opened file is the one at `file` now, not followed through a link: its handle's volume and file id match
- * an lstat of the path. Closes the gap between checking a path and opening it (audit L9): a link or file swapped in
- * between gives other ids (or a link's own), so the read is refused. A file system that gives no file id (0) can't be
- * compared this way and passes; the other checks still hold for it.
+ * Opens a file for reading only when it is the file that was checked, else null (audit L9). `inPlace` checks the path
+ * (its real place, links and junctions in its folders too). The file's id is noted before that check, the opened file
+ * must have the same one, and the path is checked again after the open. So a file, a link or a junction in its folders
+ * swapped in between is refused; comparing with the path only after the open would follow a swapped folder too.
+ * A drive that gives files no id (0) is told apart only by the path checks.
  */
-export async function openedFileIs(handle: FileHandle, file: string): Promise<boolean> {
-  const [opened, there] = await Promise.all([handle.stat({ bigint: true }), lstat(file, { bigint: true }).catch(() => null)]);
-  if (!there || there.isSymbolicLink()) return false;
-  if (opened.ino === 0n || there.ino === 0n) return opened.dev === there.dev;
-  return opened.dev === there.dev && opened.ino === there.ino;
+export async function openChecked(file: string, inPlace: () => Promise<boolean>): Promise<FileHandle | null> {
+  const before = await lstat(file, { bigint: true }).catch(() => null);
+  if (!before || before.isSymbolicLink() || !(await inPlace())) return null;
+  const handle = await open(file, "r");
+  let kept = false;
+  try {
+    const opened = await handle.stat({ bigint: true });
+    // A volume's number can come with 32 or 64 bits, depending on the Windows call behind it: its low 32 always match.
+    const sameVolume = BigInt.asUintN(32, opened.dev) === BigInt.asUintN(32, before.dev);
+    if (!sameVolume || opened.ino !== before.ino || !(await inPlace())) return null;
+    kept = true;
+    return handle;
+  } finally {
+    if (!kept) await handle.close();
+  }
 }
 
 /** Whether the path can be looked at; any error, a missing path or one that can't be read, counts as no. */

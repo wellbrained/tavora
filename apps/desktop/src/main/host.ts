@@ -1,9 +1,9 @@
 import { ChosenFolders, folderHost, type FolderHost, type FolderPlaces } from './folder-access';
 import { showInBackground, windowLook, type WindowStart } from "./background-window";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import os from "node:os";
-import { appendFile, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
 import { allowsPersonalWorkspaces, continuingPanelType, folderKey, isModuleId, OFFICIAL_PINS, officialOn, panelTypes, translateManifest, withGamePanelType, type ModuleManifest } from "@tavora/module-schema";
@@ -1580,7 +1580,12 @@ export class Host {
   /** One line per update event in the app's data folder, to see what the updater did. */
   private logUpdate(line: string): void {
     console.log(`[tavora] ${line}`);
-    void appendFile(path.join(this.options.userData, "updates.log"), `${new Date().toISOString()} ${line}\n`).catch(() => undefined);
+    try {
+      // At once, so a line written while Tavora quits isn't lost.
+      appendFileSync(path.join(this.options.userData, "updates.log"), `${new Date().toISOString()} ${line}\n`);
+    } catch {
+      // No log line; nothing depends on it.
+    }
   }
 
   /** The workspace shown now, by id; null on Home. */

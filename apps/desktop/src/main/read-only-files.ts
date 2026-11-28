@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { open, readFile, realpath, mkdir, stat } from 'node:fs/promises';
+import { readFile, realpath, mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { isGameId, isModuleId, isOwnerId } from '@tavora/module-schema';
 import { HostError } from './errors';
-import { openedFileIs, writeFileAtomic } from './fsutil';
+import { openChecked, writeFileAtomic } from './fsutil';
 import { keepNewerCopy, setAside } from './json';
 import { STORE_VERSIONS } from './saved-versions';
 import { MAX_READ_ONLY_FILE_BYTES, type ReadOnlyFile, type ReadOnlyFileState } from '@tavora/sdk/protocol';
@@ -117,11 +117,11 @@ export class ReadOnlyFiles {
     return found.size;
   }
   private async bytes(entry: Entry): Promise<Buffer> {
-    if (await realpath(entry.path) !== entry.target) throw new HostError('PERMISSION_DENIED','This file now points somewhere else. Choose it again.');
-    // The checked place itself, then a check that the opened file is what is there now (audit L9).
-    const handle = await open(entry.target,'r');
+    const inPlace = async () => await realpath(entry.path) === entry.target;
+    // Opens the checked place itself, and only the file that was checked there.
+    const handle = await inPlace() ? await openChecked(entry.target, inPlace) : null;
+    if (!handle) throw new HostError('PERMISSION_DENIED','This file now points somewhere else. Choose it again.');
     try {
-      if (!await openedFileIs(handle, entry.target)) throw new HostError('PERMISSION_DENIED','This file now points somewhere else. Choose it again.');
       const stat = await handle.stat();
       if (!stat.isFile()) throw new HostError('INVALID_PARAMS','Choose a file, not a folder.');
       if (stat.size > MAX_READ_ONLY_BYTES) throw new HostError('QUOTA_EXCEEDED','Choose a file smaller than 50 MB.');

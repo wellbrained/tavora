@@ -25,7 +25,7 @@ import { PanelSession, type PanelConnectors } from "./panel-session";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
 import { takeUploadSlot, type UploadSlots } from "./upload-slots";
-import { serveClipboard } from "./clipboard-http";
+import { json, serveClipboard } from "./clipboard-http";
 import { cleanPictureName, servePictureSave } from "./picture-save-http";
 import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { serveFileOpen, serveFileSave } from "./table-file-http";
@@ -171,12 +171,6 @@ function uploadsOf(ses: Session): Uploads {
   return uploads;
 }
 
-const TOO_MANY_UPLOADS = () =>
-  new Response(JSON.stringify({ error: { code: "QUOTA_EXCEEDED", message: "too many files are being stored at once; try again when one is done" } }), {
-    status: 429,
-    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
-  });
-
 /** Answers a request to the files address, counting one that writes for as long as it runs. */
 async function countWrite(ses: Session, request: Request, serve: () => Promise<Response>): Promise<Response> {
   if (request.method === "GET" || request.method === "HEAD") return serve();
@@ -187,7 +181,8 @@ async function countWrite(ses: Session, request: Request, serve: () => Promise<R
   let free: (() => void) | null = null;
   try {
     const slot = takeUploadSlot(uploads);
-    if (!slot) return TOO_MANY_UPLOADS();
+    // BAD_REQUEST, as for too many calls: QUOTA_EXCEEDED would read as "the storage is full".
+    if (!slot) return json(429, { error: { code: "BAD_REQUEST", message: "too many files are being stored at once; try again when one is done" } });
     free = await slot;
     return await serve();
   } finally {

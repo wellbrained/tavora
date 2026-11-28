@@ -390,17 +390,18 @@ describe("UpdateManager", () => {
       const refused: DownloadedInfoLike[] = [];
       const logs: string[] = [];
       const hashed: string[] = [];
+      const told: string[] = [];
       const manager = new UpdateManager({
         updater: updater as unknown as UpdaterLike,
         verify: async () => ({ ...SIGNED, installer: { file: "C:/cache/Tavora-Setup-0.3.0.exe", sha512: "checked" } }),
         rehash: (path) => (hashed.push(path), file()),
         onRefused: (info) => refused.push(info),
         autoDownload: true,
-        onChange: () => {},
+        onChange: (state) => told.push(state.status),
         log: (line) => logs.push(line),
         timers: fakeTimers().timers,
       });
-      return { updater, manager, refused, logs, hashed };
+      return { updater, manager, refused, logs, hashed, told };
     };
     const same = run(() => "checked");
     same.updater.emit("update-available", { version: "0.3.0" });
@@ -423,6 +424,8 @@ describe("UpdateManager", () => {
         expect(changed.refused.map((info) => info.version)).toEqual(["0.3.0"]);
         expect(changed.manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: "refused" });
         expect(changed.logs.some((line) => line.startsWith("update 0.3.0 refused before it ran: "))).toBe(true);
+        // While Tavora quits the window is gone: the state changes, and nobody is told.
+        expect(changed.told.at(-1)).toBe(install === "restart" ? "available" : "ready");
         // Nothing is ready any more: neither way starts it later.
         changed.manager.restartNow();
         changed.manager.installOnQuit(0);

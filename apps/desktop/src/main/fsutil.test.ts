@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, open, readdir, readFile, rename, symlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rename, symlink, unlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +9,7 @@ vi.mock("./rename-held", async (original) => {
   return { renameHeld: (from: string, to: string) => (cutOff.value ? new Promise<void>(() => undefined) : actual.renameHeld(from, to)) };
 });
 
-import { LEFTOVER_TEMP_AGE_MS, openedFileIs, SerialQueue, settleSerial, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
+import { LEFTOVER_TEMP_AGE_MS, openChecked, SerialQueue, settleSerial, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
 
 let root: string;
 const now = Date.now();
@@ -214,21 +214,77 @@ describe("SerialQueue", () => {
   });
 });
 
-describe("openedFileIs (audit L9)", () => {
-  it("is true for the file at the path, and false once another file was swapped in or the path is gone", async () => {
+describe("openChecked (audit L9)", () => {
+  /** A checked folder with a file, and one outside it whose file has the same name. */
+  async function folders() {
     const dir = await mkdtemp(path.join(tmpdir(), "tavora-opened-"));
-    const file = path.join(dir, "save.json");
-    await writeFile(file, "the checked file");
-    const handle = await open(file, "r");
-    try {
-      expect(await openedFileIs(handle, file)).toBe(true);
-      // Moved away while open (Windows doesn't let a file be renamed over an open one) and another put in its place.
-      await rename(file, path.join(dir, "moved.json"));
-      await writeFile(file, "another file");
-      expect(await openedFileIs(handle, file)).toBe(false);
-      expect(await openedFileIs(handle, path.join(dir, "gone.json"))).toBe(false);
-    } finally {
-      await handle.close();
+    const inside = path.join(dir, "inside");
+    const outside = path.join(dir, "outside");
+    for (const [folder, text] of [[inside, "the checked file"], [outside, "a file elsewhere"]] as const) {
+      await mkdir(folder);
+      await writeFile(path.join(folder, "save.json"), text);
     }
+    return {
+      file: path.join(inside, "save.json"),
+      /** Another program puts a junction to the other folder in the checked folder's place. */
+      swap: async () => {
+        await rename(inside, path.join(dir, "aside"));
+        await symlink(outside, inside, "junction");
+      },
+      swapBack: async () => {
+        await unlink(inside);
+        await rename(path.join(dir, "aside"), inside);
+      },
+    };
+  }
+
+  it("opens the checked file, and nothing when it is gone or not in its place", async () => {
+    const { file } = await folders();
+    const handle = await openChecked(file, async () => true);
+    expect(await handle!.readFile("utf8")).toBe("the checked file");
+    await handle!.close();
+    expect(await openChecked(file, async () => false)).toBeNull();
+    expect(await openChecked(`${file}.gone`, async () => true)).toBeNull();
+  });
+
+  it("refuses a file swapped in after the check", async () => {
+    const { file } = await folders();
+    let checks = 0;
+    const check = async () => {
+      if (checks++ === 0) {
+        await rename(file, `${file}.aside`);
+        await writeFile(file, "another file");
+      }
+      return true;
+    };
+    expect(await openChecked(file, check)).toBeNull();
+  });
+
+  it("refuses a folder swapped for a junction after the check, where the path and the opened file agree", async () => {
+    const { file, swap } = await folders();
+    let checks = 0;
+    const check = async () => {
+      if (checks++ === 0) await swap();
+      return true;
+    };
+    expect(await openChecked(file, check)).toBeNull();
+  });
+
+  it("refuses a junction that was there before the check and is gone during it", async () => {
+    const { file, swap, swapBack } = await folders();
+    await swap();
+    let checks = 0;
+    const check = async () => {
+      if (checks++ === 0) await swapBack();
+      return true;
+    };
+    expect(await openChecked(file, check)).toBeNull();
+  });
+
+  it("checks the place again after the open", async () => {
+    const { file } = await folders();
+    let checks = 0;
+    expect(await openChecked(file, async () => checks++ === 0)).toBeNull();
+    expect(checks).toBe(2);
   });
 });

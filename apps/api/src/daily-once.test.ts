@@ -15,12 +15,14 @@ describe("DailyOnce", () => {
     expect(once.first("a")).toBe(false);
   });
 
-  it("counts nothing new once the day's marks are full, so a flood can't grow memory", () => {
+  it("forgets its oldest mark once full, so a flood can't grow memory or stop others from counting", () => {
     const now = Date.parse("2026-11-28T10:00:00Z");
     const once = new DailyOnce(() => now, 2);
     expect(once.first("a")).toBe(true);
     expect(once.first("b")).toBe(true);
+    expect(once.first("c")).toBe(true);
+    expect(once.first("b")).toBe(false);
     expect(once.first("c")).toBe(false);
-    expect(once.first("a")).toBe(false);
+    expect(once.first("a")).toBe(true);
   });
 });

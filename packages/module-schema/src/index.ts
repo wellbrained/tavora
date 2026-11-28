@@ -265,9 +265,9 @@ export const MAX_SCREENSHOT_PIXELS = 4096;
 export const UPLOAD_BUDGET_BYTES = 88 * 1024 * 1024;
 
 /**
- * Why the catalog would refuse an upload of this module, before it is sent. `catalogListingProblem`, the readme (UTF-8
- * text of at most MAX_README_BYTES) and the screenshots (a PNG or WebP by their own bytes, as named, at most
- * MAX_SCREENSHOT_BYTES and MAX_SCREENSHOT_PIXELS) and UPLOAD_BUDGET_BYTES. The catalog checks more (a PNG's checksums,
+ * Why the catalog would refuse an upload of this module, before it is sent. The limits of `catalogListingProblem`
+ * (without MAX_VERSION_DIGITS, which only the catalog checks), the readme (UTF-8 text of at most MAX_README_BYTES), the
+ * screenshots (a PNG or WebP by their own bytes, as named, at most MAX_SCREENSHOT_BYTES and MAX_SCREENSHOT_PIXELS) and UPLOAD_BUDGET_BYTES. The catalog checks more (a PNG's checksums,
  * the virus scan), so null means only that none of these will stop it. `describeUploadProblem` words it in English.
  */
 export type CatalogUploadProblem =

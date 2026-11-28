@@ -451,8 +451,7 @@ export interface TavoraSDK {
     /**
      * Puts a picture on the system clipboard, so the user can paste it anywhere. Call it from the click or key
      * press that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and one press copies one
-     * picture. PNG only, a complete one, at most 20 MB, 16384 pixels on a side and 40 million pixels (INVALID_PARAMS,
-     * QUOTA_EXCEEDED).
+     * picture. PNG only, a complete one, at most 20 MB and 16384 pixels on a side (INVALID_PARAMS, QUOTA_EXCEEDED).
      */
     writeImage(png: Blob): Promise<void>;
     /**
@@ -561,8 +560,7 @@ export interface TavoraSDK {
      * on when it is taken. Resolves with the name it was saved under, or null when the user closed the dialog; the
      * module never learns the folder. Tavora 0.20.16 and older save in Pictures\Tavora without asking.
      * Call it from the click or key press that asked for it: the host refuses it otherwise (PERMISSION_DENIED), and
-     * one press saves one picture. The same PNG limits as clipboard.writeImage apply, except that a picture may have up to
-     * 100 million pixels.
+     * one press saves one picture. The same PNG limits as clipboard.writeImage apply.
      */
     save(png: Blob, name?: string): Promise<{ fileName: string } | null>;
   };

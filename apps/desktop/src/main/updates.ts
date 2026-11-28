@@ -306,7 +306,7 @@ export class UpdateManager {
 
   /** Quits, installs the downloaded version and starts Tavora again. */
   restartNow(): void {
-    if (this.current.status !== "ready" || this.installStarted || !this.installerUnchanged()) return;
+    if (this.current.status !== "ready" || !this.installerUnchanged()) return;
     this.installStarted = true;
     this.updater.quitAndInstall(true, true);
   }
@@ -315,8 +315,9 @@ export class UpdateManager {
    * Whether the ready version's installer is still the file its signature check hashed (audit L6): between the check and
    * the install it sits in the user's cache folder. A changed or unreadable one is refused like a bad signature: the file
    * goes, and the version waits as refused. No installer to compare (no rehash, or a check that named none) passes.
+   * While Tavora quits nobody is told: the window and what listens to the state are gone.
    */
-  private installerUnchanged(): boolean {
+  private installerUnchanged({ quitting = false } = {}): boolean {
     const ready = this.readyUpdate;
     if (!this.rehash || !ready?.installer) return true;
     let reason: string;
@@ -332,7 +333,9 @@ export class UpdateManager {
     this.onRefused(info);
     this.failedAt = this.now().getTime();
     const notes = this.current.status === "ready" ? this.current.notes : [];
-    this.set({ status: "available", version: info.version, notes, failed: "refused" });
+    const refused: UpdateState = { status: "available", version: info.version, notes, failed: "refused" };
+    if (quitting) this.current = refused;
+    else this.set(refused);
     return false;
   }
 
@@ -342,7 +345,7 @@ export class UpdateManager {
    */
   installOnQuit(exitCode: number): void {
     // After Restart now the installer already runs (electron-updater would ignore a second start anyway).
-    if (this.current.status !== "ready" || exitCode !== 0 || this.installStarted || !this.installerUnchanged()) return;
+    if (this.current.status !== "ready" || exitCode !== 0 || this.installStarted || !this.installerUnchanged({ quitting: true })) return;
     this.installStarted = true;
     this.log(`installing ${this.current.version} on quit`);
     this.updater.install(true, false);
