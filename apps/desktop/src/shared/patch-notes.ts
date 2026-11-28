@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.26.6",
+    date: "2026-11-28",
+    title: "Clearer texts",
+    notes: [
+      "Many texts are shorter and plainer, and German mistakes are fixed.",
+      "Theme descriptions, the first-start examples, new theme copies and the start error show in your language.",
+      "The module library is now called Community modules.",
+    ],
+    prs: [
+      { number: 1060, title: "Clearer texts in the app, built-in modules, kit, playground and docs" },
+    ],
+    tags: ["calculator", "clock-counter", "games", "icons", "notes", "overlays", "pdf-viewer", "privacy", "settings", "system-monitor", "todos", "ui-kit", "website", "whiteboard"],
+  },
+  {
     version: "0.26.5",
     date: "2026-11-28",
     title: "Tidier buttons and menus",

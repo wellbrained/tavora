@@ -637,12 +637,5 @@
     "notes": [
       "Small fixes."
     ]
-  },
-  {
-    "version": "0.1.8",
-    "date": "2026-11-02",
-    "notes": [
-      "Lists, dialogs and settings pages move smoothly."
-    ]
   }
 ]
