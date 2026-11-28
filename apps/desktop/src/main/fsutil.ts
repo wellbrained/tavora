@@ -1,7 +1,20 @@
 import { randomBytes } from "node:crypto";
-import { lstat, mkdir, open, readdir, readFile, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, rm, stat, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { renameHeld } from "./rename-held";
+
+/**
+ * Whether an opened file is the one at `file` now, not followed through a link: its handle's volume and file id match
+ * an lstat of the path. Closes the gap between checking a path and opening it (audit L9): a link or file swapped in
+ * between gives other ids (or a link's own), so the read is refused. A file system that gives no file id (0) can't be
+ * compared this way and passes; the other checks still hold for it.
+ */
+export async function openedFileIs(handle: FileHandle, file: string): Promise<boolean> {
+  const [opened, there] = await Promise.all([handle.stat({ bigint: true }), lstat(file, { bigint: true }).catch(() => null)]);
+  if (!there || there.isSymbolicLink()) return false;
+  if (opened.ino === 0n || there.ino === 0n) return opened.dev === there.dev;
+  return opened.dev === there.dev && opened.ino === there.ino;
+}
 
 /** Whether the path can be looked at; any error, a missing path or one that can't be read, counts as no. */
 export async function pathExists(target: string): Promise<boolean> {

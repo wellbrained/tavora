@@ -2,6 +2,10 @@
 
 What changed in `@tavora/module-schema`, newest first.
 
+## 0.2.7
+
+- `catalogListingProblem` refuses a version with a number of more than `MAX_VERSION_DIGITS` (15) digits: Tavora compared longer ones as equal to their neighbours, so the module could never update past it. `validateManifest` still takes them, so an installed module keeps running.
+
 ## 0.2.6
 
 - `catalogUploadProblem` checks every checksum of a PNG screenshot, as the catalog does, so a damaged picture is told before the upload.

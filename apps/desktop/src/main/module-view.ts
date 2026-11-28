@@ -24,6 +24,7 @@ import type { ModuleFileDialogs, PanelFileDialogs } from "./file-dialogs";
 import { PanelSession, type PanelConnectors } from "./panel-session";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
+import { takeUploadSlot, type UploadSlots } from "./upload-slots";
 import { serveClipboard } from "./clipboard-http";
 import { cleanPictureName, servePictureSave } from "./picture-save-http";
 import { serveJsonOpen, serveJsonSave } from "./json-file-http";
@@ -157,7 +158,7 @@ interface SessionGesture {
 }
 
 /** Files a session's pages are writing now (blobs.put goes through the module's address, not the bridge). */
-interface Uploads {
+interface Uploads extends UploadSlots {
   running: number;
   /** Told whenever one starts or ends: a closing panel waits until none runs. */
   readonly changed: Set<() => void>;
@@ -166,9 +167,15 @@ const sessionUploads = new WeakMap<Session, Uploads>();
 
 function uploadsOf(ses: Session): Uploads {
   let uploads = sessionUploads.get(ses);
-  if (!uploads) sessionUploads.set(ses, (uploads = { running: 0, changed: new Set() }));
+  if (!uploads) sessionUploads.set(ses, (uploads = { running: 0, changed: new Set(), writing: 0, queued: [] }));
   return uploads;
 }
+
+const TOO_MANY_UPLOADS = () =>
+  new Response(JSON.stringify({ error: { code: "QUOTA_EXCEEDED", message: "too many files are being stored at once; try again when one is done" } }), {
+    status: 429,
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+  });
 
 /** Answers a request to the files address, counting one that writes for as long as it runs. */
 async function countWrite(ses: Session, request: Request, serve: () => Promise<Response>): Promise<Response> {
@@ -177,9 +184,14 @@ async function countWrite(ses: Session, request: Request, serve: () => Promise<R
   const tell = () => [...uploads.changed].forEach((changed) => changed());
   uploads.running++;
   tell();
+  let free: (() => void) | null = null;
   try {
+    const slot = takeUploadSlot(uploads);
+    if (!slot) return TOO_MANY_UPLOADS();
+    free = await slot;
     return await serve();
   } finally {
+    free?.();
     uploads.running--;
     tell();
   }

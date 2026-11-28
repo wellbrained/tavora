@@ -94,6 +94,12 @@ export interface UpdateManagerOptions {
    * installed.
    */
   enforceFeed?: boolean;
+  /**
+   * Hashes the checked installer again right before it runs (Restart now, or on quit), SHA-512 in base64; throws when it
+   * can't be read. A file that changed since its check is refused instead of run (audit L6). Without it (dev builds,
+   * whose preview check names no installer) nothing is hashed again.
+   */
+  rehash?: (file: string) => string;
   /** A downloaded version was refused (the host deletes the file). */
   onRefused?: (info: DownloadedInfoLike) => void;
   /** Whether new versions download by themselves (a Settings switch). */
@@ -130,6 +136,9 @@ export class UpdateManager {
   private readonly checkFeed: ((info: UpdateInfoLike) => FeedFreshness) | null;
   private readonly enforceFeed: boolean;
   private readonly onRefused: (info: DownloadedInfoLike) => void;
+  private readonly rehash: ((file: string) => string) | null;
+  /** The version that is ready, as downloaded, and the installer its check hashed (when the check named one). */
+  private readyUpdate: { info: DownloadedInfoLike; installer: { file: string; sha512: string } | null } | null = null;
   private readonly onChange: (state: UpdateState) => void;
   private readonly onDownloaded: (version: string) => void;
   private readonly log: (line: string) => void;
@@ -157,6 +166,7 @@ export class UpdateManager {
     this.checkFeed = options.checkFeed ?? null;
     this.enforceFeed = options.enforceFeed ?? false;
     this.onRefused = options.onRefused ?? (() => {});
+    this.rehash = options.rehash ?? null;
     this.onChange = options.onChange;
     this.onDownloaded = options.onDownloaded ?? (() => {});
     // A check every few minutes says the same thing again and again; the log keeps a line when it changes,
@@ -296,9 +306,34 @@ export class UpdateManager {
 
   /** Quits, installs the downloaded version and starts Tavora again. */
   restartNow(): void {
-    if (this.current.status !== "ready") return;
+    if (this.current.status !== "ready" || this.installStarted || !this.installerUnchanged()) return;
     this.installStarted = true;
     this.updater.quitAndInstall(true, true);
+  }
+
+  /**
+   * Whether the ready version's installer is still the file its signature check hashed (audit L6): between the check and
+   * the install it sits in the user's cache folder. A changed or unreadable one is refused like a bad signature: the file
+   * goes, and the version waits as refused. No installer to compare (no rehash, or a check that named none) passes.
+   */
+  private installerUnchanged(): boolean {
+    const ready = this.readyUpdate;
+    if (!this.rehash || !ready?.installer) return true;
+    let reason: string;
+    try {
+      if (this.rehash(ready.installer.file) === ready.installer.sha512) return true;
+      reason = "the installer changed after its check";
+    } catch (error) {
+      reason = `the installer can't be read (${error instanceof Error ? error.message : String(error)})`;
+    }
+    const { info } = ready;
+    this.log(`update ${info.version} refused before it ran: ${reason}`);
+    this.readyUpdate = null;
+    this.onRefused(info);
+    this.failedAt = this.now().getTime();
+    const notes = this.current.status === "ready" ? this.current.notes : [];
+    this.set({ status: "available", version: info.version, notes, failed: "refused" });
+    return false;
   }
 
   /**
@@ -307,7 +342,7 @@ export class UpdateManager {
    */
   installOnQuit(exitCode: number): void {
     // After Restart now the installer already runs (electron-updater would ignore a second start anyway).
-    if (this.current.status !== "ready" || exitCode !== 0 || this.installStarted) return;
+    if (this.current.status !== "ready" || exitCode !== 0 || this.installStarted || !this.installerUnchanged()) return;
     this.installStarted = true;
     this.log(`installing ${this.current.version} on quit`);
     this.updater.install(true, false);
@@ -340,6 +375,7 @@ export class UpdateManager {
       return;
     }
     this.log(`update ${info.version} signature checked (${check.key} key)${this.feedNote(check.feed ?? null)}`);
+    this.readyUpdate = { info, installer: check.installer ?? null };
     this.set({ status: "ready", version: info.version, notes });
     this.onDownloaded(info.version);
   }

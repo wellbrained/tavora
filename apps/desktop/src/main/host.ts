@@ -113,7 +113,7 @@ import { askedName, sendModuleRequest } from "./module-request";
 import { PublisherNames, publisherOf } from "./publisher-names";
 import { PreviewUpdater, previewCheck, UpdateManager, type UpdateInfoLike, type UpdaterLike } from "./updates";
 import { PINNED_UPDATE_KEYS } from "./update-keys";
-import { checkDownloadedUpdate } from "./update-signature";
+import { checkDownloadedUpdate, sha512OfFileSync } from "./update-signature";
 import { ENFORCE_FEED_FRESHNESS, FeedFreshnessCheck } from "./update-freshness";
 import { OfficialPublisher } from "./official-publish";
 import { OfficialPublishing } from "./official-publishing";
@@ -707,7 +707,7 @@ export class Host {
       remember: (picked) => this.fileDialogs.remember("module-files", picked),
       notify: (message) => (this.notice = message),
       changed: () => this.pushState(),
-      writesDone: (timeoutMs) => this.data.blobWrites.idle(timeoutMs),
+      writesDone: (timeoutMs) => this.data.blobWrites.finish(timeoutMs),
     });
     this.data = new DataRegistry(options.userData, () => this.files.root(), () => this.files.moving);
     this.onlineSearch = new OnlineSearch(options.apiUrl === undefined ? {} : { baseUrl: options.apiUrl });
@@ -1412,6 +1412,8 @@ export class Host {
           : previewCheck(process.env.TAVORA_FAKE_UPDATE_UNSIGNED === "1"),
         ...(feed ? { checkFeed: (info: UpdateInfoLike) => feed.check(info) } : {}),
         enforceFeed: ENFORCE_FEED_FRESHNESS,
+        // The checked installer is hashed again right before it runs, on Restart now and on quit.
+        ...(app.isPackaged ? { rehash: sha512OfFileSync } : {}),
         // The refused installer goes, with its blockmaps (refused-update.ts).
         onRefused: (info) => removeRefusedInstaller(info, app.isPackaged),
         autoDownload: this.library.autoUpdate,

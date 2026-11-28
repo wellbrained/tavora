@@ -27,7 +27,10 @@ export interface ModuleFilesFolderHost {
   notify(message: string): void;
   /** Tells the host UI that something here changed. */
   changed(): void;
-  /** True once no picture is being written; false when one still is after `timeoutMs`. */
+  /**
+   * True once no picture is being written. Pictures still on their way after `timeoutMs` are cut off (BlobWrites.finish),
+   * so a module can't keep the move busy; false only when one still is after that.
+   */
   writesDone(timeoutMs: number): Promise<boolean>;
 }
 

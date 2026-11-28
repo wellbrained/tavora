@@ -236,6 +236,11 @@ export const MAX_SCREENSHOTS = 5;
 export const MAX_LISTED_GAMES = 100;
 /** The longest version a catalog listing can have; Tavora skips a listing with a longer one. */
 export const MAX_LISTED_VERSION = 64;
+/**
+ * The most digits in one number of a listed version: past 15, older versions of Tavora can compare it as equal
+ * to its neighbours (a JavaScript number), so the module could never update past it.
+ */
+export const MAX_VERSION_DIGITS = 15;
 
 /**
  * Why the catalog can't list this manifest, or null. Checked when a version is published, not in validateManifest: a
@@ -243,6 +248,7 @@ export const MAX_LISTED_VERSION = 64;
  */
 export function catalogListingProblem(manifest: { version: string; games: readonly string[] }): string | null {
   if (manifest.version.length > MAX_LISTED_VERSION) return `Its version is longer than ${MAX_LISTED_VERSION} characters. Use a shorter one.`;
+  if (manifest.version.split(/[.+-]/).some((part) => /^\d+$/.test(part) && part.length > MAX_VERSION_DIGITS)) return `Each number in its version can have at most ${MAX_VERSION_DIGITS} digits. Use a shorter one.`;
   if (manifest.games.length > MAX_LISTED_GAMES) return `It names ${manifest.games.length} games. A module in the catalog can name at most ${MAX_LISTED_GAMES}.`;
   return null;
 }

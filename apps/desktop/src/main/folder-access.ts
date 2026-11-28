@@ -13,6 +13,7 @@ import { folderKey, isFolderName, isLocalLowGameFolder, isModuleId, isOwnerId, K
 import type { FolderChange, FolderEntry, FolderListing, FolderState } from "@tavora/sdk/protocol";
 import { readBody } from "./clipboard-http";
 import { HostError } from "./errors";
+import { openedFileIs } from "./fsutil";
 import { isInside, isInsideOrSame } from "./path-inside";
 import { SAVED_FILES, SavedFile } from "./saved-file";
 
@@ -368,6 +369,8 @@ export async function readFolderFile(base: string, entry: FolderAccess, relative
     if (!real || kindOf(path.basename(real), entry) !== "read") throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
     const handle = await open(real, "r");
     try {
+      // The file opened is the one just checked, not one swapped in since (audit L9).
+      if (!(await openedFileIs(handle, real))) throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
       const info = await handle.stat();
       if (!info.isFile()) throw new HostError("INVALID_PARAMS", "Not a file in this folder.");
       // A hard link can be a file outside the folder by another name: such a file is not read.

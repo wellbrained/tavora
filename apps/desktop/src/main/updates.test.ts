@@ -384,6 +384,54 @@ describe("UpdateManager", () => {
     expect(updater.quitInstalls).toHaveLength(1);
   });
 
+  it("hashes the checked installer again right before it runs, and refuses one that changed or can't be read", async () => {
+    const run = (file: () => string) => {
+      const updater = new FakeUpdater();
+      const refused: DownloadedInfoLike[] = [];
+      const logs: string[] = [];
+      const hashed: string[] = [];
+      const manager = new UpdateManager({
+        updater: updater as unknown as UpdaterLike,
+        verify: async () => ({ ...SIGNED, installer: { file: "C:/cache/Tavora-Setup-0.3.0.exe", sha512: "checked" } }),
+        rehash: (path) => (hashed.push(path), file()),
+        onRefused: (info) => refused.push(info),
+        autoDownload: true,
+        onChange: () => {},
+        log: (line) => logs.push(line),
+        timers: fakeTimers().timers,
+      });
+      return { updater, manager, refused, logs, hashed };
+    };
+    const same = run(() => "checked");
+    same.updater.emit("update-available", { version: "0.3.0" });
+    same.updater.emit("update-downloaded", { version: "0.3.0" });
+    await settle();
+    same.manager.restartNow();
+    expect(same.hashed).toEqual(["C:/cache/Tavora-Setup-0.3.0.exe"]);
+    expect(same.updater.installs).toEqual([[true, true]]);
+
+    for (const file of [() => "swapped", () => { throw new Error("EBUSY"); }]) {
+      for (const install of ["restart", "quit"] as const) {
+        const changed = run(file);
+        changed.updater.emit("update-available", { version: "0.3.0" });
+        changed.updater.emit("update-downloaded", { version: "0.3.0" });
+        await settle();
+        if (install === "restart") changed.manager.restartNow();
+        else changed.manager.installOnQuit(0);
+        expect(changed.updater.installs).toEqual([]);
+        expect(changed.updater.quitInstalls).toEqual([]);
+        expect(changed.refused.map((info) => info.version)).toEqual(["0.3.0"]);
+        expect(changed.manager.state).toMatchObject({ status: "available", version: "0.3.0", failed: "refused" });
+        expect(changed.logs.some((line) => line.startsWith("update 0.3.0 refused before it ran: "))).toBe(true);
+        // Nothing is ready any more: neither way starts it later.
+        changed.manager.restartNow();
+        changed.manager.installOnQuit(0);
+        expect(changed.updater.installs).toEqual([]);
+        expect(changed.updater.quitInstalls).toEqual([]);
+      }
+    }
+  });
+
   it("after Restart now, quitting starts no second installer", async () => {
     const { manager, updater, logs } = make(true);
     updater.emit("update-available", { version: "0.3.0" });

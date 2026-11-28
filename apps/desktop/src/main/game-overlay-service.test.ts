@@ -1096,6 +1096,19 @@ describe("hiding everything", () => {
     // Safe to call again (a signal after quitting).
     service.closeNow();
   });
+
+  it("opens no window again after closeNow, whatever comes in late while Tavora quits", async () => {
+    const { service, world } = await setup();
+    service.start();
+    show(service);
+    service.closeNow();
+    const before = world.windows.length;
+    service.tick();
+    show(service, CLOCK, "other", "item-late");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(world.windows.length).toBe(before);
+    expect(world.windows.every((window) => window.destroyed)).toBe(true);
+  });
 });
 
 describe("what goes with a game or a module", () => {

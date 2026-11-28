@@ -136,7 +136,7 @@ A module can keep pictures, PDF files and sounds that are too big for a document
 
 `sdk.blobs.app` (Tavora 0.23.101 and newer) is the same for files the module shares across every workspace, such as a sound library the user builds once: `put`, `url`, `list`, `usage` and `delete`, at `/_app-blobs/`, with limits of their own (50 MB each, 500 MB together per module). They stay when a workspace is deleted and go with the module's data in Settings > Modules. Set `minTavora`, or check `sdk.supports("blobs.app.put")`.
 
-- **Storing:** `sdk.blobs.put(file)` sends the file to the module's own address, `POST /_blobs/`, as the request body, so it is streamed to disk and never held in memory whole. The answer is a `BlobInfo`: `id` (32 lowercase hex characters chosen by the host), `bytes`, `type` and `createdAt`. A module never names a file.
+- **Storing:** `sdk.blobs.put(file)` sends the file to the module's own address, `POST /_blobs/`, as the request body, so it is streamed to disk and never held in memory whole. The answer is a `BlobInfo`: `id` (32 lowercase hex characters chosen by the host), `bytes`, `type` and `createdAt`. A module never names a file. At most 4 files are stored at once for a module in a workspace; up to 16 more wait their turn, and any past that fail with `QUOTA_EXCEEDED`. When the user moves the pictures folder, `put` can fail until the move is done (`INTERNAL`), also for a file that is already on its way; try again then.
 - **Showing:** `sdk.blobs.url(id)` is the address to use as an image source (`GET /_blobs/<id>`). It only works from the module's own page. For a sound, `fetch` it and decode it with Web Audio (`decodeAudioData`), or use it as an `<audio>` source.
 - **What is accepted:** PNG, JPEG, GIF and WebP pictures, PDF files and (Tavora 0.23.101 and newer) MP3, Ogg and WAV sounds, judged by the first bytes of the file itself (`%PDF-` for a PDF; an ID3 tag or an MPEG layer III frame for an MP3, `OggS` for Ogg, `RIFF`…`WAVE` for WAV), never by its name or type. Anything else (SVG, BMP, other documents, scripts) is refused with `INVALID_PARAMS`. Over the limits it is `QUOTA_EXCEEDED`, and nothing is left behind.
 - **Serving:** each file is sent with its real type, `X-Content-Type-Options: nosniff` and a policy that lets it load nothing, so a picture can only be shown. A PDF also carries `Content-Disposition: attachment`: Tavora never shows it as a page, the module reads the bytes and draws them itself. The SDK exports `PICTURE_TYPES` (the four pictures), `AUDIO_TYPES` (`audio/mpeg`, `audio/ogg`, `audio/wav`) and `BLOB_TYPES` (all of them and `application/pdf`). A Tavora from before PDF or sound support refuses that file with `INVALID_PARAMS`.
@@ -146,7 +146,7 @@ A module can keep pictures, PDF files and sounds that are too big for a document
 `sdk.clipboard.writeImage(png)` puts a picture on the system clipboard so the user can paste it into any app. The PNG is sent to the module's own address, `POST /_clipboard/`, as the request body. `sdk.clipboard.writeText(text)` does the same for plain text, as a normal call (Tavora 0.25.23 and newer; check `sdk.supports("clipboard.writeText")`). The browser's own Clipboard API doesn't work in a panel: Tavora gives a panel no browser permissions. The kit's `copyText` and `copyImage` use these calls, and fall back by themselves on an older Tavora and outside Tavora.
 
 - **Only after the user did something:** it must follow a real click or key press in the module (within 2 seconds), and one press copies one picture; otherwise it is refused with `PERMISSION_DENIED`. Call it from the click handler of the button.
-- **Only a complete PNG:** the host checks every part of the file before using it (`INVALID_PARAMS` for anything else, such as a different format, a cut-off or damaged file, or a picture over 16384 pixels on a side or 100 million pixels), and a file over 20 MB is `QUOTA_EXCEEDED`.
+- **Only a complete PNG:** the host checks every part of the file before using it (`INVALID_PARAMS` for anything else, such as a different format, a cut-off or damaged file, or a picture over 16384 pixels on a side or 40 million pixels; older versions of Tavora took up to 100 million), and a file over 20 MB is `QUOTA_EXCEEDED`.
 - **Text:** plain text only, not empty, at most 1 MiB as UTF-8 (`INVALID_PARAMS`, `QUOTA_EXCEEDED`). The same press rule applies: one press copies once, shared with the picture calls.
 - **Write only:** a module cannot read the clipboard.
 
@@ -155,7 +155,7 @@ A module can keep pictures, PDF files and sounds that are too big for a document
 `sdk.pictures.save(png, name)` saves a picture as a `.png` file where the user says. Tavora's save dialog opens in the folder they last saved a picture to, at first Tavora's own folder in their Pictures (`Pictures\Tavora`), with `name` filled in. The PNG is sent to the module's own address, `POST /_pictures/?name=…`, as the request body, and the answer is `{ fileName }`, the name the file was saved under, or `null` when the user closed the dialog. Tavora 0.20.16 and older save in `Pictures\Tavora` without a dialog.
 
 - **Only after the user did something:** the same as the clipboard, one picture per click or key press within 2 seconds, otherwise `PERMISSION_DENIED`. A press used for the clipboard is used up for saving too.
-- **Only a complete PNG,** with the same checks and limits as the clipboard (`INVALID_PARAMS`, `QUOTA_EXCEEDED`).
+- **Only a complete PNG,** with the same checks and limits as the clipboard, except that a picture may have up to 100 million pixels (`INVALID_PARAMS`, `QUOTA_EXCEEDED`).
 - **The user picks the file:** `name` is a suggestion. Tavora takes out anything a file name cannot hold (slashes, colons, control characters, leading and trailing dots), shortens it to 80 characters, uses `Picture` when nothing is left, adds `.png`, and adds ` (2)`, ` (3)` and so on when the folder already has it. Only the user chooses the folder and name, and a file is replaced only when they confirm that in the dialog. A module cannot choose the folder or the type, and never learns where the file went.
 
 ### Menus
@@ -601,7 +601,7 @@ Without the capability every one of them fails with `PERMISSION_DENIED` and `cap
 
 | Limit | Value |
 | --- | --- |
-| Request size (serialized) | 8 MiB |
+| Request size (serialized, text counted as UTF-8) | 8 MiB |
 | Requests in flight per panel | 64 |
 | Bytes of requests in flight per panel | 16 MiB |
 | Storage key length | 256 characters |

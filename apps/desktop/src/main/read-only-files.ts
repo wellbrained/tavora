@@ -3,7 +3,7 @@ import { open, readFile, realpath, mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { isGameId, isModuleId, isOwnerId } from '@tavora/module-schema';
 import { HostError } from './errors';
-import { writeFileAtomic } from './fsutil';
+import { openedFileIs, writeFileAtomic } from './fsutil';
 import { keepNewerCopy, setAside } from './json';
 import { STORE_VERSIONS } from './saved-versions';
 import { MAX_READ_ONLY_FILE_BYTES, type ReadOnlyFile, type ReadOnlyFileState } from '@tavora/sdk/protocol';
@@ -118,8 +118,10 @@ export class ReadOnlyFiles {
   }
   private async bytes(entry: Entry): Promise<Buffer> {
     if (await realpath(entry.path) !== entry.target) throw new HostError('PERMISSION_DENIED','This file now points somewhere else. Choose it again.');
-    const handle = await open(entry.path,'r');
+    // The checked place itself, then a check that the opened file is what is there now (audit L9).
+    const handle = await open(entry.target,'r');
     try {
+      if (!await openedFileIs(handle, entry.target)) throw new HostError('PERMISSION_DENIED','This file now points somewhere else. Choose it again.');
       const stat = await handle.stat();
       if (!stat.isFile()) throw new HostError('INVALID_PARAMS','Choose a file, not a folder.');
       if (stat.size > MAX_READ_ONLY_BYTES) throw new HostError('QUOTA_EXCEEDED','Choose a file smaller than 50 MB.');

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, readFile, symlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readdir, readFile, rename, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +9,7 @@ vi.mock("./rename-held", async (original) => {
   return { renameHeld: (from: string, to: string) => (cutOff.value ? new Promise<void>(() => undefined) : actual.renameHeld(from, to)) };
 });
 
-import { LEFTOVER_TEMP_AGE_MS, SerialQueue, settleSerial, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
+import { LEFTOVER_TEMP_AGE_MS, openedFileIs, SerialQueue, settleSerial, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
 
 let root: string;
 const now = Date.now();
@@ -211,5 +211,24 @@ describe("SerialQueue", () => {
     });
     await settleSerial();
     expect(late).toBe(true);
+  });
+});
+
+describe("openedFileIs (audit L9)", () => {
+  it("is true for the file at the path, and false once another file was swapped in or the path is gone", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "tavora-opened-"));
+    const file = path.join(dir, "save.json");
+    await writeFile(file, "the checked file");
+    const handle = await open(file, "r");
+    try {
+      expect(await openedFileIs(handle, file)).toBe(true);
+      // Moved away while open (Windows doesn't let a file be renamed over an open one) and another put in its place.
+      await rename(file, path.join(dir, "moved.json"));
+      await writeFile(file, "another file");
+      expect(await openedFileIs(handle, file)).toBe(false);
+      expect(await openedFileIs(handle, path.join(dir, "gone.json"))).toBe(false);
+    } finally {
+      await handle.close();
+    }
   });
 });

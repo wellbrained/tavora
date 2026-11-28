@@ -6,7 +6,14 @@ import { LIMITS, type ErrorCode } from "@tavora/sdk/protocol";
 import { HostError } from "./errors";
 import { checkPng, type PngLimits } from "./png";
 
-export const CLIPBOARD_PNG_LIMITS: PngLimits = { maxSide: 16384, maxPixels: 100_000_000 };
+/**
+ * The clipboard decodes the picture in the main process (4 bytes a pixel), and a small, highly compressed PNG can stand
+ * for a huge one, so the clipboard takes fewer pixels than a saved picture: 40 million is about 160 MB decoded. The
+ * Whiteboard copies at most 32 million.
+ */
+export const CLIPBOARD_PNG_LIMITS: PngLimits = { maxSide: 16384, maxPixels: 40_000_000 };
+/** A saved picture is written as it came, never decoded. */
+export const PICTURE_PNG_LIMITS: PngLimits = { maxSide: 16384, maxPixels: 100_000_000 };
 
 export interface ClipboardDeps {
   /** Whether the user did something in the module just now. */
