@@ -2059,6 +2059,7 @@ export const de: Record<keyof typeof en, string> = {
   "overlays.opacity.label": "Deckkraft",
   "overlays.capture.label": "Vor Aufnahme verbergen",
   "overlays.capture.hint": "Nur du siehst es, nicht OBS oder geteilte Bildschirme. Manche Anti-Cheats mögen das nicht.",
+  "overlays.capture.panelHint": "Nur du siehst das Panel, auch wenn du es im Spiel benutzt, nicht OBS oder geteilte Bildschirme. Manche Anti-Cheats mögen das nicht.",
   "overlays.remove": "Entfernen",
   "overlays.closeLabel": "Dieses Overlay entfernen",
   "overlays.preview": "Vorschau",

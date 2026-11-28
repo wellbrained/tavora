@@ -2057,6 +2057,7 @@ export const en = {
   "overlays.opacity.label": "Opacity",
   "overlays.capture.label": "Hide from capture",
   "overlays.capture.hint": "Only you see it, not OBS or screen shares. Some anti-cheats don't like that.",
+  "overlays.capture.panelHint": "Only you see the panel, also while you use it in game, not OBS or screen shares. Some anti-cheats don't like that.",
   "overlays.remove": "Remove",
   "overlays.closeLabel": "Remove this overlay",
   "overlays.preview": "Preview",

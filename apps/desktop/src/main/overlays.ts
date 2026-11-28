@@ -36,6 +36,11 @@ export const MAX_OVERLAY_PORT = 65535;
 const MAX_STREAMS = 64;
 /** How often a live overlay hears that Tavora is still there, and checks its link still may be served. */
 const STREAM_PING_MS = 15_000;
+/**
+ * How long a link still counts as streamed after its last stream closed: OBS closes and opens the stream when a source is
+ * refreshed or (with "Shutdown source when not visible") when the scene changes, and the panel feeding it keeps running.
+ */
+export const STREAM_GRACE_MS = 30_000;
 /** How long saving waits for more changes, so a burst of counter clicks is written once. */
 const SAVE_DELAY_MS = 250;
 
@@ -234,6 +239,8 @@ export interface OverlayServerOptions {
   page(link: OverlayLink): OverlayPage | null;
   /** The clock frame page keys are timed by (tests). */
   now?: () => number;
+  /** Which links are streamed changed (streamed): a stream opened for a link that had none, or a link's grace ended. */
+  streamsChanged?(): void;
 }
 
 /**
@@ -393,6 +400,8 @@ export class OverlayServer {
   private listening: number | null = null;
   /** Each open live stream and the link it is for. */
   private readonly streams = new Map<ServerResponse, OverlayLink>();
+  /** Links whose last stream closed lately (by token), and the timer that ends their grace (STREAM_GRACE_MS). */
+  private readonly lately = new Map<string, { link: OverlayLink; timer: ReturnType<typeof setTimeout> }>();
   status: OverlayServerStatus = "off";
   private readonly frameKeys: FrameKeys;
 
@@ -449,8 +458,12 @@ export class OverlayServer {
     this.server = null;
     this.listening = null;
     this.status = "off";
+    const had = this.streams.size > 0 || this.lately.size > 0;
     for (const stream of this.streams.keys()) stream.end();
     this.streams.clear();
+    for (const { timer } of this.lately.values()) clearTimeout(timer);
+    this.lately.clear();
+    if (had) this.options.streamsChanged?.();
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 
@@ -461,6 +474,17 @@ export class OverlayServer {
    */
   recheck(): void {
     for (const [stream, link] of this.streams) if (!this.options.page(link)) stream.end();
+  }
+
+  /** The links OBS has open now, or had within STREAM_GRACE_MS, each once: the panels feeding them keep running. */
+  streamed(): OverlayLink[] {
+    const links = new Map<string, OverlayLink>();
+    for (const link of [...this.streams.values(), ...[...this.lately.values()].map((one) => one.link)]) links.set(link.token, link);
+    return [...links.values()];
+  }
+
+  private isStreamed(token: string): boolean {
+    return this.lately.has(token) || [...this.streams.values()].some((link) => link.token === token);
   }
 
   private async handle(request: IncomingMessage, response: ServerResponse, port: number): Promise<void> {
@@ -545,7 +569,12 @@ export class OverlayServer {
     if (this.streams.size >= MAX_STREAMS) return this.plain(response, 503, "Too many overlays");
     response.writeHead(200, { ...COMMON_HEADERS, "Content-Type": "text/event-stream; charset=utf-8", Connection: "keep-alive" });
     if (request.method === "HEAD") return void response.end();
+    const fresh = !this.isStreamed(link.token);
+    const grace = this.lately.get(link.token);
+    if (grace) clearTimeout(grace.timer);
+    this.lately.delete(link.token);
     this.streams.set(response, link);
+    if (fresh) this.options.streamsChanged?.();
     let current = state;
     const send = (value: JsonValue | null) => {
       current = value;
@@ -571,7 +600,14 @@ export class OverlayServer {
     response.on("close", () => {
       clearInterval(ping);
       stop();
-      this.streams.delete(response);
+      if (!this.streams.delete(response) || this.isStreamed(link.token) || !this.server) return;
+      // The last stream of the link: it counts a while longer (a refresh opens it again), then its panel may stop.
+      const timer = setTimeout(() => {
+        this.lately.delete(link.token);
+        if (!this.isStreamed(link.token)) this.options.streamsChanged?.();
+      }, STREAM_GRACE_MS);
+      timer.unref?.();
+      this.lately.set(link.token, { link, timer });
     });
   }
 }

@@ -748,6 +748,14 @@ export class GameOverlays {
     return this.placedOfKey(record)?.item.mode === "toggle";
   }
 
+  /** Whether an item of this module from this workspace is in a setup whose keys work now (its module's own keys work then too). */
+  moduleShowing(module: Pick<HotkeyRecord, "owner" | "moduleId" | "workspaceId">): boolean {
+    if (!this.showing()) return false;
+    const setups = this.keySetups();
+    const same = (item: { owner: string; moduleId: string; workspaceId: string }) => item.owner === module.owner && item.moduleId === module.moduleId && item.workspaceId === module.workspaceId;
+    return [...placedOverlays(this.store, setups).values()].some(({ item }) => same(item)) || [...placedPanels(this.store, setups).values()].some(({ item }) => same(item));
+  }
+
   /** Whether a key works outside one game (the layer key, and the toggle key of an item in Everywhere or All games): it collides with any workspace's keys. */
   general(record: Pick<HotkeyRecord, "owner" | "moduleId" | "workspaceId" | "action" | "target">): boolean {
     if (record.action === OVERLAY_LAYER_ACTION) return true;
@@ -958,6 +966,7 @@ export class GameOverlays {
       hasLive: (panel) => this.liveStateOf(panel) !== undefined,
       card: (mode) => layerCardContent(this.options.language(), mode, this.options.streaming.keyOf(layerBinding())?.accelerator ?? null),
       awayHandle: handle,
+      frontHandle: Number(frontOf(this.watch)?.window ?? 0) || 0,
       make: {
         overlay: (overlay, id) => this.makeOverlay(overlay, id),
         panel: (panel, id) => this.makePanel(panel, id),

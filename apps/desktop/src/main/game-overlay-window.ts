@@ -107,6 +107,12 @@ export class GameOverlayWindow {
   private readonly frame: WebContentsView;
   private opacityCss: string | undefined;
   private opacity: Opacity = 100;
+  /**
+   * An overlay page's window stays see-through until its page has loaded with its opacity style in, so a page set to 50 %
+   * never shows at full strength first; and while it is veiled (a live view behind its panel in the open layer).
+   */
+  private styled = false;
+  private veiled = false;
   private zoom = 1;
   /** `off`: click-through, no frame. `use`: a panel takes input, no frame. `arrange`: the frame, to move and resize. */
   private mode: WindowMode = "off";
@@ -156,11 +162,14 @@ export class GameOverlayWindow {
       window.setAlwaysOnTop(true, "screen-saver");
       window.setIgnoreMouseEvents(true);
       // Visible to screen capture; setHideFromCapture hides it when the user asks.
-      if (options.hidden) window.setOpacity(0);
+      if (options.hidden || !options.panel) window.setOpacity(0);
       const contents = window.webContents;
       lockContents(contents);
       contents.on("did-finish-load", () => {
-        void this.applyOpacity();
+        void this.applyOpacity().then(() => {
+          this.styled = true;
+          this.applyWindowOpacity();
+        });
         // The page keeps the zoom it was given, but a load may reset it.
         if (!this.options.panel && !contents.isDestroyed() && contents.getZoomFactor() !== this.zoom) contents.setZoomFactor(this.zoom);
       });
@@ -345,8 +354,14 @@ export class GameOverlayWindow {
    * from before (the to-do not ticked yet) for a frame, then faded in, when the layer closed.
    */
   setVeiled(veiled: boolean): void {
+    this.veiled = veiled;
+    this.applyWindowOpacity();
+  }
+
+  /** An overlay page's window: see-through while hidden for tests, veiled or not styled yet; else fully there (the page fades itself). */
+  private applyWindowOpacity(): void {
     if (this.isDestroyed || this.options.panel) return;
-    this.window.setOpacity(veiled || this.options.hidden ? 0 : 1);
+    this.window.setOpacity(this.options.hidden || this.veiled || !this.styled ? 0 : 1);
   }
 
   /** Puts the window above the other windows of its level (the veil is shown first, and everything above it is raised after). */

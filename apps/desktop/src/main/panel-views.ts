@@ -572,7 +572,7 @@ export class PanelViews {
 
   /**
    * Places every view where the host UI showed it. Panels in a background tab are hidden and paused, as are all panels
-   * while the window is. A panel over the game is placed, shown and paused by its overlay window, not by this slot.
+   * while the window is, except those kept running (for overlays or with their game). A panel over the game is placed, shown and paused by its overlay window, not by this slot.
    */
   applyBounds(): void {
     this.deps.placing?.();
@@ -607,9 +607,9 @@ export class PanelViews {
     this.followSight(instanceId, adapter, rect !== undefined, visible && dialog === undefined);
     adapter.setVisible(visible);
     if (back && this.standIns.has(instanceId)) this.liftStandIn(instanceId, adapter);
-    // A panel kept running for the overlays isn't paused for being out of sight: its overlay goes on being fed. One
-    // running with its game isn't paused at all, also while Tavora's window is minimized: the user is playing.
-    if (this.isKept(instanceId, "game") || ((rect || this.keep.has(instanceId)) && !this.deps.windowHidden())) adapter.resume();
+    // A panel kept running for the overlays or with its game isn't paused at all, also while Tavora's window is minimized
+    // or hidden: the user is playing (or streaming), and its overlay goes on being fed.
+    if (this.keep.has(instanceId) || (rect && !this.deps.windowHidden())) adapter.resume();
     else adapter.suspend();
   }
 

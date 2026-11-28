@@ -58,6 +58,8 @@ export interface StreamingOptions {
   shell: Pick<Shell, "openSetting" | "focus">;
   language(): Language;
   changed(): void;
+  /** Which overlay links OBS has open changed (streamedSubjects): the panels feeding them follow. */
+  streamsChanged?(): void;
 }
 
 /** What game overlays need of the hotkeys: which of their keys work now, and what a press does (game-overlay-service.ts). */
@@ -70,6 +72,11 @@ export interface OverlayKeys {
   pressed(record: HotkeyRecord): void;
   /** Whether the key works over every game (the layer key, a general overlay's key): it collides with any workspace's keys. */
   general(binding: Omit<HotkeyRecord, "label" | "accelerator">): boolean;
+  /**
+   * Whether an item of this module from this workspace (an overlay, or a panel's live view) is in a setup whose keys work
+   * now: the module's own keys work then too, also while its workspace isn't shown in Tavora.
+   */
+  moduleShowing?(module: Pick<HotkeyRecord, "owner" | "moduleId" | "workspaceId">): boolean;
 }
 
 interface PendingHotkey {
@@ -113,7 +120,7 @@ export class Streaming {
     private readonly overlays: OverlayStore,
     private readonly hotkeys: HotkeyStore,
   ) {
-    this.server = new OverlayServer({ store: overlays, page: (link) => this.pageOf(link) });
+    this.server = new OverlayServer({ store: overlays, page: (link) => this.pageOf(link), streamsChanged: () => options.streamsChanged?.() });
     this.registrar = new HotkeyRegistrar(options.shortcuts, (record) => this.pressed(record));
   }
 
@@ -128,6 +135,11 @@ export class Streaming {
     const module = this.options.installed.shown(link.moduleId);
     if (!module || module.owner !== link.owner || !module.manifest.overlay || !this.overlayGranted(link.moduleId, link.owner)) return null;
     return { root: module.root, entry: module.manifest.overlay };
+  }
+
+  /** The overlays OBS has open now (or had a moment ago): their panels keep running, as for a game overlay. */
+  streamedSubjects(): OverlaySubject[] {
+    return this.server.streamed().map(({ owner, moduleId, workspaceId, key }) => ({ owner, moduleId, workspaceId, key }));
   }
 
   /** Ends open Stream overlay pages of modules that may no longer serve one; called when grants or modules change. */
@@ -300,32 +312,54 @@ export class Streaming {
   // ── Keys registered with the system ──────────────────────────────────
 
   /**
-   * Registers the hotkeys that should work now: the workspace shown now, modules with a panel in it. Cheap when
-   * nothing changed, so the host calls it on every state push.
+   * Registers the hotkeys that should work now: the workspace shown now, modules with a panel in it; and, while
+   * something shows over a game or the screen, the keys of a module whose item is on screen there and whose panel runs
+   * for it (from any workspace). Cheap when nothing changed, so the host calls it on every state push.
    */
   sync(): void {
     this.dropStalePending();
     const workspaceId = this.options.workspaceId();
-    const open = new Set(this.panelListeners().map((panel) => panel.moduleId));
-    const wanted = workspaceId === null ? [] : this.hotkeys.all().filter((record) => record.workspaceId === workspaceId && !isOverlayAction(record.action) && open.has(record.moduleId) && this.options.installed.shown(record.moduleId)?.owner === record.owner);
-    // The keys of game overlays follow what shows instead (a game's setup, All games, Everywhere), so they take no key
-    // from other programs while nothing does. An item's key works where the item shows.
-    if (this.overlayKeys?.showing()) wanted.push(...this.hotkeys.all().filter((record) => isOverlayAction(record.action) && this.overlayKeys!.wants(record)));
+    const listeners = this.panelListeners();
+    const open = new Set(listeners.map((panel) => panel.moduleId));
+    const installed = (record: HotkeyRecord) => this.options.installed.shown(record.moduleId)?.owner === record.owner;
+    const wanted = workspaceId === null ? [] : this.hotkeys.all().filter((record) => record.workspaceId === workspaceId && !isOverlayAction(record.action) && open.has(record.moduleId) && installed(record));
+    if (this.overlayKeys?.showing()) {
+      // A counter's or a song's key works in game while its overlay is there, whatever Tavora shows. A key the workspace
+      // shown has (or one taken by an earlier overlay's module) wins: one press, one action.
+      const taken = new Set(wanted.map((record) => record.accelerator));
+      for (const record of this.hotkeys.all()) {
+        if (record.workspaceId === workspaceId || isOverlayAction(record.action) || taken.has(record.accelerator) || !installed(record) || !this.runsForOverlay(record, listeners)) continue;
+        taken.add(record.accelerator);
+        wanted.push(record);
+      }
+      // The keys of game overlays follow what shows instead (a game's setup, All games, Everywhere), so they take no key
+      // from other programs while nothing does. An item's key works where the item shows.
+      wanted.push(...this.hotkeys.all().filter((record) => isOverlayAction(record.action) && this.overlayKeys!.wants(record)));
+    }
     this.registrar.apply(wanted);
+  }
+
+  /** Whether the record's module has an item on screen over a game or the screen, and a panel of its workspace runs for it. */
+  private runsForOverlay(record: HotkeyRecord, listeners: readonly HotkeyListener[]): boolean {
+    if (!this.overlayKeys?.showing() || !this.overlayKeys.moduleShowing?.(record)) return false;
+    return listeners.some((panel) => panel.moduleId === record.moduleId && panel.workspaceId === record.workspaceId);
   }
 
   /**
    * One press is one action: it goes to one panel of the module, the one used last, so several panels don't each act on
-   * it. A panel of the workspace shown comes first (not one lent from another workspace to the game layer), then one in
+   * it; for a key of a workspace not shown (its module's item is on screen), to a panel of that workspace. A panel of the workspace shown comes first (not one lent from another workspace to the game layer), then one in
    * sight: one running only with its game can't act on what needs the user (PanelGate), so the press would be lost there.
    */
   private pressed(record: HotkeyRecord): void {
     if (isOverlayAction(record.action)) return this.overlayKeys?.pressed(record);
-    if (this.options.workspaceId() !== record.workspaceId) return;
+    const listeners = this.panelListeners();
+    // A key of a workspace not shown works only for a panel of that workspace running behind the module's item on screen.
+    const shown = this.options.workspaceId() === record.workspaceId;
+    if (!shown && !this.runsForOverlay(record, listeners)) return;
     const here = (item: HotkeyListener) => ((item.workspaceId ?? record.workspaceId) === record.workspaceId ? 1 : 0);
     const inSight = (item: HotkeyListener) => (item.inSight?.() ?? true ? 1 : 0);
-    const panel = this.panelListeners()
-      .filter((item) => item.moduleId === record.moduleId)
+    const panel = listeners
+      .filter((item) => item.moduleId === record.moduleId && (shown || item.workspaceId === record.workspaceId))
       .sort((a, b) => here(b) - here(a) || inSight(b) - inSight(a) || b.usedAt - a.usedAt)[0];
     panel?.hotkeyPressed({ action: record.action, target: record.target });
   }

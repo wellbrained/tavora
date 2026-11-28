@@ -38,6 +38,8 @@ export interface OverlayHostPorts {
   changed(): void;
   /** Something the Settings page or the game watcher depends on changed (a game overlay was added, removed or toggled). */
   overlaysChanged(): void;
+  /** Which overlay links OBS has open changed: the panels feeding them keep running or may stop. */
+  streamsChanged?(): void;
   /** A module's game overlays in one workspace changed (the Overlay page added or removed one): its panels there hear it. */
   overGameChanged(module: { owner: string; moduleId: string; workspaceId: string }): void;
   saveLibrary(): void;
@@ -50,7 +52,7 @@ export interface OverlayHostPorts {
   /** The Overlay page's side of the host: every panel, which ones run, leaving the page, and the system's picture dialog. */
   page: {
     sources(): SourcePanel[];
-    keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): boolean[];
+    keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null; key?: string | null }[]): boolean[];
     leave(): void;
     openSettings(target: { workspaceId: string; moduleId: string; instanceId: string | null; key: string | null }): void;
     choosePicture(): Promise<string | undefined>;
@@ -112,6 +114,7 @@ export async function createOverlayServices(wiring: OverlayWiring): Promise<Over
     shell: ports.shell,
     language: ports.language,
     changed: ports.changed,
+    ...(ports.streamsChanged ? { streamsChanged: ports.streamsChanged } : {}),
   });
   const gameOverlays = await GameOverlays.create({
     userData: options.userData,

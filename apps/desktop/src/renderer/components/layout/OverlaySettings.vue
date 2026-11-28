@@ -50,6 +50,8 @@ const modes = computed(() => [
 ]);
 const mode = computed(() => shared((one) => one.mode));
 const capture = computed(() => shared((one) => one.hideFromCapture));
+/** Only panels selected: the hint says it covers the whole panel in the in-game layer too. */
+const panelsOnly = computed(() => props.items.every((one) => one.kind === "panel"));
 const opacity = computed({
   get: () => {
     const value = shared((one) => one.opacity);
@@ -108,7 +110,7 @@ const opacity = computed({
           <Switch :model-value="capture === true" :aria-label="t('overlays.capture.label')" data-testid="layout-capture" @update:model-value="change({ hideFromCapture: $event })" />
           <span v-if="capture === null" class="text-muted-foreground text-xs" data-testid="layout-capture-mixed">{{ t("overlays.layout.mixed") }}</span>
         </div>
-        <p class="text-muted-foreground text-xs">{{ t("overlays.capture.hint") }}</p>
+        <p class="text-muted-foreground text-xs" data-testid="layout-capture-hint">{{ t(panelsOnly ? "overlays.capture.panelHint" : "overlays.capture.hint") }}</p>
       </div>
       <div v-if="item && item.moveTargets.length" class="border-t pt-3">
         <DropdownMenu>

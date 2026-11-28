@@ -18,7 +18,15 @@ vi.mock("electron", () => {
   const contents = () => ({
     setWindowOpenHandler: () => undefined,
     setWebRTCIPHandlingPolicy: () => undefined,
-    on: () => undefined,
+    /** The page's events heard so far, to fire one in a test (`emitted`). */
+    heard: new Map<string, ((...args: unknown[]) => void)[]>(),
+    on(name: string, fn: (...args: unknown[]) => void) {
+      this.heard.set(name, [...(this.heard.get(name) ?? []), fn]);
+    },
+    insertCSS: async () => "style",
+    removeInsertedCSS: async () => undefined,
+    getZoomFactor: () => 1,
+    setZoomFactor: () => undefined,
     once: () => undefined,
     loadURL: async () => undefined,
     isDestroyed: () => false,
@@ -145,6 +153,7 @@ type RawWindow = {
   focusable: boolean;
   opacity: number;
   visible: boolean;
+  webContents: { heard: Map<string, (() => void)[]> };
 };
 
 function make(game: Rect | null = null, options: { overlay?: boolean; hidden?: boolean } = {}) {
@@ -442,5 +451,43 @@ describe("a game overlay window holding an overlay page", () => {
     window.setMode("off");
     expect(raw.ignoring).toBe(true);
     expect(frame.visible).toBe(false);
+  });
+});
+
+describe("a game overlay window holding an overlay page, as it loads", () => {
+  const loaded = async (raw: RawWindow) => {
+    for (const fn of raw.webContents.heard.get("did-finish-load") ?? []) fn();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+  };
+
+  it("stays see-through until its page has loaded with its opacity in, so it never flashes at full strength", async () => {
+    const { window, raw } = make(null, { overlay: true, hidden: false });
+    window.setOpacity(50);
+    window.setShown(true);
+    expect(raw.visible).toBe(true);
+    expect(raw.opacity).toBe(0);
+    await loaded(raw);
+    expect(raw.opacity).toBe(1);
+  });
+
+  it("stays see-through while veiled, and comes back once it isn't, but not before its page has loaded", async () => {
+    const { window, raw } = make(null, { overlay: true, hidden: false });
+    window.setShown(true);
+    window.setVeiled(true);
+    window.setVeiled(false);
+    expect(raw.opacity).toBe(0);
+    await loaded(raw);
+    expect(raw.opacity).toBe(1);
+    window.setVeiled(true);
+    expect(raw.opacity).toBe(0);
+    window.setVeiled(false);
+    expect(raw.opacity).toBe(1);
+  });
+
+  it("stays invisible in test runs", async () => {
+    const { window, raw } = make(null, { overlay: true, hidden: true });
+    window.setShown(true);
+    await loaded(raw);
+    expect(raw.opacity).toBe(0);
   });
 });

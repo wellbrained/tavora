@@ -76,7 +76,7 @@ export interface OverlayLayoutOptions<W extends LayoutWindow = LayoutWindow> {
   sources(): SourcePanel[];
   openWindow(request: { closed(): void }): W;
   /** The panels behind the items shown: they have to run for their pages to have anything to show, whichever workspace they are in. */
-  keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): boolean[];
+  keepRunning(panels: { workspaceId: string; moduleId: string; instanceId: string | null; key?: string | null }[]): boolean[];
   /** The page asked to go back to the workspace. */
   leave(): void;
   /** The toolbar's Settings: the panel behind an item shows in its dialog over the page, with the settings of `key` (an overlay's key; null for a panel's own item). */
@@ -504,7 +504,7 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     // Panels that can show over a game run too while the page is open, so what they list (overlay.setSources) is known.
     const listed = this.options.sources().filter((panel) => panel.inGame && !shown.some((info) => (info.ref.kind === "panel" ? info.ref.instanceId === panel.instanceId : info.keyTarget.workspaceId === panel.workspaceId && info.moduleId === panel.moduleId)));
     const runs = this.options.keepRunning([
-      ...shown.map((info) => ({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null })),
+      ...shown.map((info) => ({ workspaceId: info.keyTarget.workspaceId, moduleId: info.moduleId, instanceId: info.ref.kind === "panel" ? info.ref.instanceId : null, key: info.ref.kind === "panel" ? null : info.keyTarget.key })),
       ...listed.map((panel) => ({ workspaceId: panel.workspaceId, moduleId: panel.moduleId, instanceId: panel.instanceId })),
     ]);
     this.running = new Map(shown.map((info, index) => [info.id, runs[index] ?? false]));

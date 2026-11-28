@@ -7,6 +7,8 @@
 //   - The window is only as big as the card plus room for its shadow and its tooltips. It lets clicks through except
 //     while the pointer is over the card itself, so the room below never covers a panel.
 //   - Like the veil it is visible to screen capture, and the user can't close it: the layer (Close, its key, Esc) does.
+//   - It takes the keyboard when the user clicks it, or when the layer opens with no panel to take it (`focus`), so a
+//     game that locks the mouse lets go of it.
 import { app, BrowserWindow, type IpcMainEvent } from "electron";
 import { DEFAULT_THEME_FONT, type TavoraTheme } from "@tavora/sdk/protocol";
 import { cleanExtent } from "../shared/host-toasts";
@@ -19,6 +21,11 @@ export interface LayerCard {
   show(area: Rect, content: LayerCardContent, items?: readonly Rect[]): void;
   /** Above the layer's other windows. */
   raise(): void;
+  /**
+   * Gives the card the keyboard, once it is shown (now, or when its page has measured it): the layer opened with no
+   * panel to take it, and a game that locks the mouse lets go of it only when another window is in front.
+   */
+  focus?(): void;
   /** Whether the card has the keyboard (the user clicked or tabbed into it). */
   readonly focused: boolean;
   /** The theme or the language changed. */
@@ -56,6 +63,8 @@ export class GameLayerCard implements LayerCard {
   private items: readonly Rect[] = [];
   private content: LayerCardContent | null = null;
   private extent: { width: number; height: number } | null = null;
+  /** The card takes the keyboard once it is shown (focus before the page measured it). */
+  private wantsFocus = false;
   private readonly onQuit = () => {
     this.quitting = true;
   };
@@ -146,7 +155,15 @@ export class GameLayerCard implements LayerCard {
     this.send();
   }
 
-  /** Over the area's top centre, sized to the card, once the page has measured it; shown then, without taking the keyboard. */
+  focus(): void {
+    this.wantsFocus = true;
+    this.place();
+  }
+
+  /**
+   * Over the area's top centre, sized to the card, once the page has measured it; shown then, without taking the keyboard
+   * unless `focus` asked for it.
+   */
   private place(): void {
     const window = this.window;
     if (this.destroyed || window.isDestroyed() || !this.area || !this.extent) return;
@@ -156,6 +173,10 @@ export class GameLayerCard implements LayerCard {
     if (!window.isVisible()) {
       window.showInactive();
       window.setAlwaysOnTop(true, "screen-saver");
+    }
+    if (this.wantsFocus) {
+      this.wantsFocus = false;
+      window.focus();
     }
   }
 

@@ -92,6 +92,7 @@ function input(setups: Record<string, { overlays?: GameOverlay[]; panels?: InGam
     hasLive: () => true,
     card: (mode) => ({ mode }) as never,
     awayHandle: 0,
+    frontHandle: 0,
     make: { overlay: () => ({}) as never, panel: () => ({}) as never, live: () => ({}) as never },
     ...change,
   };
@@ -227,6 +228,17 @@ describe("layerScene", () => {
     expect(ids(layerScene(input({ elden: { panels: [todos] } }, { layer: open() })))).toEqual(["panel use", "live off"]);
     expect(ids(layerScene(input({ elden: { panels: [todos] } }, { layer: open({ mode: "arrange" }) })))).toEqual(["panel arrange", "live off"]);
     expect(layerScene(input({ elden: { panels: [todos] } }, { layer: open() })).items[0]).toMatchObject({ id: panelWindowId("p1"), instanceId: "p1", setup: "elden" });
+  });
+
+  it("hides a panel in the open layer from capture as its item says, the whole panel as well as its live view", () => {
+    const hidden = panel("p1", { hideFromCapture: true });
+    const items = layerScene(input({ elden: { panels: [hidden] } }, { layer: open() })).items;
+    expect(items).toMatchObject([{ kind: "panel", look: { hideFromCapture: true } }, { kind: "live", look: { hideFromCapture: true } }]);
+    expect(layerScene(input({ elden: { panels: [panel("p1")] } }, { layer: open() })).items[0]).toMatchObject({ kind: "panel", look: { hideFromCapture: false } });
+  });
+
+  it("passes on the handle of the game window in front", () => {
+    expect(layerScene(input({}, { frontHandle: 77 })).frontHandle).toBe(77);
   });
 
   it("shows a panel's live view only with something to show, veiled behind the panel while the layer is open", () => {

@@ -575,6 +575,18 @@ describe("modes and settings", () => {
     expect(live()[0]!.shown).toBe(false);
   });
 
+  it("says a module's item is on screen while its game is in front, so the module's own keys work there too", async () => {
+    const { service, world } = await setup();
+    show(service);
+    const clock = { owner: "official", moduleId: CLOCK.manifest.id, workspaceId: "elden" };
+    expect(service.moduleShowing(clock)).toBe(true);
+    expect(service.moduleShowing({ ...clock, workspaceId: "poe2" })).toBe(false);
+    expect(service.moduleShowing({ ...clock, owner: "local" })).toBe(false);
+    world.foreground = null;
+    service.tick();
+    expect(service.moduleShowing(clock)).toBe(false);
+  });
+
   it("has no key for an Always overlay or while the switch is off", async () => {
     const { service, world, key } = await setup();
     show(service);

@@ -116,6 +116,8 @@ export class LayerWindows {
   /** The windows shown and their stacking places at the last look; they are raised again when it changes. */
   private stackKey = "";
   private shownCount = 0;
+  /** The game window in front at the last look (0: none). */
+  private frontHandle = 0;
 
   constructor(private readonly options: LayerWindowsOptions) {}
 
@@ -160,6 +162,11 @@ export class LayerWindows {
     const handle = scene.awayHandle;
     const awayGame = handle !== 0 && platform.stackAboveGame && !platform.gameOnTop?.(handle) ? handle : 0;
     const onTop = (setup: string) => awayGame === 0 || setup === EVERYWHERE;
+    // The game came (back) in front, or is always on top itself: Windows put it over every window of its level when it was
+    // activated, a quick alt-tab between two looks too, so the windows shown go on top again.
+    const front = scene.frontHandle;
+    const raiseAgain = front !== 0 && (front !== this.frontHandle || platform.gameOnTop?.(front) === true);
+    this.frontHandle = front;
     const started: { entry: Entry; instanceId: string }[] = [];
     /** Whether a window came up in this look: it is drawn above the card, which goes on top again. */
     let shownNow = false;
@@ -205,7 +212,7 @@ export class LayerWindows {
       }
       this.card.show(layer.area, layer.card, this.cardItems);
     }
-    const { restacked, stacked } = this.restack(scene, veilNew, awayGame, onTop);
+    const { restacked, stacked } = this.restack(scene, veilNew || raiseAgain, awayGame, onTop);
     // One window takes the keyboard, the panel used last; not each in turn.
     let focused = false;
     if (started.length > 0) {
@@ -214,6 +221,10 @@ export class LayerWindows {
       newest?.entry.window.focusPanel?.();
       focused = newest !== undefined;
     }
+    // A layer that just opened with no panel to take the keyboard gives it to the card: a game that locks the mouse
+    // (most shooters and action games) lets go of it only when another window is in front, so Use, Arrange and Close can
+    // be clicked. Closing gives the game the keyboard back, as after a panel had it.
+    if (veilNew && !focused) this.card?.focus?.();
     // The card stays on top of everything the layer shows; a window given the keyboard comes to the top of its level, so after that.
     if (restacked || cardNew || shownNow || focused) this.card?.raise();
     return stacked;
@@ -255,6 +266,8 @@ export class LayerWindows {
     const entry = this.open.get(item.id) ?? this.lend(item);
     if (!entry) return false;
     entry.setup = item.setup;
+    // Hidden from capture before it shows, as its live view is: the whole panel, not only the view, stays off a stream.
+    this.style(entry, entry.opacity, look.hideFromCapture);
     if (!entry.window.dragging) entry.window.setRect(look.rect);
     this.zoomTo(entry, look.zoom);
     const shownNow = this.reveal(entry);
@@ -348,17 +361,18 @@ export class LayerWindows {
 
   /**
    * Stacks the windows shown as the setups' order says (Arrange on the Overlay page); where none was arranged, overlays
-   * below panels, as shown. Only an arranged order counts: windows coming and going don't raise the others. A fresh veil
-   * would otherwise sit above overlays that were shown before it.
+   * below panels, as shown. Only an arranged order counts: windows coming and going don't raise the others. All are raised
+   * again (`raiseAll`) under a fresh veil, which would otherwise sit above overlays shown before it, and when the game
+   * comes in front.
    */
-  private restack(scene: LayerScene, veilNew: boolean, awayGame: number, onTop: (setup: string) => boolean): { restacked: boolean; stacked: boolean } {
+  private restack(scene: LayerScene, raiseAll: boolean, awayGame: number, onTop: (setup: string) => boolean): { restacked: boolean; stacked: boolean } {
     const places = new Map(scene.items.flatMap((item) => (item.look ? [[item.id, item.look.z] as const] : [])));
     const stack = [...this.open]
       .filter(([, entry]) => entry.showing.status === "shown")
       .map(([id, entry]) => ({ id, entry, z: places.get(id) ?? Number.MAX_SAFE_INTEGER }))
       .sort((x, y) => x.z - y.z || Number(x.entry.kind !== "overlay") - Number(y.entry.kind !== "overlay") || x.entry.shownOrder - y.entry.shownOrder);
     const stackKey = stack.filter((one) => one.z !== Number.MAX_SAFE_INTEGER).map((one) => `${one.id}:${one.z}`).join("|");
-    const restacked = veilNew || stackKey !== this.stackKey;
+    const restacked = raiseAll || stackKey !== this.stackKey;
     if (restacked) for (const one of stack) one.entry.window.raise?.();
     this.stackKey = stackKey;
     for (const one of stack) one.entry.window.setTopmost?.(onTop(one.entry.setup));

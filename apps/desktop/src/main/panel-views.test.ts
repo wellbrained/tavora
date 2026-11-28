@@ -108,14 +108,23 @@ describe("visibility", () => {
     expect(a.suspended).toBe(true);
   });
 
-  it("keeps a panel running for the overlays going when it is out of sight, unless the window is hidden", () => {
+  it("keeps a panel running for the overlays going when it is out of sight, also while the window is hidden", () => {
     const rig = panelViewsRig();
     const a = rig.add(A);
+    const b = rig.add(B);
     rig.views.keepRunning(A);
-    rig.views.applyBounds();
+    rig.views.place([place(A), place(B)]);
+    expect(a.suspended).toBe(false);
+    rig.views.place([]);
     expect(a.visible).toBe(false);
     expect(a.suspended).toBe(false);
+    // Tavora minimized: its overlay goes on being fed (StarCraft 2's build card stays), while a panel only in its slot pauses.
+    rig.views.place([place(A), place(B)]);
     rig.world.hidden = true;
+    rig.views.applyBounds();
+    expect(a.suspended).toBe(false);
+    expect(b.suspended).toBe(true);
+    rig.views.stopKeeping(A);
     rig.views.applyBounds();
     expect(a.suspended).toBe(true);
   });

@@ -213,6 +213,8 @@ export interface SceneInput {
   card(mode: LayerMode): LayerCardContent;
   /** The handle of the game window the user left while overlays stay (0: none, or not known). */
   awayHandle: number;
+  /** The handle of the game window in front (0: none, or not known). */
+  frontHandle: number;
   /** The window each kind of item lives in, made only when it has none. A live view's keeps to the area of `setup`. */
   make: {
     overlay(overlay: GameOverlay, id: string): WindowMaker;
@@ -221,18 +223,21 @@ export interface SceneInput {
   };
 }
 
-/** How a shown panel looks: its place, zoom and mode, and its place in the setup's stacking order (null: never arranged). */
+/**
+ * How a shown panel looks: its place, zoom and mode, its place in the setup's stacking order (null: never arranged), and
+ * whether screen capture sees it (the item's Hide from capture, which covers the whole panel as well as its live view).
+ */
 export interface PanelLook {
   rect: Rect;
   zoom: number;
   mode: WindowMode;
   z: number | null;
+  hideFromCapture: boolean;
 }
 
-/** How a shown overlay looks: as a panel, and how see-through it is and whether screen capture sees it. */
+/** How a shown overlay looks: as a panel, and how see-through it is. */
 export interface OverlayLook extends PanelLook {
   opacity: Opacity;
-  hideFromCapture: boolean;
 }
 
 /** How a shown live view looks: as an overlay; while the layer is open, see-through behind its panel (`veiled`), and only if it is on screen already. */
@@ -261,6 +266,8 @@ export interface LayerScene {
   layer: { area: Rect; card: LayerCardContent } | null;
   /** The handle of the game window the user left while overlays stay right above it (0: above every window). */
   awayHandle: number;
+  /** The handle of the game window in front (0: none, or not known): the windows are raised again when it comes in front. */
+  frontHandle: number;
   /** Every item, in the order its window is seen to: overlays, the panels (only while the layer is open), live views. */
   items: SceneItem[];
 }
@@ -305,7 +312,7 @@ export function layerScene(input: SceneInput): LayerScene {
         kind: "panel",
         instanceId: panel.instanceId,
         setup,
-        look: { rect: placeItem(panel, where), zoom: contentScale(where.height), mode: arranging ? "arrange" : "use", z: panel.z ?? null },
+        look: { rect: placeItem(panel, where), zoom: contentScale(where.height), mode: arranging ? "arrange" : "use", z: panel.z ?? null, hideFromCapture: panel.hideFromCapture },
         make: () => input.make.panel(panel, id),
       });
     }
@@ -331,5 +338,5 @@ export function layerScene(input: SceneInput): LayerScene {
       items.push({ id, kind: "live", instanceId, setup, look, make: () => input.make.live(panel, id, setup) });
     } else items.push({ id, kind: "live", instanceId, setup: placed?.setup ?? null, look: null });
   }
-  return { layer: area && layer.status === "open" ? { area, card: input.card(layer.mode) } : null, awayHandle: input.awayHandle, items };
+  return { layer: area && layer.status === "open" ? { area, card: input.card(layer.mode) } : null, awayHandle: input.awayHandle, frontHandle: input.frontHandle, items };
 }

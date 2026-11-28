@@ -62,6 +62,8 @@ function rig() {
   const cards: (LayerCard & { request: LayerCardRequest })[] = [];
   const stacked: { game: number; windows: number[] }[] = [];
   const used = new Map<string, number>();
+  /** The game windows that are always on top themselves. */
+  const onTop = new Set<number>();
   const platform: LayerWindowsPlatform = {
     openWindow: (request) => {
       const window = new Window(request.id);
@@ -83,6 +85,7 @@ function rig() {
           calls.push("card show");
         },
         raise: () => void calls.push("card raise"),
+        focus: () => void calls.push("card focus"),
         refresh: () => {},
         destroy: () => void calls.push("card destroy"),
       };
@@ -90,10 +93,10 @@ function rig() {
       return card;
     },
     stackAboveGame: (game, handles) => (stacked.push({ game, windows: [...handles] }), true),
-    gameOnTop: () => false,
+    gameOnTop: (game) => onTop.has(game),
   };
   const layer = new LayerWindows({ platform, setMode: () => {}, close: () => {}, usedAt: (instanceId) => used.get(instanceId) ?? 0 });
-  return { layer, windows, cards, stacked, used };
+  return { layer, windows, cards, stacked, used, onTop };
 }
 
 const request = (id: string) => ({ id }) as OverlayWindowRequest;
@@ -124,10 +127,10 @@ function panel(id: string, lent: string[], change: Partial<Pick<PanelItem, "look
       return loan;
     },
   });
-  const { opacity: _opacity, hideFromCapture: _capture, veiled: _veiled, ...panelLook } = look({ mode: "use" });
+  const { opacity: _opacity, veiled: _veiled, ...panelLook } = look({ mode: "use" });
   return { id, kind: "panel", instanceId: id, setup: "elden", look: panelLook, make, ...change };
 }
-const scene = (items: SceneItem[], change: Partial<LayerScene> = {}): LayerScene => ({ layer: null, awayHandle: 0, items, ...change });
+const scene = (items: SceneItem[], change: Partial<LayerScene> = {}): LayerScene => ({ layer: null, awayHandle: 0, frontHandle: 0, items, ...change });
 const LAYER = { area: AREA, card: {} as never };
 
 beforeEach(() => {
@@ -228,6 +231,23 @@ describe("panels", () => {
     expect(calls.filter((call) => call.endsWith("focus"))).toEqual(["p2 focus"]);
   });
 
+  it("are hidden from capture before they show when the item says so, the whole panel and not only its live view", () => {
+    const { layer } = rig();
+    const hidden = panel("p", [], { look: { ...panel("p", []).look, hideFromCapture: true } });
+    layer.show(scene([hidden], { layer: LAYER }));
+    const own = calls.filter((call) => call.startsWith("p "));
+    expect(own).toContain("p capture true");
+    expect(own.indexOf("p capture true")).toBeLessThan(own.indexOf("p show"));
+    calls.length = 0;
+    layer.show(scene([hidden], { layer: LAYER }));
+    expect(calls).not.toContain("p capture true");
+    // Visible to capture by default: a new window already is, so nothing is said.
+    layer.show(scene([]));
+    calls.length = 0;
+    layer.show(scene([panel("q", [])], { layer: LAYER }));
+    expect(calls.some((call) => call.startsWith("q capture"))).toBe(false);
+  });
+
   it("whose page ended give the view back, forget the dead window and are lent into a new one at the next look", () => {
     const { layer } = rig();
     const lent: string[] = [];
@@ -271,7 +291,7 @@ describe("the layer's veil and card", () => {
     layer.show(scene([overlay("a")]));
     calls.length = 0;
     layer.show(scene([overlay("a")], { layer: LAYER }));
-    expect(calls).toEqual(["veil made", "veil place", "a rect", "a top", "card show", "a raise", "a top", "card raise"]);
+    expect(calls).toEqual(["veil made", "veil place", "a rect", "a top", "card show", "a raise", "a top", "card focus", "card raise"]);
     calls.length = 0;
     layer.show(scene([overlay("a")]));
     expect(calls).toEqual(["veil destroy", "card destroy", "a rect", "a top", "a top"]);
@@ -319,7 +339,48 @@ describe("the layer's veil and card", () => {
   });
 });
 
+describe("the keyboard when the layer opens", () => {
+  it("goes to the card when no panel takes it, so a game that locks the mouse lets go of it", () => {
+    const { layer } = rig();
+    layer.show(scene([overlay("a")]));
+    layer.show(scene([overlay("a")], { layer: LAYER }));
+    expect(calls.filter((call) => call.endsWith("focus"))).toEqual(["card focus"]);
+    // Once, as it opens: not at every look.
+    calls.length = 0;
+    layer.show(scene([overlay("a")], { layer: LAYER }));
+    expect(calls.filter((call) => call.endsWith("focus"))).toEqual([]);
+    // And again the next time it opens.
+    layer.show(scene([overlay("a")]));
+    layer.show(scene([overlay("a")], { layer: LAYER }));
+    expect(calls.filter((call) => call.endsWith("focus"))).toEqual(["card focus"]);
+  });
+
+  it("goes to the panel used last when there is one, never to the card as well", () => {
+    const { layer } = rig();
+    layer.show(scene([overlay("a"), panel("p", [])], { layer: LAYER }));
+    expect(calls.filter((call) => call.endsWith("focus"))).toEqual(["p focus"]);
+  });
+});
+
 describe("stacking", () => {
+  it("raises the windows shown again when the game comes in front, and at every look over a game that is always on top", () => {
+    const { layer, onTop } = rig();
+    layer.show(scene([overlay("a")], { frontHandle: 7 }));
+    calls.length = 0;
+    layer.show(scene([overlay("a")], { frontHandle: 7 }));
+    expect(calls.filter((call) => call.endsWith("raise"))).toEqual([]);
+    // Away and back: the game was put over them when it was activated.
+    layer.show(scene([overlay("a")], { frontHandle: 0 }));
+    layer.show(scene([overlay("a")], { frontHandle: 7 }));
+    expect(calls.filter((call) => call.endsWith("raise"))).toEqual(["a raise"]);
+    // A game always on top itself comes back above them after an alt-tab too quick for a look to see.
+    onTop.add(7);
+    calls.length = 0;
+    layer.show(scene([overlay("a")], { frontHandle: 7 }));
+    layer.show(scene([overlay("a")], { frontHandle: 7 }));
+    expect(calls.filter((call) => call.endsWith("raise"))).toEqual(["a raise", "a raise"]);
+  });
+
   it("raises windows in their arranged order only when it changes, overlays below panels where none was arranged", () => {
     const { layer } = rig();
     const lent: string[] = [];

@@ -127,6 +127,7 @@ import { readSteamKinds } from "./steam-appinfo";
 import { GameOverlays, layerBinding, toggleBinding, type PanelInfo } from "./game-overlay-service";
 import { scopeForKind } from "./game-overlays";
 import { OverlayLayout, type SourcePanel } from "./overlay-layout";
+import { OverlayFeeders, type FedKey } from "./overlay-feeders";
 import { OverlayCanvas } from "./overlay-canvas";
 import { PICTURES_FOLDER } from "./layout-pictures";
 import { parseLayoutMessage } from "../shared/layout-view";
@@ -444,6 +445,8 @@ export class Host {
   });
   /** How to put back what the user deleted a moment ago (a layout, a folder, a workspace), while its toast offers Undo. */
   private readonly undos = new UndoShelf();
+  /** The panel that published each overlay key last: the one kept running for that overlay (syncOverlayPanels). */
+  private readonly overlayFeeders = new OverlayFeeders();
   /** What every browser session is made safe with; built when the first Browser panel opens. */
   private browserHooks: BrowserSessionHooks | undefined;
   /** The third-party licences, read the first time Settings asks (licences()). */
@@ -2433,37 +2436,75 @@ export class Host {
     this.layout.open(setupId);
   }
 
+  /**
+   * overlay.* of Streaming for one panel; a publish notes the panel as the one feeding that key (for a key with a game
+   * overlay or an OBS link), so that is the panel kept running for it.
+   */
+  private overlayOf(record: InstanceRecord, module: InstalledModule, workspaceId: string): ReturnType<Streaming["overlayFor"]> {
+    const overlay = this.streaming.overlayFor(module, workspaceId);
+    return {
+      ...overlay,
+      publish: (key, state) => {
+        overlay.publish(key, state);
+        const subject = { owner: module.owner, moduleId: module.manifest.id, workspaceId, key };
+        if (!this.gameOverlays.has(subject) && !this.streaming.overlayStore.peek(subject)) return;
+        if (this.overlayFeeders.published(subject, record.instanceId)) this.syncOverlayPanels();
+      },
+    };
+  }
+
+  /** The panels of a workspace that feed an item: a panel item's own, or for a module's overlay the one that published its key (overlay-feeders.ts). */
+  private feedersOf(workspaceId: string, item: { instanceId: string } | FedKey): InstanceRecord[] {
+    const entry = this.library.workspaces[workspaceId];
+    if (!entry || entry.trashedAt) return [];
+    const records = this.records(entry.id);
+    return "instanceId" in item ? records.filter((record) => record.instanceId === item.instanceId) : this.overlayFeeders.of(records, item);
+  }
+
   /** The Overlay page shows what panels publish, so the panels of its items run, hidden, even from a workspace not opened this run; they stop when the page is left. */
-  private runForOverlayPage(panels: { workspaceId: string; moduleId: string; instanceId: string | null }[]): boolean[] {
+  private runForOverlayPage(panels: { workspaceId: string; moduleId: string; instanceId: string | null; key?: string | null }[]): boolean[] {
     return panels.map((panel) => {
       const entry = this.library.workspaces[panel.workspaceId];
       if (!entry || entry.trashedAt) return false;
-      const record = this.records(entry.id).find((item) => (panel.instanceId ? item.instanceId === panel.instanceId : item.moduleId === panel.moduleId));
-      if (!record) return false;
-      if (this.screen === "overlay" && !this.panels.has(record.instanceId) && this.modulePanels.typeOf(record) !== undefined) {
-        this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+      const records = panel.instanceId
+        ? this.feedersOf(entry.id, { instanceId: panel.instanceId })
+        : this.feedersOf(entry.id, { moduleId: panel.moduleId, workspaceId: entry.id, key: panel.key ?? "" });
+      for (const record of records) {
+        if (this.screen === "overlay" && !this.panels.has(record.instanceId) && this.modulePanels.typeOf(record) !== undefined) {
+          this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+        }
       }
-      return this.panels.has(record.instanceId);
+      return records.some((record) => this.panels.has(record.instanceId));
     });
   }
 
-  /** Started: the panels behind every overlay and panel item run now. Stopped: they are let go of, except those of the workspace shown. */
+  /**
+   * Started: the panels behind every overlay and panel item run now, and those behind an overlay OBS has open, whether
+   * game overlays are on or not. Stopped: they are let go of, except those of the workspace shown.
+   */
   private syncOverlayPanels(): void {
     const layout = this.gameOverlays.layout;
     const wanted = new Set<string>();
+    const keep = (workspaceId: string, records: readonly InstanceRecord[]) => {
+      const entry = this.library.workspaces[workspaceId];
+      if (!entry) return;
+      for (const record of records) {
+        if (this.modulePanels.typeOf(record) === undefined || record.moduleId === BROWSER_MODULE_ID) continue;
+        wanted.add(record.instanceId);
+        this.panels.keepRunning(record.instanceId);
+        if (!this.panels.has(record.instanceId)) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+      }
+    };
     if (this.library.gameOverlays && !this.gameOverlays.hidden) {
       for (const setup of layout.setups()) {
         for (const info of layout.items(setup)) {
-          const entry = this.library.workspaces[info.keyTarget.workspaceId];
-          if (!entry || entry.trashedAt) continue;
-          const record = this.records(entry.id).find((item) => (info.ref.kind === "panel" ? item.instanceId === info.ref.instanceId : item.moduleId === info.moduleId));
-          if (!record || this.modulePanels.typeOf(record) === undefined || record.moduleId === BROWSER_MODULE_ID) continue;
-          wanted.add(record.instanceId);
-          this.panels.keepRunning(record.instanceId);
-          if (!this.panels.has(record.instanceId)) this.createView(record, { id: entry.id, displayName: entry.name, kind: entry.kind });
+          const { workspaceId } = info.keyTarget;
+          keep(workspaceId, this.feedersOf(workspaceId, info.ref.kind === "panel" ? { instanceId: info.ref.instanceId } : info.keyTarget));
         }
       }
     }
+    // An OBS source keeps its panel going as a game overlay does, also while Tavora shows another workspace or is minimized.
+    for (const subject of this.streaming.streamedSubjects()) keep(subject.workspaceId, this.feedersOf(subject.workspaceId, subject));
     // One still running with its game, shown in its workspace or over the game stays.
     for (const instanceId of this.panels.keptIds()) if (!wanted.has(instanceId)) this.panels.letGo(instanceId);
   }
@@ -2757,6 +2798,7 @@ export class Host {
    * until then it may still save its last state, which would bring the file back.
    */
   private closeView(instanceId: string): void {
+    this.overlayFeeders.forget(instanceId);
     void this.panels
       .closeForGood(instanceId, () => this.data.panelState.remove(instanceId))
       .catch((error: unknown) => console.error("[tavora]", error));
@@ -3105,7 +3147,7 @@ export class Host {
       connection: this.connection,
       media: this.media,
       overlay: {
-        ...this.streaming.overlayFor(module, workspace.id),
+        ...this.overlayOf(record, module, workspace.id),
         showOverGame: (key) => this.gameOverlays.show(module, workspace.id, key),
         hideOverGame: (key) => this.gameOverlays.hide(module, workspace.id, key),
         overGame: () => this.gameOverlays.keysOf(module, workspace.id),
@@ -4013,6 +4055,10 @@ export class Host {
           this.pushStateSoon();
         },
         overGameChanged: (changed) => this.tellOverGameChanged(changed),
+        // Before the overlays are wired (a stream can't open before the server listens, but to be safe) there is nothing to sync.
+        streamsChanged: () => {
+          if (this.gameOverlays) this.syncOverlayPanels();
+        },
         fontCss: () => fontStylesheet(this.appearance.host.font),
         saveLibrary: () => this.saveLibrary(),
         workspaceId: () => this.workspaceId,
