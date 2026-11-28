@@ -9,6 +9,7 @@ export const en = {
   valuesError: "Could not save your values: {error}",
 
   "mode.label": "Keypad",
+  "calc.toolbar": "Calculator controls",
   "mode.basic": "Basic",
   "mode.plus": "Plus",
 
@@ -90,6 +91,7 @@ export const de: Record<keyof typeof en, string> = {
   valuesError: "Werte nicht gespeichert: {error}",
 
   "mode.label": "Tasten",
+  "calc.toolbar": "Rechner-Steuerung",
   "mode.basic": "Einfach",
   "mode.plus": "Plus",
 

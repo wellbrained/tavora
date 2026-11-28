@@ -2,6 +2,7 @@
    the rest of the overlay it is drawn over game art, not in the app, so its colours are the item's own text colours with a dark
    outline instead of theme colours. The box around the lines (size, alignment, scrolling) is the kit's OverlayText.
    Its font is Tavora's (the one the user picked, from watchOverlay), Inter on a Tavora before that setting. */
+/* rules-allow-file: color, color-fallback, font-family, font-weight, motion drawn over the game and on stream, in the item's own colours and fonts */
 @import "@fontsource-variable/inter/wght.css";
 @import "@fontsource-variable/jetbrains-mono/wght.css";
 

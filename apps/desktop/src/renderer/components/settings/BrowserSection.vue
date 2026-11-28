@@ -2,9 +2,9 @@
 // Settings > Browser: the sites the user marked in a Browser panel's
 // toolbar, and clearing what websites stored. Sites are only added from the
 // toolbar, where the user is on the site; here they can be removed.
-import { X } from "@lucide/vue";
 import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { Chip } from "@tavora/official-ui/components/ui/chip";
 import { act, confirmAction, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
@@ -64,11 +64,8 @@ function clear(scope: "workspace" | "shared") {
       <template #below>
         <p v-if="!list.sites().length" class="text-muted-foreground/80 mt-2 text-sm">{{ list.empty() }}</p>
         <ul v-else class="mt-2 flex flex-wrap gap-2" :data-testid="list.setting">
-          <li v-for="site in list.sites()" :key="site" class="bg-secondary flex h-8 items-center gap-1 rounded-md pr-1 pl-3 text-sm">
-            {{ site }}
-            <Button variant="danger" size="icon-xs" :aria-label="t('settings.browser.removeSite', { site })" @click="act({ type: 'browser-forget-site', list: list.id, site })">
-              <X />
-            </Button>
+          <li v-for="site in list.sites()" :key="site" class="flex">
+            <Chip removable size="lg" :label="site" :remove-label="t('settings.browser.removeSite', { site })" @remove="act({ type: 'browser-forget-site', list: list.id, site })" />
           </li>
         </ul>
       </template>

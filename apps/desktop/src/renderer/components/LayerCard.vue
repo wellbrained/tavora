@@ -76,7 +76,7 @@ onBeforeUnmount(() => measure.disconnect());
     <div
       v-if="state"
       ref="card"
-      class="bg-card text-card-foreground pointer-events-auto flex w-max items-center gap-2 rounded-lg border p-1 pl-2.5 font-sans shadow-md"
+      class="bg-card text-card-foreground pointer-events-auto flex w-max items-center gap-2 rounded-lg border p-1 pl-2.5 font-sans shadow-elevation-2"
       role="group"
       :aria-label="state.texts.label"
       :data-status="mode"

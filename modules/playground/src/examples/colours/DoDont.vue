@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// rules-allow-file: color, color-fallback the "don't" example, shown as code
 // The same card twice. The "don't" is only shown as code, never drawn: a hex colour or a palette colour looks right in
 // one theme and breaks in another.
 import { Check, X } from "@lucide/vue";

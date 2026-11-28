@@ -23,7 +23,7 @@ import { t } from "../i18n";
 import { formatSize } from "../catalog-size";
 import { PLACEHOLDER_MODULES } from "../catalog-placeholder";
 import { cn } from "@tavora/official-ui/lib/utils";
-import { ChevronRight, CircleCheck, Gamepad2, ShieldCheck, WifiOff } from "@lucide/vue";
+import { CircleCheck, Gamepad2, ShieldCheck, WifiOff } from "@lucide/vue";
 import CatalogIcon from "./CatalogIcon.vue";
 import CatalogModuleDialog from "./CatalogModuleDialog.vue";
 import CatalogRating from "./CatalogRating.vue";
@@ -134,7 +134,7 @@ function settings() {
     <EmptyState v-if="problem" class="mt-8" role="status" :title="t(`catalog.problem.${problem}.title`)" :description="t(`catalog.problem.${problem}.text`)" :data-testid="`catalog-${problem}`">
       <template #icon><WifiOff /></template>
       <template #action>
-        <Button v-if="problem === 'off'" variant="secondary" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}<ChevronRight data-icon="end" /></Button>
+        <Button v-if="problem === 'off'" variant="secondary" data-testid="catalog-settings" @click="settings">{{ t("catalog.openSettings") }}</Button>
         <Button v-else variant="secondary" data-testid="catalog-retry" @click="load">{{ t("catalog.retry") }}</Button>
       </template>
     </EmptyState>
@@ -156,9 +156,9 @@ function settings() {
       <ul class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">
         <li v-for="module in cards" :key="module.id" class="bg-background/40 hover:border-primary/40 flex flex-col gap-3 rounded-xl border p-4 transition-colors" :data-testid="`catalog-${module.id}`">
           <div class="flex min-w-0 gap-3">
-            <button type="button" class="focus-visible:ring-ring flex-none rounded-xl outline-none focus-visible:ring-2" tabindex="-1" aria-hidden="true" @click="open(module)">
+            <Button variant="bare" class="flex-none rounded-xl" tabindex="-1" aria-hidden="true" @click="open(module)">
               <CatalogIcon :module-id="module.id" :has="module.icon" />
-            </button>
+            </Button>
             <div class="min-w-0">
               <div class="flex min-w-0 items-baseline gap-2">
                 <TextLink class="font-medium" :title="module.name"

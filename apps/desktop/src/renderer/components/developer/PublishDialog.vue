@@ -4,7 +4,7 @@
 // listed with its fix right here: the next version and its patch notes, an id with the developer's own
 // prefix (Use it, or Check and Claim it), or a build. Publish uploads exactly what this shows; the click is the
 // approval, so nothing asks again.
-import { ArrowUpRight, CircleAlert, Loader, TriangleAlert, Upload } from "@lucide/vue";
+import { CircleAlert, Loader, TriangleAlert, Upload } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DialogButton, DialogFooter } from "@tavora/official-ui/components/ui/dialog";
@@ -164,7 +164,7 @@ function browse() {
       <p class="text-muted-foreground text-sm" data-testid="publish-done">{{ t(waiting ? "publish.waitingText" : "publish.doneText") }}</p>
       <DialogFooter>
         <DialogButton close variant="ghost" @click="close">{{ t("common.close") }}</DialogButton>
-        <DialogButton v-if="!waiting" data-testid="publish-browse" @click="browse">{{ t("publish.browse") }}<ArrowUpRight data-icon="end" /></DialogButton>
+        <DialogButton v-if="!waiting" data-testid="publish-browse" @click="browse">{{ t("publish.browse") }}</DialogButton>
       </DialogFooter>
     </template>
 

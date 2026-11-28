@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.110",
+    "date": "2026-11-28",
+    "notes": [
+      "Delete buttons are red, and the add buttons show an arrow."
+    ]
+  },
+  {
     "version": "0.1.109",
     "date": "2026-11-28",
     "notes": [

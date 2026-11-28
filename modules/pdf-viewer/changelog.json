@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.97",
+    "date": "2026-11-28",
+    "notes": [
+      "The open file is marked more clearly in the file list."
+    ]
+  },
+  {
     "version": "0.1.96",
     "date": "2026-11-28",
     "notes": [

@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.3.99",
+    "date": "2026-11-28",
+    "notes": [
+      "A button puts the style palette back, and Escape cancels dragging it.",
+      "Icons and arrows on the toolbar buttons."
+    ]
+  },
+  {
     "version": "0.3.98",
     "date": "2026-11-28",
     "notes": [

@@ -2,7 +2,8 @@
 // `.css`, without tests), so they don't depend on someone remembering the rulebook. With no folder it checks the
 // modules in `modules/` and the examples in `examples/` (or, where there is no `modules/`, the module folders in the
 // current folder, as in tavora-modules).
-// A folder is a module (it has a tavora.module.json) or holds modules.
+// A folder is a module (it has a tavora.module.json) or holds modules. With no folder it also checks the app's renderer
+// and the kit (AREAS), without the rules that only make sense for a module.
 //
 // Known breaks are kept in module-rules-baseline.json in the current folder; only new ones fail (exit code 1).
 // `--update-baseline` rewrites it for the checked modules. A real exception (game art, the paper of a PDF page, canvas
@@ -35,6 +36,17 @@ export const RULES = {
   "menu-anchor": "Pass the element as anchor: ui.showMenu({ anchor: element }), never the pointer position.",
   "file-save": "Save through files.saveJson or pictures.save (Tavora's save dialog), not a browser download.",
   "window-keys": "Listen for keys with usePaneKeys(root, handler) or on your own element (a ref), not the whole window: the component may be shown twice.",
+};
+
+/** Rules about a module as a whole: its lifecycle, panel state, catalogs and one page per panel. */
+const MODULE_ONLY = ["suspend-flush", "view-flush", "panel-state-read", "catalogs", "window-keys"];
+/**
+ * Source that is no module but follows the same look and controls: checked whole (the folder is its source), without
+ * the rules in `skip`. The kit draws the controls, so it may use raw elements and draws their focus ring.
+ */
+export const AREAS = {
+  "apps/desktop/src/renderer": { skip: new Set(MODULE_ONLY) },
+  "modules/shared/src": { skip: new Set([...MODULE_ONLY, "kit-control", "focus-ring"]) },
 };
 
 /** Problems with an allow comment itself. They are never kept in the baseline. */
@@ -722,6 +734,10 @@ function entryScripts(pages) {
 function pageRoots(analysed) {
   const roots = new Set();
   for (const a of analysed) {
+    // A root loaded on demand: `import("./App.vue").then(… createApp(App))`.
+    if (/\bcreateApp\s*\(/.test(a.code)) {
+      for (const m of matches(/\bimport\s*\(\s*["']([^"']+\.vue)["']\s*\)/g, a.code)) roots.add(path.posix.normalize(path.posix.join(path.posix.dirname(a.file), m[1])));
+    }
     for (const m of matches(/\bcreateApp\s*\(/g, a.code)) {
       const args = argsAt(a.code, m.index + m[0].length - 1);
       for (const id of new Set(args.match(/[A-Za-z_$][\w$]*/g) ?? [])) {
@@ -759,9 +775,9 @@ const SAVES = /(?<![\w$])\w*(?:[sS]ave|[pP]ersist|[wW]rite)\w*\s*[(,)]|\.setStat
  * The breaks in one module: every file's, plus the rules about the module as a whole (a delayed save needs an
  * onSuspend flush, panel state is read back, ZoomPane views are flushed, the catalogs are tested).
  * `files`: [{ file, text }] of the module's src, tests included (they only count for checkCatalogs and catalogProblems), and its pages
- * (`*.html`, which name the entry scripts).
+ * (`*.html`, which name the entry scripts). Rules in `skip` are left out (see AREAS).
  */
-export function checkModule(files) {
+export function checkModule(files, { skip = new Set() } = {}) {
   const pages = files.filter((f) => f.file.endsWith(".html"));
   const sources = files.filter((f) => SOURCE.test(f.file) && !SKIP.test(f.file));
   const tests = files.filter((f) => SKIP.test(f.file) && !f.file.endsWith(".d.ts"));
@@ -822,7 +838,7 @@ export function checkModule(files) {
     if (a.isAllowed(line, rule)) continue;
     findings.push(finding(a.file, a.lines, line, rule, message));
   }
-  return findings.sort((x, y) => (x.file === y.file ? x.line - y.line : x.file < y.file ? -1 : 1));
+  return findings.filter((f) => !skip.has(f.rule)).sort((x, y) => (x.file === y.file ? x.line - y.line : x.file < y.file ? -1 : 1));
 }
 
 
@@ -830,19 +846,22 @@ export function checkModule(files) {
 
 const slash = (p) => p.split(path.sep).join("/");
 
-/** The module folders to check, relative to `root`: each folder given, or the modules in it. */
+/** The folders to check, relative to `root`: each one given (a module, an area, a folder of modules), or all of them. */
 export function findModules(root, folders = []) {
   const asked = folders.length ? folders : existsSync(path.join(root, "modules")) ? ["modules", ...(existsSync(path.join(root, "examples")) ? ["examples"] : [])] : ["."];
   const found = [];
   for (const folder of asked) {
     const dir = path.resolve(root, folder);
-    if (existsSync(path.join(dir, "tavora.module.json"))) found.push(dir);
+    if (slash(path.relative(root, dir)) in AREAS) {
+      if (existsSync(dir)) found.push(dir);
+    } else if (existsSync(path.join(dir, "tavora.module.json"))) found.push(dir);
     else if (existsSync(dir)) {
       for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
         if (entry.isDirectory() && existsSync(path.join(dir, entry.name, "tavora.module.json"))) found.push(path.join(dir, entry.name));
       }
     }
   }
+  if (!folders.length) found.push(...Object.keys(AREAS).map((area) => path.resolve(root, area)).filter((dir) => existsSync(dir)));
   return [...new Set(found)].map((dir) => slash(path.relative(root, dir)) || ".");
 }
 
@@ -860,11 +879,13 @@ function sourceFiles(dir) {
   return out.sort();
 }
 
-/** Every break in the given module folders (relative to `root`). */
+/** Every break in the given module and area folders (relative to `root`). */
 export function checkModules(root, modules) {
-  return modules.flatMap((module) =>
-    checkModule(sourceFiles(path.join(root, module, "src")).map((full) => ({ file: slash(path.relative(root, full)), text: readFileSync(full, "utf8").replace(/\r\n/g, "\n") }))).map((f) => ({ ...f, module })),
-  );
+  return modules.flatMap((module) => {
+    const area = AREAS[module];
+    const files = sourceFiles(path.join(root, module, area ? "" : "src")).map((full) => ({ file: slash(path.relative(root, full)), text: readFileSync(full, "utf8").replace(/\r\n/g, "\n") }));
+    return checkModule(files, area).map((f) => ({ ...f, module }));
+  });
 }
 
 // ── Baseline ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -949,7 +970,7 @@ export function main(argv, { cwd = process.cwd(), log = console.log } = {}) {
   if (flags.has("--update-baseline")) {
     writeFileSync(baselinePath, `${JSON.stringify(updatedBaseline(baseline, findings, modules), null, 2)}\n`);
     const kept = findings.filter((f) => f.rule !== ALLOW_RULE);
-    log(`${BASELINE_FILE}: ${kept.length} known break${kept.length === 1 ? "" : "s"} in ${modules.length} module${modules.length === 1 ? "" : "s"}.`);
+    log(`${BASELINE_FILE}: ${kept.length} known break${kept.length === 1 ? "" : "s"} in ${modules.length} folder${modules.length === 1 ? "" : "s"}.`);
     const problems = findings.filter((f) => f.rule === ALLOW_RULE);
     for (const f of problems) log(show(f));
     return problems.length ? 1 : 0;
@@ -969,7 +990,9 @@ export function main(argv, { cwd = process.cwd(), log = console.log } = {}) {
     log("Breaks per module:");
     for (const [module, n] of Object.entries(byModule)) log(`  ${module.padEnd(28)} ${n}`);
   }
-  const where = `${modules.length} module${modules.length === 1 ? "" : "s"}`;
+  const areas = modules.filter((m) => m in AREAS).length;
+  const count = modules.length - areas;
+  const where = [count || !areas ? `${count} module${count === 1 ? "" : "s"}` : "", areas ? `${areas} other folder${areas === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
   if (fresh.length) {
     log(`\n${fresh.length} new break${fresh.length === 1 ? "" : "s"} of the module rules in ${where} (${known.length} known in ${BASELINE_FILE}).`);
     log(`Fix ${fresh.length === 1 ? "it" : "them"} (docs/module-rules.md in tavora), or mark a real exception with \`// rules-allow: <rule> <reason>\` on the line or alone on the line before.`);

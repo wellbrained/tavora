@@ -3,15 +3,15 @@ import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import type { ExcalidrawTextElement, FileId } from "@excalidraw/excalidraw/element/types";
 
 // Scene colours work with Excalidraw's light/dark filter and remain editable with its usual style palette.
-const CARD_STYLE = { strokeColor: "#d6cfc1", strokeWidth: 1, fillStyle: "solid" as const, roughness: 0, roundness: { type: 3 as const, value: 8 } };
-const HEADING = "#26231e";
-const BODY = "#514b40";
+const CARD_STYLE = { strokeColor: "#d6cfc1", strokeWidth: 1, fillStyle: "solid" as const, roughness: 0, roundness: { type: 3 as const, value: 8 } }; // rules-allow: color ink and paper drawn on the canvas, saved with the board
+const HEADING = "#26231e"; // rules-allow: color ink and paper drawn on the canvas, saved with the board
+const BODY = "#514b40"; // rules-allow: color ink and paper drawn on the canvas, saved with the board
 const BODY_LINE_HEIGHT = 1.5 as ExcalidrawTextElement["lineHeight"];
 
 export function noteCard(x: number, y: number, heading: string, body: string) {
   const groupIds = [crypto.randomUUID()];
   const elements = convertToExcalidrawElements([
-    { type: "rectangle", x, y, width: 300, height: 190, backgroundColor: "#f5f0e4", ...CARD_STYLE, groupIds },
+    { type: "rectangle", x, y, width: 300, height: 190, backgroundColor: "#f5f0e4", ...CARD_STYLE, groupIds }, // rules-allow: color ink and paper drawn on the canvas, saved with the board
     { type: "text", x: x + 20, y: y + 20, width: 260, autoResize: false, text: heading, fontSize: 24, fontFamily: 2, strokeColor: HEADING, groupIds },
     { type: "text", x: x + 20, y: y + 62, width: 260, autoResize: false, text: body, fontSize: 17, fontFamily: 2, lineHeight: BODY_LINE_HEIGHT, strokeColor: BODY, groupIds },
   ]);
@@ -26,7 +26,7 @@ export function pictureCard(x: number, y: number, fileId: FileId, width: number,
   const w = width * scale;
   const h = height * scale;
   const elements = convertToExcalidrawElements([
-    { type: "rectangle", x, y, width: Math.max(w, 160) + 24, height: h + 64, backgroundColor: "#f1eee8", ...CARD_STYLE, groupIds, customData },
+    { type: "rectangle", x, y, width: Math.max(w, 160) + 24, height: h + 64, backgroundColor: "#f1eee8", ...CARD_STYLE, groupIds, customData }, // rules-allow: color ink and paper drawn on the canvas, saved with the board
     { type: "image", x: x + 12, y: y + 12, width: w, height: h, fileId, status: "saved", groupIds, customData },
     { type: "text", x: x + 16, y: y + h + 28, width: Math.max(w, 160) - 8, autoResize: false, text: caption, fontSize: 16, fontFamily: 2, lineHeight: BODY_LINE_HEIGHT, strokeColor: BODY, groupIds, customData },
   ]);

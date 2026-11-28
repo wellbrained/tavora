@@ -499,7 +499,8 @@ mounts (that is where the page's keydown with `handleUndoKey` goes). Text catalo
 skip the colour and motion rules, since a sentence like "Items #123" isn't a colour. It runs in CI and in `pnpm lint`.
 In `tavora-modules`, `pnpm check:modules` runs the same script from the `../tavora` checkout.
 
-- **Run it**: `pnpm check:modules` checks `modules/*` and `examples/*` (in `tavora-modules`, every module folder); name folders to check
+- **Run it**: `pnpm check:modules` checks `modules/*` and `examples/*` (in `tavora-modules`, every module folder), and in
+  this repo the app renderer (`apps/desktop/src/renderer`) and the kit (`modules/shared/src`) too; name folders to check
   only those (`pnpm check:modules modules/todos`). Each break is one line: file and line, the rule, what it found and
   what to use instead.
 - **Known breaks** are in `module-rules-baseline.json`; only new ones fail. A break is known by its file, rule and the
@@ -530,5 +531,9 @@ In `tavora-modules`, `pnpm check:modules` runs the same script from the `../tavo
   ```
 
 - `--all` lists the known breaks too, `--summary` counts all of them per rule and per module.
+
+The app and the kit are no modules, so the rules about a module as a whole (flushes, panel state, catalogs, window
+keys) don't apply to them; the kit also skips `kit-control` and `focus-ring`, since it draws the controls. The files
+that define the tokens and styles carry `rules-allow-file`.
 
 A clean check doesn't replace the [Done checklist](#5-done-checklist): it can't see texts, layout, behaviour or a theme.

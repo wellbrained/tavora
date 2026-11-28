@@ -1,5 +1,6 @@
 /* The page OBS shows (and the game layer): transparent, nothing but the text, which fills the Browser Source. The text itself is
    drawn by overlay-view.ts and styled in overlay-view.css, which the settings' preview uses too. */
+/* rules-allow-file: color, color-fallback, font-family, font-weight, motion drawn over the game and on stream, in the item's own colours and fonts */
 @import "./overlay-view.css";
 
 html,

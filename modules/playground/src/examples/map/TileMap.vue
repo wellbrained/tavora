@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// rules-allow-file: color demo art drawn on the made-up map
 // The tile map specimen on a made-up world: its tiles are drawn here from the theme's colours (a real module serves
 // game tiles), with an island so the levels line up visibly, and a grid with each tile's level and place.
 import { Castle, Egg, Focus, Gem } from "@lucide/vue";

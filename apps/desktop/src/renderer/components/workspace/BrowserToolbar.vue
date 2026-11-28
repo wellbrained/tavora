@@ -1,12 +1,13 @@
 <script setup lang="ts">
 // A Browser panel's toolbar. It is drawn by the host UI, above the page's
 // native view, so a page can never draw over it or fake the address it shows.
-import { ArrowLeft, ArrowRight, ExternalLink, Minimize2, Plus, RotateCw, ShieldCheck, ShieldOff, Users, Volume2, VolumeX, X } from "@lucide/vue";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Minimize2, Plus, RotateCw, ShieldCheck, ShieldOff, Users, Volume2, VolumeX, X } from "@lucide/vue";
 import { computed, onMounted, ref, watch } from "vue";
 import type { BrowserCommand, BrowserState } from "../../../shared/host-api";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Input } from "@tavora/official-ui/components/ui/input";
 import { Toggle } from "@tavora/official-ui/components/ui/toggle";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { act, addressFocus, showToast } from "../../host";
 import { t } from "../../i18n";
@@ -89,7 +90,7 @@ function toggleAdblock() {
 </script>
 
 <template>
-  <div class="flex h-10 flex-none items-center gap-0.5 border-b px-1.5" :data-testid="`browser-toolbar-${instanceId}`" @keydown="onKeydown">
+  <Toolbar variant="bar" class="flex-none" :label="t('browser.toolbarLabel')" :data-testid="`browser-toolbar-${instanceId}`" @keydown="onKeydown">
     <Button variant="ghost" size="icon-sm" :aria-label="t('browser.back')" :title="t('browser.back')" :aria-keyshortcuts="keyshortcuts('browser.back')" :disabled="!browser.canGoBack" data-testid="browser-back" @click="command('back')">
       <ArrowLeft />
     </Button>
@@ -184,7 +185,7 @@ function toggleAdblock() {
       <Plus />
     </Button>
     <Button variant="ghost" size="icon-sm" :aria-label="t('browser.external')" :title="t('browser.external')" :disabled="!browser.url" data-testid="browser-external" @click="command('open-external')">
-      <ExternalLink />
+      <ArrowUpRight />
     </Button>
-  </div>
+  </Toolbar>
 </template>

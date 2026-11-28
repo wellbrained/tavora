@@ -121,9 +121,9 @@ async function savePicture(png: string) {
              the picture, the small button removes it. -->
         <div class="flex items-end gap-3 px-5">
           <div class="profile-pop relative -mt-11 w-fit flex-none">
-            <button
-              type="button"
-              class="group/avatar ring-background focus-visible:outline-ring relative block rounded-full ring-4 focus-visible:outline-2 focus-visible:outline-offset-4"
+            <Button
+              variant="bare"
+              class="group/avatar ring-background relative block rounded-full ring-4"
               data-testid="profile-picture"
               :aria-label="t('profile.changePicture')"
               :title="t('profile.changePicture')"
@@ -133,18 +133,18 @@ async function savePicture(png: string) {
               <span class="bg-secondary ring-background absolute right-0 bottom-0 grid size-7 place-items-center rounded-full ring-2" aria-hidden="true">
                 <Camera class="size-3.5" />
               </span>
-            </button>
-            <button
+            </Button>
+            <Button
               v-if="profile.pictureUrl"
-              type="button"
-              class="bg-secondary text-muted-foreground hover:bg-destructive ring-background focus-visible:outline-ring absolute top-0 right-0 grid size-6 place-items-center rounded-full ring-2 transition-colors hover:text-white focus-visible:outline-2"
+              variant="bare"
+              class="bg-secondary text-destructive hover:bg-destructive ring-background absolute top-0 right-0 grid size-6 place-items-center rounded-full ring-2 transition-colors hover:text-white"
               data-testid="profile-remove-picture"
               :aria-label="t('profile.removePicture')"
               :title="t('profile.removePicture')"
               @click="act({ type: 'remove-profile-picture' })"
             >
               <X class="size-3.5" />
-            </button>
+            </Button>
           </div>
           <input ref="fileInput" type="file" class="hidden" accept="image/png,image/jpeg,image/webp" data-testid="profile-file" @change="onFile" />
           <span :class="cn('min-w-0 truncate pb-1.5 text-lg font-semibold', !shownName && 'text-muted-foreground')" data-testid="profile-dialog-name">{{ shownName || t("profile.yours") }}</span>

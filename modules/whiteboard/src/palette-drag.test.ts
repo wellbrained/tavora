@@ -10,6 +10,7 @@ import { DEFAULT_PALETTE, type PalettePlace } from "./palette";
 let app: App | undefined;
 beforeEach(() => {
   Object.defineProperty(Element.prototype, "setPointerCapture", { configurable: true, value: () => undefined });
+  Object.defineProperty(Element.prototype, "hasPointerCapture", { configurable: true, value: () => false });
 });
 afterEach(() => {
   app?.unmount();

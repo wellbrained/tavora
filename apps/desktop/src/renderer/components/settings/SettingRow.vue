@@ -6,9 +6,8 @@
 // The short line says what it does; anything more (how it works, privacy, what each choice means) goes in `details`,
 // shown beside the name when the pointer rests on it or it gets keyboard focus, so pages stay short. The name's dotted
 // line shows while the pointer is on its row, so a page full of them doesn't look busy. A setting in
-// NEW_SETTINGS says New. A row with `opens` leads to a page of its own: the whole row is the button, with a chevron,
-// and its `icon` in a tile in front, so it reads as a way somewhere rather than a setting.
-import { ChevronRight } from "@lucide/vue";
+// NEW_SETTINGS says New. A row with `opens` leads to a page of its own: the whole row is the button, with its `icon`
+// in a tile in front, so it reads as a way somewhere rather than a setting.
 import { computed, ref, type Component } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Tooltip } from "@tavora/official-ui/components/tooltip";
@@ -61,7 +60,7 @@ const tip = useDetails();
           >{{ label }}</span
         >
         <span v-else class="font-medium">{{ label }}</span>
-        <Badge v-if="isNew" class="py-0 text-[10px] font-semibold uppercase" data-testid="setting-new">{{ t("settings.new") }}</Badge>
+        <Badge v-if="isNew" class="py-0 font-semibold" data-testid="setting-new">{{ t("settings.new") }}</Badge>
         <slot name="badges" />
       </span>
       <span v-if="description" class="text-muted-foreground text-sm">{{ description }}</span>
@@ -70,7 +69,6 @@ const tip = useDetails();
       <span v-if="details" class="sr-only">{{ details }}</span>
     </div>
     <slot />
-    <ChevronRight v-if="opens" class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
     <Tooltip v-if="details" side="right" :open="tip.open.value" :anchor="tip.anchor.value" :description="details" @dismiss="tip.hide()" />
   </component>
 </template>

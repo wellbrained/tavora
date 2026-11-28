@@ -35,7 +35,7 @@ body {
   .toolbar-label { display: none; }
 }
 .whiteboard-app .excalidraw .App-toolbar-content { padding: 4px; }
-.whiteboard-app .excalidraw .HintViewer { margin-top: 4px; font-size: 11px; }
+.whiteboard-app .excalidraw .HintViewer { margin-top: 4px; font-size: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .picture-lock { transition: none; }
 }
@@ -98,7 +98,7 @@ body {
 }
 .excalidraw .App-menu__left .palette-handle {
   position: sticky;
-  z-index: 1;
+  z-index: var(--layer-lift);
   top: -0.5rem;
   margin: -0.5rem -0.625rem 0.25rem;
   background: inherit;
@@ -159,7 +159,7 @@ body {
 .excalidraw .App-menu__left .panelColumn legend,
 .excalidraw .App-menu__left .panelColumn .control-label {
   margin-bottom: 0.125rem;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 .excalidraw .App-menu__left .buttonList {
   padding: 0;

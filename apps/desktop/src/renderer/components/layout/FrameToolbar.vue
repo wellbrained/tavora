@@ -6,12 +6,12 @@
 // decides where it sits. Each button has a kit tooltip that opens on the side away from the frame, so it never covers what
 // you are arranging.
 import { ChevronDown } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Separator } from "@tavora/official-ui/components/ui/separator";
 import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
-import { Tooltip } from "@tavora/official-ui/components/tooltip";
+import { Tooltip, useTooltip } from "@tavora/official-ui/components/tooltip";
 import { isGroupAction, offered, selectionOf, type ToolbarActionId } from "../../../shared/layout-toolbar";
 import type { LayoutItemView } from "../../../shared/layout-view";
 import { t } from "../../i18n";
@@ -29,31 +29,14 @@ const actions = computed<FrameAction[]>(() => {
   return (view.value?.toolbar.buttons ?? []).filter((id: ToolbarActionId) => offered(id, selection)).map((id: ToolbarActionId) => all.value[id]);
 });
 
-const tip = ref<{ text: string; anchor: { left: number; top: number; right: number; bottom: number } } | null>(null);
-let delay: ReturnType<typeof setTimeout> | undefined;
-
-function show(event: Event, label: string) {
-  const button = event.currentTarget as HTMLElement;
-  clearTimeout(delay);
-  delay = setTimeout(() => {
-    const { left, top, right, bottom } = button.getBoundingClientRect();
-    tip.value = { text: label, anchor: { left, top, right, bottom } };
-  }, 150);
-}
-
-function hide() {
-  clearTimeout(delay);
-  tip.value = null;
-}
+const tip = useTooltip<string>({ delay: 150 });
 
 function press(action: FrameAction) {
-  hide();
+  tip.hide();
   action.run();
   // The layer keeps the keyboard (Del, the arrow keys) once a button was used.
   emit("done");
 }
-
-onBeforeUnmount(() => clearTimeout(delay));
 </script>
 
 <template>
@@ -68,7 +51,7 @@ onBeforeUnmount(() => clearTimeout(delay));
     <template v-for="action in actions" :key="action.id">
       <!-- A thin line sets Remove apart from the ones that only change the frame. -->
       <Separator v-if="action.id === 'remove' && actions.length > 1" orientation="vertical" class="mx-0.5 h-5" />
-      <DropdownMenu v-if="isGroupAction(action.id)" @update:open="(open: boolean) => (open ? hide() : emit('done'))">
+      <DropdownMenu v-if="isGroupAction(action.id)" @update:open="(open: boolean) => (open ? tip.hide() : emit('done'))">
         <DropdownMenuTrigger as-child>
           <Button
             variant="ghost"
@@ -77,8 +60,7 @@ onBeforeUnmount(() => clearTimeout(delay));
             :disabled="action.disabled"
             :aria-label="action.label"
             :data-testid="`layout-frame-${action.id}`"
-            @pointerenter="show($event, action.label)"
-            @pointerleave="hide"
+            v-bind="tip.on(action.label, { side, as: 'description' })"
           >
             <component :is="action.icon" />
             <ChevronDown class="size-3" />
@@ -118,16 +100,13 @@ onBeforeUnmount(() => clearTimeout(delay));
         :disabled="action.disabled"
         :aria-label="action.label"
         :data-testid="`layout-frame-${action.id}`"
-        @pointerenter="show($event, action.label)"
-        @pointerleave="hide"
-        @focus="($event.target as HTMLElement).matches(':focus-visible') && show($event, action.label)"
-        @blur="hide"
+        v-bind="tip.on(action.label, { side, as: 'description' })"
         @click="press(action)"
       >
         <component :is="action.icon" />
       </Button>
     </template>
     <!-- Drawn on the page, not inside the toolbar, so the layer's edge can't clip it. -->
-    <Tooltip :open="tip !== null" :anchor="tip?.anchor" :side="side" compact :description="tip?.text" @dismiss="hide" />
+    <Tooltip v-bind="tip.props" compact :description="tip.content ?? undefined" />
   </Toolbar>
 </template>

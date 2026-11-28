@@ -3,12 +3,13 @@
 // game window's shape with a soft square grid and the game's picture dimmed under it), the Sources and the Settings of the
 // selected item on the right. The live pages and the layer that takes the mouse are separate native views over the canvas
 // (main/overlay-canvas.ts); this page only tells the main process where the canvas is.
-import { Image as ImageIcon, Layers, Redo2, Trash2, Undo2 } from "@lucide/vue";
+import { Camera, Image as ImageIcon, Layers, Redo2, Trash2, Undo2 } from "@lucide/vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { Picker } from "@tavora/official-ui/components/ui/picker";
 import { SegmentedControl } from "@tavora/official-ui/components/ui/segmented-control";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { GRID_SETTINGS, type GridSetting } from "../../shared/layout-math";
 import { LAYOUT_ALL_GAMES } from "../../shared/layout-view";
 import { act, deleteWithUndo, state } from "../host";
@@ -178,14 +179,14 @@ const stayDetails = computed<Record<string, string>>(() => ({ stay: t("overlays.
     </header>
     <div v-if="view" class="flex min-h-0 flex-1 gap-2 px-2 pb-2" :class="{ 'flex-row-reverse': state?.gameOverlays.sidebar === 'left' }" data-testid="overlay-body">
       <section class="bg-card flex min-w-0 flex-1 flex-col rounded-lg border">
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2">
+        <Toolbar variant="bar" wrap class="gap-x-4 gap-y-2 rounded-t-lg px-3 py-2" :label="t('overlays.layout.toolbarLabel')">
           <div class="flex items-center gap-1">
             <label class="flex items-center gap-2 text-sm">
               <span class="text-muted-foreground">{{ t("overlays.layout.setup") }}</span>
               <Picker v-model="setup" :options="setupOptions" :label="t('overlays.layout.setup')" testid="layout-game" />
             </label>
             <!-- Only a game's own overlay can go; Everywhere and All games always exist. -->
-            <Button v-if="isGame" variant="ghost" size="icon-sm" :aria-label="t('overlays.layout.deleteSetup', { game: setupName })" :title="t('overlays.layout.deleteSetup', { game: setupName })" data-testid="layout-delete-setup" @click="deleteSetup"><Trash2 /></Button>
+            <Button v-if="isGame" variant="danger" size="icon-sm" :aria-label="t('overlays.layout.deleteSetup', { game: setupName })" :title="t('overlays.layout.deleteSetup', { game: setupName })" data-testid="layout-delete-setup" @click="deleteSetup"><Trash2 /></Button>
           </div>
           <OverlayCopy />
           <div class="flex items-center gap-2 text-sm">
@@ -214,11 +215,11 @@ const stayDetails = computed<Record<string, string>>(() => ({ stay: t("overlays.
               />
             </label>
             <!-- Off, it still shows why: a disabled button with a title keeps its hint (see the kit's Button). Everywhere and All games have no one window to take. -->
-            <Button v-if="isGame" variant="secondary" size="sm" :disabled="!view.canTakePicture" :title="pictureHint ?? undefined" :aria-description="pictureHint ?? undefined" data-testid="layout-take-picture" @click="send({ type: 'take-picture' })">{{ t("overlays.layout.takePicture") }}</Button>
-            <Button variant="secondary" size="sm" data-testid="layout-choose-picture" @click="send({ type: 'choose-picture' })"><ImageIcon />{{ t("overlays.layout.choosePicture") }}</Button>
-            <Button v-if="view.picture" variant="ghost" size="sm" data-testid="layout-remove-picture" @click="send({ type: 'remove-picture' })"><Trash2 />{{ t("overlays.layout.removePicture") }}</Button>
+            <Button v-if="isGame" variant="ghost" size="sm" :disabled="!view.canTakePicture" :title="pictureHint ?? undefined" :aria-description="pictureHint ?? undefined" data-testid="layout-take-picture" @click="send({ type: 'take-picture' })"><Camera />{{ t("overlays.layout.takePicture") }}</Button>
+            <Button variant="ghost" size="sm" data-testid="layout-choose-picture" @click="send({ type: 'choose-picture' })"><ImageIcon />{{ t("overlays.layout.choosePicture") }}</Button>
+            <Button v-if="view.picture" variant="danger" size="sm" data-testid="layout-remove-picture" @click="send({ type: 'remove-picture' })"><Trash2 />{{ t("overlays.layout.removePicture") }}</Button>
           </div>
-        </div>
+        </Toolbar>
         <div v-if="view.notice || view.copied || !view.enabled" class="flex flex-col gap-2 border-b px-3 py-2">
           <OverlayCopied />
           <Notice v-if="view.notice" variant="warning" data-testid="layout-notice">
@@ -230,7 +231,7 @@ const stayDetails = computed<Record<string, string>>(() => ({ stay: t("overlays.
         <div ref="area" class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           <div
             ref="canvas"
-            class="bg-muted absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-sm shadow-sm ring-1"
+            class="bg-muted absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-sm shadow-elevation-1 ring-1"
             :style="{ width: `${size.width}px`, height: `${size.height}px`, ...gridStyle }"
             role="img"
             :aria-label="t('overlays.layout.canvas')"

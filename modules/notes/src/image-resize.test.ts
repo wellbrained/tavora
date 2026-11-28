@@ -16,6 +16,7 @@ const pointer = (type: string, x = 0) => Object.assign(new MouseEvent(type, { bu
 
 function setup() {
   Object.defineProperty(Element.prototype, "setPointerCapture", { configurable: true, value: () => undefined });
+  Object.defineProperty(Element.prototype, "hasPointerCapture", { configurable: true, value: () => false });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 400 });
   const element = document.createElement("div");
   document.body.append(element);

@@ -5,6 +5,7 @@
 // pinging (it runs even while this panel is hidden, so drops are logged); this only shows what it found. A red notice
 // tops the section while the connection is down. No sound and no system notification, by design.
 import { ArrowDown, ArrowUp, Trash2 } from "@lucide/vue";
+import { Card } from "@tavora/official-ui/components/ui/card";
 import { cn, ConfirmDialog } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tavora/official-ui/components/ui/collapsible";
@@ -109,8 +110,7 @@ function clear(): void {
   void props.monitor.clearLog();
 }
 
-const CARD = "bg-card text-card-foreground flex flex-col gap-1.5 rounded-lg border p-2.5";
-const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase";
+const LABEL = "text-muted-foreground flex-none text-xs font-medium";
 const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
 </script>
 
@@ -122,15 +122,15 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
 
       <!-- Four cards in a row on a wide panel, two by two below 620 px, one by one on a very narrow one. -->
       <div class="grid grid-cols-1 items-stretch gap-2 @min-[320px]:grid-cols-2 @min-[620px]:grid-cols-4">
-        <section :class="CARD" data-testid="connection-status">
+        <Card as="section" size="sm" data-testid="connection-status">
           <header class="flex items-baseline gap-2">
             <span :class="LABEL">{{ t("status.title") }}</span>
           </header>
           <div :class="cn(BIG, 'text-center whitespace-nowrap', status.class)" data-testid="status-text">{{ status.text }}</div>
           <p class="text-muted-foreground truncate text-center text-xs tabular-nums" data-testid="status-detail">{{ status.detail }}</p>
-        </section>
+        </Card>
 
-        <section :class="CARD" data-testid="connection-ping">
+        <Card as="section" size="sm" data-testid="connection-ping">
           <header class="flex items-baseline gap-2">
             <span :class="LABEL">{{ t("ping.title") }}</span>
           </header>
@@ -144,9 +144,9 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
               <span class="text-muted-foreground text-xs">{{ t("ping.internet") }}</span>
             </div>
           </div>
-        </section>
+        </Card>
 
-        <section :class="CARD" data-testid="connection-speed" :title="t('speed.hint')" tabindex="0">
+        <Card as="section" size="sm" data-testid="connection-speed" :title="t('speed.hint')" tabindex="0">
           <header class="flex items-baseline gap-2">
             <span :class="LABEL">{{ t("speed.title") }}</span>
           </header>
@@ -155,18 +155,18 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
             <span :class="cn(BIG, 'text-[1.375rem]')" data-testid="speed-up"><ArrowUp class="text-muted-foreground mr-0.5 inline size-4 align-[-0.1em]" aria-hidden="true" />{{ speed.up }}</span>
           </div>
           <p class="text-muted-foreground text-center text-xs">{{ t("speed.unit") }}</p>
-        </section>
-        <section :class="CARD" data-testid="connection-loss" :title="t('loss.hint')" tabindex="0">
+        </Card>
+        <Card as="section" size="sm" data-testid="connection-loss" :title="t('loss.hint')" tabindex="0">
           <header class="flex items-baseline gap-2">
             <span :class="LABEL">{{ t("loss.title") }}</span>
           </header>
           <div :class="cn(BIG, 'text-center', loss.class)" data-testid="loss-text">{{ loss.text }}<span v-if="loss.text" class="text-muted-foreground ml-0.5 text-base font-normal">%</span></div>
           <p class="text-muted-foreground truncate text-center text-xs">{{ t("loss.hint") }}</p>
-        </section>
+        </Card>
 
         <TrafficCard v-if="monitor.panel.value.traffic" :monitor="monitor" />
 
-        <section v-if="outages.length" :class="cn(CARD, 'col-span-full gap-1')" data-testid="connection-drops">
+        <Card as="section" size="sm" class="col-span-full gap-1" v-if="outages.length" data-testid="connection-drops">
           <Collapsible>
             <div class="flex items-center gap-2">
               <CollapsibleTrigger class="min-w-0 flex-1 py-0.5" data-testid="drops-toggle">
@@ -186,7 +186,7 @@ const BIG = "text-[1.625rem] leading-none font-semibold tabular-nums";
               </ul>
             </CollapsibleContent>
           </Collapsible>
-        </section>
+        </Card>
       </div>
     </template>
 

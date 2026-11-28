@@ -7,7 +7,7 @@ import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui"
 import { useTask } from "@tavora/official-ui/use-task";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { ArrowLeftRight, ArrowRight, ImagePlus, Minus, MoreHorizontal, Plus, StickyNote, Trash2, Waypoints } from "@lucide/vue";
+import { ArrowLeftRight, ArrowRight, ChevronDown, Copy, ImageDown, ImagePlus, Lock, LockOpen, Minus, MoreHorizontal, Plus, StickyNote, Trash2, Waypoints } from "@lucide/vue";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { toast, Toaster, undoable } from "@tavora/official-ui/components/ui/toast";
@@ -130,11 +130,7 @@ function sessionOpened(session: BoardSession) {
   board.value = session;
   boardState.value = session.state;
   library.value?.attach(session);
-  const offs = [session.onState((next) => (boardState.value = next)), session.onNotice(notify), session.onCopyShortcut(() => {
-    // A picture is already being copied or saved: the shortcut is ignored until it is done.
-    // Nothing on the board (the Copy button is off then): the shortcut does nothing either.
-    if (!copying.value && boardState.value.ready && !boardState.value.empty) void copyAsPicture();
-  })];
+  const offs = [session.onState((next) => (boardState.value = next)), session.onNotice(notify)];
   stopSession = () => offs.forEach((off) => off());
 }
 
@@ -222,6 +218,18 @@ async function select(id: string) {
     if (!(reason instanceof Error && reason.name === "ItemNotFoundError")) notify(t(reason instanceof BoardNotSaved ? "save.staysOpen" : "save.error"));
   }
 }
+
+// Excalidraw's own copy as PNG uses the browser clipboard, which module pages cannot write; its shortcut (Shift+Alt+C)
+// copies through Tavora instead (its menu item is hidden in style.css). Before Excalidraw sees the key.
+function onCopyKey(event: KeyboardEvent) {
+  if (!board.value || event.code !== "KeyC" || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
+  event.preventDefault();
+  event.stopPropagation();
+  // A picture already being copied or saved, or an empty board (the Copy button is off then): nothing happens.
+  if (!copying.value && boardState.value.ready && !boardState.value.empty) void copyAsPicture();
+}
+onMounted(() => addEventListener("keydown", onCopyKey, true));
+onBeforeUnmount(() => removeEventListener("keydown", onCopyKey, true));
 
 onMounted(async () => {
   try {
@@ -460,7 +468,7 @@ const addPicture = fromInput(addPictureFrom);
       </div>
       <span class="flex-1" />
       <DropdownMenu v-model:open="connectorOpen">
-        <DropdownMenuTrigger as-child><Button variant="ghost" size="sm" :disabled="!boardState.ready" :aria-label="t('connector.button')" :title="t('connector.button')" data-testid="connector-menu"><Waypoints class="size-4" aria-hidden="true" /><span class="toolbar-label">{{ t("connector.button") }}</span></Button></DropdownMenuTrigger>
+        <DropdownMenuTrigger as-child><Button variant="ghost" size="sm" :disabled="!boardState.ready" :aria-label="t('connector.button')" :title="t('connector.button')" data-testid="connector-menu"><Waypoints class="size-4" aria-hidden="true" /><span class="toolbar-label">{{ t("connector.button") }}</span><ChevronDown data-icon="end" aria-hidden="true" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="start" @close-auto-focus="finishConnector">
           <DropdownMenuItem data-testid="connector-line" @select="setConnector('line')"><Minus class="size-4" aria-hidden="true" />{{ t("connector.line") }}</DropdownMenuItem>
           <DropdownMenuItem data-testid="connector-one-way" @select="setConnector('one-way')"><ArrowRight class="size-4" aria-hidden="true" />{{ t("connector.one") }}</DropdownMenuItem>
@@ -469,7 +477,7 @@ const addPicture = fromInput(addPictureFrom);
       </DropdownMenu>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button variant="ghost" size="sm" :disabled="!boardState.ready" data-testid="add-card" :aria-label="t('card.add')" :title="t('card.add')"><Plus class="size-4" aria-hidden="true" /><span class="toolbar-label">{{ t("card.add") }}</span></Button>
+          <Button variant="ghost" size="sm" :disabled="!boardState.ready" data-testid="add-card" :aria-label="t('card.add')" :title="t('card.add')"><Plus class="size-4" aria-hidden="true" /><span class="toolbar-label">{{ t("card.add") }}</span><ChevronDown data-icon="end" aria-hidden="true" /></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem data-testid="add-note-card" @select="addNote"><StickyNote class="size-4" aria-hidden="true" />{{ t("card.note") }}</DropdownMenuItem>
@@ -489,17 +497,17 @@ const addPicture = fromInput(addPictureFrom);
         :data-locked="boardState.pictures.allLocked"
         @click="togglePictureLocks"
       >
-        {{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}
+        <component :is="boardState.pictures.allLocked ? LockOpen : Lock" aria-hidden="true" />{{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}
       </Button>
-      <Button class="board-image-action" type="button" variant="ghost" size="sm" :title="t('copy.hint')" data-testid="copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @click="copyAsPicture">{{ t("copy.button") }}</Button>
-      <Button class="board-image-action" type="button" variant="ghost" size="sm" :title="t('savePicture.hint')" data-testid="save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @click="saveAsPicture">{{ t("savePicture.button") }}</Button>
+      <Button class="board-image-action" type="button" variant="ghost" size="sm" :title="t('copy.hint')" data-testid="copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @click="copyAsPicture"><Copy aria-hidden="true" />{{ t("copy.button") }}</Button>
+      <Button class="board-image-action" type="button" variant="ghost" size="sm" :title="t('savePicture.hint')" data-testid="save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @click="saveAsPicture"><ImageDown aria-hidden="true" />{{ t("savePicture.button") }}</Button>
       <DropdownMenu>
         <DropdownMenuTrigger as-child><Button class="board-actions-menu" variant="ghost" size="icon-sm" :aria-label="t('board.actions')" :title="t('board.actions')" data-testid="board-actions"><MoreHorizontal class="size-4" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem class="[&_[data-slot=menu-reason]]:max-w-none" data-testid="compact-copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" :action="copyAsPicture">{{ t("copy.button") }}</DropdownMenuItem>
-          <DropdownMenuItem class="[&_[data-slot=menu-reason]]:max-w-none" data-testid="compact-save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @select="saveAsPicture">{{ t("savePicture.button") }}</DropdownMenuItem>
+          <DropdownMenuItem class="[&_[data-slot=menu-reason]]:max-w-none" data-testid="compact-copy-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" :action="copyAsPicture"><Copy aria-hidden="true" />{{ t("copy.button") }}</DropdownMenuItem>
+          <DropdownMenuItem class="[&_[data-slot=menu-reason]]:max-w-none" data-testid="compact-save-picture" :disabled="boardState.empty || copying" :disabled-reason="boardState.empty ? t('board.nothingYet') : undefined" @select="saveAsPicture"><ImageDown aria-hidden="true" />{{ t("savePicture.button") }}</DropdownMenuItem>
           <DropdownMenuSeparator v-if="boardState.pictures.count > 0" />
-          <DropdownMenuItem v-if="boardState.pictures.count > 0" @select="togglePictureLocks">{{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}</DropdownMenuItem>
+          <DropdownMenuItem v-if="boardState.pictures.count > 0" @select="togglePictureLocks"><component :is="boardState.pictures.allLocked ? LockOpen : Lock" aria-hidden="true" />{{ t(boardState.pictures.allLocked ? "image.unlock" : "image.lock") }}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </Toolbar>
@@ -509,7 +517,7 @@ const addPicture = fromInput(addPictureFrom);
         <Button type="button" size="sm" variant="secondary" data-testid="board-restore" @click="restore">{{ t("deleted.restore") }}</Button>
       </template>
     </Notice>
-    <Notice v-if="level !== 'ok'" :variant="level === 'full' ? 'error' : 'warning'" class="mx-2 mt-2 flex-none" data-testid="board-size">
+    <Notice v-if="level !== 'ok'" :variant="level === 'full' ? 'destructive' : 'warning'" class="mx-2 mt-2 flex-none" data-testid="board-size">
       {{ t(level === "full" ? "size.full" : "size.warn", { used: formatMegabytes(boardState.bytes), max: formatMegabytes(MAX_BOARD_BYTES) }) }}
     </Notice>
     <main class="relative min-h-0 flex-1" :data-board="shown.id" :data-pictures="boardState.picturesLoaded" data-testid="board">
@@ -527,7 +535,7 @@ const addPicture = fromInput(addPictureFrom);
         @toolbar="placeToolbar"
         @palette="placePalette"
       />
-      <EmptyState v-if="boardState.empty" variant="bare" :title="t('empty.hint')" class="text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 bg-transparent p-0" data-testid="empty-hint" />
+      <EmptyState v-if="boardState.empty" variant="bare" :title="t('empty.hint')" class="text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-(--layer-lift) w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 bg-transparent p-0" data-testid="empty-hint" />
     </main>
     <ConfirmDialog v-if="deleting" :icon="Trash2" :confirm-icon="Trash2" :title="t('delete.title', { name: deleting.name })" :description="t('delete.description')" :confirm="t('delete.confirm')" :cancel="t('delete.cancel')" :busy="removal.busy.value" @confirm="remove" @cancel="deleting = null" />
     <Toaster />

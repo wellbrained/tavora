@@ -84,7 +84,7 @@ function finishRename(save: boolean, event?: Event) {
   <div v-show="!renaming" class="contents">
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
-        <Button type="button" variant="outline" size="sm" class="max-w-56 min-w-0 font-medium" :title="t('board.switch')" data-testid="board-menu">
+        <Button type="button" variant="ghost" size="sm" class="max-w-56 min-w-0 font-medium" :title="t('board.switch')" data-testid="board-menu">
           <span class="truncate" data-testid="board-name">{{ currentName }}</span>
           <ChevronDown data-icon="end" aria-hidden="true" />
         </Button>

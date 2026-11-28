@@ -14,10 +14,12 @@ import { connectModule, copyText as copyToClipboard, errorMessage, SegmentedCont
 import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { handleUndoKey, Toaster, undoable, type Undoable } from "@tavora/official-ui/components/ui/toast";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
+import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
-import type { TavoraSDK } from "@tavora/sdk";
+import type { JsonValue, TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type ComponentPublicInstance } from "vue";
 import { copyText, decimalComma, EMPTY, evaluate, format, insert, press, pretty, reference, rounded, segments, type Entry } from "./calc";
 import { remember, restoreHistory, type Calculation } from "./history";
@@ -51,8 +53,13 @@ const tab = ref<"history" | "values">("history");
 /** The lists' open tab: only Values while the history is hidden. */
 const shownTab = computed({
   get: () => (settings.value.history ? tab.value : "values"),
-  set: (value: string | number) => void (tab.value = value === "values" ? "values" : "history"),
+  set: (value: string | number) => {
+    tab.value = value === "values" ? "values" : "history";
+    void sdk.value?.panel.setState({ ...otherState, tab: tab.value }).catch(() => undefined);
+  },
 });
+/** What a newer version keeps in the panel's state, saved back as it was. */
+let otherState: Record<string, JsonValue> = {};
 /** The value dialog that is open: Save as…, or Rename for a value's name. */
 const valueDialog = ref<{ renaming?: string } | null>(null);
 /** Deletes that can still be undone from their toasts; they end when the panel goes. */
@@ -339,6 +346,11 @@ onMounted(async () => {
     cleanup.push(() => void stored.dispose().catch(() => undefined));
     lists.value = stored;
     cleanup.push(connected.panel.onDialogChange((open) => (dialogOpen.value = open)));
+    const kept = await connected.panel.getState().catch(() => null);
+    if (kept && typeof kept === "object" && !Array.isArray(kept)) {
+      otherState = kept as Record<string, JsonValue>;
+      if (otherState.tab === "values") tab.value = "values";
+    }
     sdk.value = connected;
   } catch (reason) {
     error.value = errorMessage(reason);
@@ -370,8 +382,8 @@ onBeforeUnmount(() => {
     @close="closeSettings"
   />
   <div v-else class="@container flex h-full min-h-0 flex-col" data-testid="calculator-app">
-    <div class="flex flex-none items-center gap-2 px-3 pt-2">
-      <SegmentedControl v-model="mode" :label="t('mode.label')" :options="modes" />
+    <Toolbar variant="bar" class="flex-none" :label="t('calc.toolbar')">
+      <SegmentedControl v-model="mode" size="sm" :label="t('mode.label')" :options="modes" />
       <span class="flex-1" />
       <Toggle
         variant="ghost"
@@ -386,6 +398,7 @@ onBeforeUnmount(() => {
       <Button variant="ghost" size="icon-sm" :aria-label="t('options.title')" :title="t('options.title')" data-testid="options" @click="openSettings">
         <SettingsIcon />
       </Button>
+    </Toolbar>
       <SettingsDialog
         v-if="settingsOpen"
         v-model:decimals="decimals"
@@ -396,7 +409,6 @@ onBeforeUnmount(() => {
         @update:short="(on: boolean) => choose({ short: on })"
         @close="closeSettings"
       />
-    </div>
     <p v-if="shownError" class="text-destructive flex-none px-3 pt-1 text-xs">{{ shownError }}</p>
     <div
       class="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto p-3 @min-[36rem]:flex-row @min-[36rem]:items-start @min-[36rem]:justify-center"
@@ -508,16 +520,10 @@ onBeforeUnmount(() => {
             <p v-if="!history.length" class="text-muted-foreground py-2 text-sm">{{ t("history.empty") }}</p>
             <ol v-else class="min-h-0 flex-1 overflow-y-auto">
               <li v-for="(item, index) in recent" :key="`${index}:${item.expression}`">
-                <Button
-                  variant="ghost"
-                  class="block h-auto w-full px-2 py-1 text-right font-normal"
-                  :title="t('history.use', { result: showResult(item.result) })"
-                  data-testid="history-item"
-                  @click="use(item)"
-                >
+                <ListRow class="py-1 text-right" :title="t('history.use', { result: showResult(item.result) })" data-testid="history-item" @click="use(item)">
                   <span class="text-muted-foreground block truncate font-mono text-sm">{{ show(item.expression) }} =</span>
-                  <span class="block truncate font-mono text-lg tabular-nums">{{ showResult(item.result) }}</span>
-                </Button>
+                  <span class="block truncate font-mono text-lg tabular-nums" data-testid="history-result">{{ showResult(item.result) }}</span>
+                </ListRow>
               </li>
             </ol>
           </TabsContent>
@@ -525,16 +531,10 @@ onBeforeUnmount(() => {
             <p v-if="!values.length" class="text-muted-foreground py-2 text-sm">{{ t("values.empty") }}</p>
             <ul v-else class="min-h-0 flex-1 overflow-y-auto">
               <li v-for="item in values" :key="item.name" class="flex items-center gap-1" :data-focus-row="item.name">
-                <Button
-                  variant="ghost"
-                  class="h-auto min-w-0 flex-1 justify-between gap-3 px-2 py-1 font-normal"
-                  :title="t('values.use', { name: item.name })"
-                  data-testid="value-item"
-                  @click="tap(item)"
-                >
-                  <span class="text-primary truncate text-sm">{{ item.name }}</span>
-                  <span class="truncate font-mono text-lg tabular-nums">{{ showResult(item.value) }}</span>
-                </Button>
+                <ListRow class="min-w-0 flex-1" :title="t('values.use', { name: item.name })" data-testid="value-item" @click="tap(item)">
+                  <span class="text-primary">{{ item.name }}</span>
+                  <template #trailing><span class="text-foreground max-w-40 truncate font-mono text-lg tabular-nums">{{ showResult(item.value) }}</span></template>
+                </ListRow>
                 <DropdownMenu>
                   <DropdownMenuTrigger as-child>
                     <Button

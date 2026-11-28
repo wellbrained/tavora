@@ -4,6 +4,7 @@
 // both together, as a data plan counts it; below are the two parts. A month Windows' record only partly covers says
 // from when it counts. Shown only when the user turned Traffic on in Settings.
 import { ArrowDown, ArrowUp } from "@lucide/vue";
+import { Card } from "@tavora/official-ui/components/ui/card";
 import { cn } from "@tavora/official-ui";
 import type { SystemTrafficPeriod } from "@tavora/sdk";
 import { computed } from "vue";
@@ -35,13 +36,12 @@ const cells = computed(() => {
 
 const message = computed(() => (status.value === "old" ? t("traffic.old") : status.value === "error" ? t("traffic.error") : status.value === "loading" && cells.value.length === 0 ? t("traffic.loading") : ""));
 
-const CARD = "bg-card text-card-foreground flex flex-col gap-1.5 rounded-lg border p-2.5";
-const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase";
+const LABEL = "text-muted-foreground flex-none text-xs font-medium";
 const BIG = "text-[1.375rem] leading-none font-semibold tabular-nums";
 </script>
 
 <template>
-  <section :class="cn(CARD, 'col-span-full')" data-testid="connection-traffic" :title="t('traffic.hint')">
+  <Card as="section" size="sm" class="col-span-full" data-testid="connection-traffic" :title="t('traffic.hint')">
     <header class="flex items-baseline gap-2">
       <span :class="LABEL">{{ t("traffic.title") }}</span>
     </header>
@@ -58,5 +58,5 @@ const BIG = "text-[1.375rem] leading-none font-semibold tabular-nums";
         <span v-if="cell.note" class="text-muted-foreground truncate text-xs" data-testid="traffic-note">{{ cell.note }}</span>
       </div>
     </div>
-  </section>
+  </Card>
 </template>

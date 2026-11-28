@@ -16,10 +16,10 @@ import { CountTo } from "@tavora/official-ui/components/ui/count-to";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ButtonGroup } from "@tavora/official-ui/components/ui/button-group";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
-import { Input } from "@tavora/official-ui/components/ui/input";
+import { SearchInput } from "@tavora/official-ui/components/ui/search-input";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { t } from "../i18n";
-import { Activity, Blocks, ChevronDown, CloudDownload, Code, FileArchive, Globe, LayoutGrid, NotebookPen, Search, Settings2, Upload, X } from "@lucide/vue";
+import { Activity, Blocks, ChevronDown, CloudDownload, Code, FileArchive, Globe, LayoutGrid, NotebookPen, Settings2, Upload, X } from "@lucide/vue";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { ListRow } from "@tavora/official-ui/components/ui/list-row";
 import { TextLink } from "@tavora/official-ui/components/ui/text-link";
@@ -227,13 +227,13 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
     >
       <aside class="thin-scroll module-menu bg-background flex shrink-0 flex-col gap-3 border-b px-4 pb-4 sm:w-56 sm:overflow-y-auto sm:border-r sm:border-b-0 lg:w-64">
         <form class="relative flex h-16 flex-none items-center" @submit.prevent="submit">
-          <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" aria-hidden="true" />
           <label class="sr-only" for="module-search">{{ t("addModule.search") }}</label>
           <!-- Opens focused, so typing searches; the focus ring shows only once the search is used, as in Settings. -->
-          <Input
+          <SearchInput
             id="module-search"
             v-model="query"
-            :class="cn('h-10 pr-3 pl-9', !searchUsed && 'focus-visible:border-input focus-visible:ring-0')"
+            size="lg"
+            :class="cn('w-full', !searchUsed && '[&_input:focus-visible]:border-input [&_input:focus-visible]:ring-0')"
             :placeholder="t('addModule.search')"
             autocomplete="off"
             data-testid="module-search"
@@ -268,10 +268,10 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                 :key="index"
                 :class="
                   cn(
-                    'bg-background absolute top-2 grid size-6 place-items-center rounded-md border shadow-sm',
+                    'bg-background absolute top-2 grid size-6 place-items-center rounded-md border shadow-elevation-1',
                     index === 0 && 'left-0 -rotate-12',
                     index === 1 && 'left-6 rotate-12',
-                    index === 2 && 'top-0.5 left-3 z-10 transition-colors',
+                    index === 2 && 'top-0.5 left-3 z-(--layer-lift) transition-colors',
                     index === 2 && (view === 'catalog' ? 'border-primary/60 text-primary' : 'group-hover/list-row:border-primary/40 group-hover/list-row:text-primary/80'),
                   )
                 "
@@ -322,16 +322,16 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                   cn(
                     'bg-background/40 hover:border-primary/40 relative flex flex-col gap-3 rounded-xl border p-4 transition-colors',
                     openCount(module.id) && 'border-primary/30 bg-primary/5',
-                    expanded === module.id && 'border-primary/40 z-10 rounded-b-none',
+                    expanded === module.id && 'border-primary/40 z-(--layer-sticky) rounded-b-none',
                   )
                 "
                 :data-testid="`module-${module.id}`"
                 :data-panel-menu="module.id"
               >
                 <div class="flex items-start gap-3">
-                  <button type="button" class="module-tile focus-visible:ring-ring size-10 outline-none focus-visible:ring-2" tabindex="-1" aria-hidden="true" @click="openInfo(module)">
+                  <Button variant="bare" class="module-tile size-10" tabindex="-1" aria-hidden="true" @click="openInfo(module)">
                     <ModuleIcon :module-id="module.id" size="size-[34px]" />
-                  </button>
+                  </Button>
                   <div class="min-w-0 flex-1">
                     <div class="flex min-w-0 items-center gap-2">
                       <TextLink class="font-medium" :title="module.name"
@@ -413,7 +413,7 @@ const ADD_CLASS = "border-primary/50 text-primary hover:bg-primary/10 hover:text
                 <div
                   v-if="expanded === module.id"
                   :id="`panel-menu-${module.id}`"
-                  class="bg-card absolute inset-x-[-1px] top-[calc(100%-0.5rem)] z-10 rounded-b-xl border border-t-0 border-primary/40 shadow-xl"
+                  class="bg-card absolute inset-x-[-1px] top-[calc(100%-0.5rem)] z-(--layer-sticky) rounded-b-xl border border-t-0 border-primary/40 shadow-elevation-3"
                 >
                   <div :class="cn('bg-background/40 rounded-b-xl px-4 pt-2 pb-3', openCount(module.id) && 'bg-primary/5')">
                     <ul class="flex flex-col gap-1 border-t pt-3" :aria-label="t('addModule.panels', { name: module.name })" :data-testid="`panel-types-${module.id}`">

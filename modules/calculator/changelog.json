@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.102",
+    "date": "2026-11-28",
+    "notes": [
+      "The tools sit in one bar, and the open History or Values tab is remembered."
+    ]
+  },
+  {
     "version": "0.1.101",
     "date": "2026-11-28",
     "notes": [

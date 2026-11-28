@@ -71,7 +71,7 @@ function deleteNow(workspaceId: string, name: string) {
   <SettingGroup data-testid="trash">
     <p v-if="!library.trash.length" class="text-muted-foreground py-4 text-sm" data-testid="trash-empty">{{ t("settings.trash.empty") }}</p>
     <template v-else>
-      <div class="bg-card sticky top-0 z-[5] -mx-5 flex min-h-12 flex-wrap items-center gap-3 border-b px-5 py-2">
+      <div class="bg-card sticky top-0 z-(--layer-sticky) -mx-5 flex min-h-12 flex-wrap items-center gap-3 border-b px-5 py-2">
         <CheckboxField
           :model-value="trashAll ? true : trashTicked.size > 0 ? 'indeterminate' : false"
           :label="t('settings.trash.selectAll')"

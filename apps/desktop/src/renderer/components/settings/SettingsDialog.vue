@@ -3,12 +3,12 @@
 // at its foot; the chosen page on the right, under a title that stays put while it scrolls. A page that opens from a
 // row (SUB_PAGES) has a way back in its title; the developer pages are tabs under one entry. Each page is its own
 // component; settings-index.ts lists them and every setting the search can find.
-import { Info, RotateCw, Search, X } from "@lucide/vue";
+import { Info, RotateCw, X } from "@lucide/vue";
 import { computed, defineAsyncComponent, nextTick, provide, ref, watch } from "vue";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
-import { Input } from "@tavora/official-ui/components/ui/input";
+import { SearchInput } from "@tavora/official-ui/components/ui/search-input";
 import { usePageMotion } from "@tavora/official-ui/components/ui/motion";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { Tabs, TabsList, TabsTrigger } from "@tavora/official-ui/components/ui/tabs";
@@ -226,11 +226,10 @@ function onSearchKey(event: KeyboardEvent) {
     >
       <div class="thin-scroll settings-menu bg-background flex w-60 flex-none flex-col gap-3 overflow-y-auto border-r px-4 pb-4 lg:w-72">
         <div class="relative flex h-16 flex-none items-center">
-          <Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" aria-hidden="true" />
-          <Input
+          <SearchInput
             v-model="query"
-            type="text"
-            :class="cn('h-10 pr-3 pl-9', !searchUsed && 'focus-visible:border-input focus-visible:ring-0')"
+            size="lg"
+            :class="cn('w-full', !searchUsed && '[&_input:focus-visible]:border-input [&_input:focus-visible]:ring-0')"
             :placeholder="t('settings.search')"
             :aria-label="t('settings.search')"
             autocomplete="off"

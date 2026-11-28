@@ -2,7 +2,7 @@
 // Clock & Counter: a toolbar with Add, then the workspace's clocks and counters. Every panel of a workspace shows the same
 // list; which settings are open is each panel's own. Running clocks tick here only while the panel is visible: they
 // keep their start time, so nothing is lost while it is hidden. Hotkeys arrive at the panel used last.
-import { Hash, Hourglass, Link, Plus, Timer } from "@lucide/vue";
+import { ChevronDown, Hash, Hourglass, Link, Plus, Timer } from "@lucide/vue";
 import { connectModule, errorMessage, onFontChange, useFocusRecovery } from "@tavora/official-ui";
 import { escapeCloses } from "@tavora/official-ui/lib/keys";
 import { Badge } from "@tavora/official-ui/components/ui/badge";
@@ -236,7 +236,7 @@ async function moveRow(id: string, by: -1 | 1, focus: string): Promise<void> {
   void store.value?.apply([], (data) => move(data, id, by));
   // The row is moved in the list, which drops the keyboard focus; give it back.
   await nextTick();
-  setTimeout(() => document.querySelector<HTMLElement>(focus)?.focus(), 60);
+  setTimeout(() => listEl.value?.querySelector<HTMLElement>(focus)?.focus(), 60);
 }
 
 function onRowKey(event: KeyboardEvent): void {
@@ -575,6 +575,7 @@ onBeforeUnmount(() => {
           <Button variant="ghost" size="sm" :disabled="list.items.length >= MAX.items" data-testid="add">
             <Plus />
             {{ t("app.add") }}
+            <ChevronDown data-icon="end" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

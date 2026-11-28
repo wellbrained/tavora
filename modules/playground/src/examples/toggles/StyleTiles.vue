@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// rules-allow-file: palette demo art in the tiles
 // Each tile's picture is drawn in the #tile slot.
 import { StyleTiles } from "@tavora/official-ui/components/ui/style-tiles";
 import { ref } from "vue";

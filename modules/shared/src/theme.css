@@ -3,6 +3,7 @@
    These values are only the starting point: connectModule() replaces them
    with the tokens the host sends through ui.getTheme, so a later theme
    reaches the modules without rebuilding them. */
+/* rules-allow-file: color, motion, radius, shadow this file defines the tokens modules use */
 @import "tailwindcss";
 @import "tw-animate-css";
 /* Fonts are bundled (latin and latin-extended only); modules cannot load anything from the web. */

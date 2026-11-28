@@ -382,7 +382,7 @@ function removeToken(token: AccountPublishToken) {
             <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.tokenRenameLabel', { name: token.name })" :data-testid="`publish-token-rename-${token.id}`" @click="renameToken(token)">
               <Pencil />{{ t("account.developer.tokenRename") }}
             </Button>
-            <Button variant="ghost" size="sm" :disabled="busy" :aria-label="t('account.developer.tokenRemoveLabel', { name: token.name })" @click="removeToken(token)">
+            <Button variant="danger" size="sm" :disabled="busy" :aria-label="t('account.developer.tokenRemoveLabel', { name: token.name })" @click="removeToken(token)">
               <Trash2 />{{ t("account.developer.tokenRemove") }}
             </Button>
           </li>

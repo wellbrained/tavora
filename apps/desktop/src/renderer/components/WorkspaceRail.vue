@@ -431,7 +431,7 @@ const folderHint = (id: string) => hintFor({ kind: "folder", id, place: { list: 
             'app-no-drag text-muted-foreground hover:text-foreground focus-visible:ring-ring grid flex-none place-items-center focus-visible:ring-2 focus-visible:outline-none',
             expanded
               ? 'hover:bg-rail-hover size-8 rounded-md'
-              : 'bg-card border-foreground/20 hover:border-foreground/40 hover:bg-transparent focus-visible:border-transparent absolute top-[18px] -right-[14px] z-20 size-7 rounded-md border opacity-0 shadow-sm shadow-black/30 transition-opacity group-hover/rail:opacity-100 focus-visible:opacity-100',
+              : 'bg-card border-foreground/20 hover:border-foreground/40 hover:bg-transparent focus-visible:border-transparent absolute top-[18px] -right-[14px] z-20 size-7 rounded-md border opacity-0 shadow-elevation-1 transition-opacity group-hover/rail:opacity-100 focus-visible:opacity-100',
           )
         "
         data-testid="rail-toggle"

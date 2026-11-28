@@ -1,4 +1,5 @@
 /* The live view's plate (plate.ts sets the variables and classes from the look). Nothing on it can be clicked. */
+/* rules-allow-file: color, color-fallback, font-weight, radius, shadow, all-caps, focus-ring drawn over the game and on stream in the user's own look */
 .live-plate {
   box-sizing: border-box;
   width: 100%;

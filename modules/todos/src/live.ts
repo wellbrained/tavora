@@ -30,6 +30,7 @@ export const LIVE_HEADERS = ["none", "line", "name"] as const;
 export type LiveHeaders = (typeof LIVE_HEADERS)[number];
 
 /** Colors offered for the text and the plate; any other #rrggbb works too. */
+// rules-allow: color the colours the user picks from for the live view
 export const LIVE_COLORS = ["#ffffff", "#facc15", "#fb923c", "#f87171", "#f472b6", "#a78bfa", "#60a5fa", "#2dd4bf", "#4ade80", "#000000"];
 
 /** How the live view looks; stored per panel. */
@@ -61,11 +62,11 @@ export const LIVE_DEFAULTS: LiveLook = {
   font: "inter",
   size: "m",
   bold: false,
-  color: "#ffffff",
+  color: "#ffffff", // rules-allow: color the live view's default text colour, drawn over the game or stream
   outline: true,
   headers: "name",
   showFinished: false,
-  backgroundColor: "#000000",
+  backgroundColor: "#000000", // rules-allow: color the live view's default plate colour
   background: 35,
   padding: 8,
 };

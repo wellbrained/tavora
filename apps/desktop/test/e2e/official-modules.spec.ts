@@ -1083,7 +1083,7 @@ test("calculator: works out sums from keys and the keyboard, and keeps the last 
   await ready(app, CALCULATOR, "key-=");
   const text = (testId: string) => inModule<string>(app, CALCULATOR, `${q(testId)}.textContent.trim()`);
   const results = (running = app) =>
-    inModule<string[]>(running, CALCULATOR, `[...document.querySelectorAll('[data-testid="history-item"] span:last-child')].map((el) => el.textContent)`);
+    inModule<string[]>(running, CALCULATOR, `[...document.querySelectorAll('[data-testid="history-result"]')].map((el) => el.textContent)`);
 
   for (const key of ["1", "2", "*", "(", "3", "+", "4"]) await clickSelector(app, CALCULATOR, `[data-testid="key-${key}"]`);
   await expect.poll(() => text("display")).toBe("12×(3+4");

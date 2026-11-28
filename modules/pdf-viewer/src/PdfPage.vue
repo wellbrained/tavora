@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// rules-allow-file: palette the paper of a document page, the same in every theme
 // One page of a PDF. It draws itself (picture and selectable text) only while it is near the visible part, and
 // gives the memory back when it is far away. The size it takes up is always known, so the column never jumps.
 // Links on the page sit on top as buttons; what a click on one does is the pane's call (`link`).

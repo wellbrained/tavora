@@ -10,7 +10,8 @@ import { ChevronDown, ChevronRight, Eye, EyeOff, Link, Plus, Settings } from "@l
 import { computed, ref } from "vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { CountTo } from "@tavora/official-ui/components/ui/count-to";
-import { Input } from "@tavora/official-ui/components/ui/input";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
+import { SearchInput } from "@tavora/official-ui/components/ui/search-input";
 import { cn } from "@tavora/official-ui/lib/utils";
 import type { SourceBlock } from "../../../shared/layout-view";
 import { t } from "../../i18n";
@@ -136,7 +137,7 @@ const selected = (row: Row) => row.item !== null && (current.value?.selected.inc
       <h2 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">{{ t("overlays.layout.sources") }}</h2>
       <span class="text-muted-foreground text-xs" data-testid="layout-count"><CountTo :value="count" :format="(shown) => t('overlays.layout.count', { count: shown, max: current?.limit ?? 0 })" /></span>
     </div>
-    <Input v-model="query" type="search" :placeholder="t('overlays.layout.search')" :aria-label="t('overlays.layout.search')" data-testid="layout-search" />
+    <SearchInput v-model="query" :placeholder="t('overlays.layout.search')" :aria-label="t('overlays.layout.search')" data-testid="layout-search" />
     <p v-if="!shown.length" class="text-muted-foreground px-1 py-2 text-sm" :data-testid="blockedLine ? 'layout-blocked' : 'layout-empty'">{{ blockedLine ?? (query ? t("overlays.layout.noSources") : t("overlays.layout.nothing")) }}</p>
     <div v-else class="-mr-3 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]" data-testid="layout-sources-list">
       <ul class="flex flex-col gap-1">
@@ -146,23 +147,22 @@ const selected = (row: Row) => row.item !== null && (current.value?.selected.inc
           :class="cn('flex items-center gap-1 rounded-md border', selected(row) ? 'border-primary bg-primary/5' : 'hover:bg-accent border-transparent', row.type === 'thing' && 'ml-6')"
           :data-testid="`layout-source-${row.key}`"
         >
-          <button
-            type="button"
-            class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2"
+          <ListRow
+            class="min-w-0 flex-1 py-1.5"
             :aria-pressed="row.item ? selected(row) : undefined"
             :aria-expanded="row.type === 'header' ? !folded.has(row.panel) : undefined"
             :aria-label="row.type === 'header' ? t(folded.has(row.panel) ? 'overlays.layout.expand' : 'overlays.layout.collapse', { name: row.name }) : row.add ? t('overlays.layout.addSource', { name: row.name }) : undefined"
             @click="press(row)"
           >
-            <component :is="folded.has(row.panel) ? ChevronRight : ChevronDown" v-if="row.type === 'header'" class="text-muted-foreground -ml-1 size-4 flex-none" aria-hidden="true" />
-            <Link v-if="row.group" class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
-            <ModuleIcon v-else :module-id="row.moduleId" />
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-medium">{{ row.name }}</span>
-              <span v-if="row.sub" class="text-muted-foreground block truncate text-xs">{{ row.sub }}</span>
-            </span>
-            <Plus v-if="row.add" class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
-          </button>
+            <template #leading>
+              <component :is="folded.has(row.panel) ? ChevronRight : ChevronDown" v-if="row.type === 'header'" class="text-muted-foreground -ml-1 size-4 flex-none" aria-hidden="true" />
+              <Link v-if="row.group" class="text-muted-foreground size-4 flex-none" aria-hidden="true" />
+              <ModuleIcon v-else :module-id="row.moduleId" />
+            </template>
+            <span class="font-medium">{{ row.name }}</span>
+            <template v-if="row.sub" #description>{{ row.sub }}</template>
+            <template v-if="row.add" #trailing><Plus class="size-4" aria-hidden="true" /></template>
+          </ListRow>
           <template v-if="row.item">
             <Button
               variant="ghost"
