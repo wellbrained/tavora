@@ -106,7 +106,7 @@ const refusedRect = computed<Rect | null>(() => {
 
     <Transition name="dock-fade">
       <div v-if="samePlace" key="same" class="absolute flex items-center justify-center" :style="at(samePlace)" data-testid="dock-same-place">
-        <span class="bg-card text-foreground rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap shadow-sm">{{ t("dock.samePlace") }}</span>
+        <span class="bg-card text-foreground rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap shadow-elevation-1">{{ t("dock.samePlace") }}</span>
       </div>
     </Transition>
 

@@ -2,6 +2,7 @@
 // own or at the left or right with the text flowing around it, always at a width the user chose
 // (or its real size). Dragging its corner resizes it.
 
+import { bindDrag } from "@tavora/official-ui/lib/bind-drag";
 import { Node } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 
@@ -114,41 +115,34 @@ export const ImageNode = Node.create<ImageOptions>({
       dom.addEventListener("dblclick", () => this.options.onOpen((current.attrs as ImageAttrs).blobId));
 
       // Dragging the corner changes the width of a picture on its own line.
+      const drag = bindDrag();
       handle.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         event.stopPropagation();
         const container = editor.view.dom as HTMLElement;
         const total = container.clientWidth - parseFloat(getComputedStyle(container).paddingLeft || "0") - parseFloat(getComputedStyle(container).paddingRight || "0");
-        const startX = event.clientX;
         const startWidth = dom.getBoundingClientRect().width;
         let width: number | null = (current.attrs as ImageAttrs).width;
-        handle.setPointerCapture(event.pointerId);
-        const move = (moveEvent: PointerEvent) => {
-          width = clampWidth(((startWidth + moveEvent.clientX - startX) / total) * 100);
-          dom.style.width = width === null ? "" : `${width}%`;
-        };
-        const finish = (keep: boolean) => {
-          handle.removeEventListener("pointermove", move);
-          handle.removeEventListener("pointerup", stop);
-          handle.removeEventListener("pointercancel", cancel);
-          const attrs = current.attrs as ImageAttrs;
-          if (!keep) {
-            // The system took the pointer away: the picture goes back to the width it had.
-            show();
-            return;
-          }
-          const pos = getPos();
-          if (typeof pos !== "number") return;
-          if (attrs.width === width) return;
-          const tr = editor.state.tr.setNodeMarkup(pos, undefined, { ...attrs, width });
-          // Replacing the picture drops the selection; keep it selected.
-          editor.view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, pos)));
-        };
-        const stop = () => finish(true);
-        const cancel = () => finish(false);
-        handle.addEventListener("pointermove", move);
-        handle.addEventListener("pointerup", stop);
-        handle.addEventListener("pointercancel", cancel);
+        drag.start(
+          event,
+          {
+            move: (_, delta) => {
+              width = clampWidth(((startWidth + delta.x) / total) * 100);
+              dom.style.width = width === null ? "" : `${width}%`;
+            },
+            drop: () => {
+              const attrs = current.attrs as ImageAttrs;
+              const pos = getPos();
+              if (typeof pos !== "number" || attrs.width === width) return;
+              const tr = editor.state.tr.setNodeMarkup(pos, undefined, { ...attrs, width });
+              // Replacing the picture drops the selection; keep it selected.
+              editor.view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, pos)));
+            },
+            // Escape or a pointer the system takes away: the picture goes back to the width it had.
+            cancel: show,
+          },
+          { capture: handle },
+        );
       });
 
       show();
@@ -163,6 +157,7 @@ export const ImageNode = Node.create<ImageOptions>({
         selectNode: () => dom.classList.add("note-image-selected"),
         deselectNode: () => dom.classList.remove("note-image-selected"),
         stopEvent: (event) => event.target === handle,
+        destroy: () => drag.cancel(),
         ignoreMutation: () => true,
       };
     };

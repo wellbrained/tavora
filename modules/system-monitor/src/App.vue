@@ -7,6 +7,7 @@ import { Settings as SettingsIcon } from "@lucide/vue";
 import { connectModule, errorMessage } from "@tavora/official-ui";
 import { escapeCloses } from "@tavora/official-ui/lib/keys";
 import { Button } from "@tavora/official-ui/components/ui/button";
+import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import type { TavoraSDK } from "@tavora/sdk";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import ConnectionSection from "./ConnectionSection.vue";
@@ -76,7 +77,7 @@ const tavora = computed(() => {
 /** Opens the settings: the panel shows them big, in a dialog over the app, as every module's settings. */
 function openSettings(): void {
   openError.value = null;
-  void sdk.value?.panel.openDialog({ width: 960, height: 680 }).catch((reason) => (openError.value = errorMessage(reason)));
+  void sdk.value?.panel.openDialog(settingsDialogSize({ pages: 3 })).catch((reason) => (openError.value = errorMessage(reason)));
 }
 
 function onKey(event: KeyboardEvent): void {
@@ -100,9 +101,9 @@ const bothSections = computed(() => sections.value.system && sections.value.conn
       {{ t("readError", { error: monitor.error.value }) }}
     </p>
     <div v-else class="@container min-h-0 flex-1 overflow-y-auto">
-      <h2 v-if="bothSections" class="text-muted-foreground px-3 pt-2 text-[0.6875rem] font-medium tracking-wide uppercase" data-testid="heading-system">{{ t("section.system") }}</h2>
+      <h2 v-if="bothSections" class="text-muted-foreground px-3 pt-2 text-xs font-medium" data-testid="heading-system">{{ t("section.system") }}</h2>
       <SystemSection v-if="sections.system" :monitor="monitor" @show-apps="showingApps = true" />
-      <h2 v-if="bothSections" class="text-muted-foreground px-3 pt-1 text-[0.6875rem] font-medium tracking-wide uppercase" data-testid="heading-connection">{{ t("section.connection") }}</h2>
+      <h2 v-if="bothSections" class="text-muted-foreground px-3 pt-1 text-xs font-medium" data-testid="heading-connection">{{ t("section.connection") }}</h2>
       <ConnectionSection v-if="sections.connection" :monitor="monitor" />
       <p v-if="!snapshot" class="text-muted-foreground px-3 py-2 text-xs" data-testid="waiting">{{ t("waiting") }}</p>
     </div>

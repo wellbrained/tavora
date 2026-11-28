@@ -10,7 +10,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { liftedDragImage, useReorderMotion } from "@tavora/official-ui/components/ui/reorder";
 import { settingsDialogSize } from "@tavora/official-ui/components/ui/module-settings";
 import { SwitchField } from "@tavora/official-ui/components/ui/switch";
-import { handleUndoKey, Toaster, undoable, type Undoable, type UndoAnswer } from "@tavora/official-ui/components/ui/toast";
+import { handleUndoKey, toast, Toaster, undoable, type Undoable, type UndoAnswer } from "@tavora/official-ui/components/ui/toast";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Toolbar } from "@tavora/official-ui/components/ui/toolbar";
 import type { JsonValue, MenuOptions, TavoraSDK } from "@tavora/sdk";
@@ -149,7 +149,7 @@ const panelStyle = computed(() => {
 
 /** Opens the settings: the panel shows them big, in a dialog over the app, as every module's settings. */
 function openSettings() {
-  void sdk.value?.panel.openDialog(settingsDialogSize({ pages: 4 })).catch((reason) => (error.value = errorMessage(reason)));
+  void sdk.value?.panel.openDialog(settingsDialogSize({ pages: 4 })).catch((reason) => toast.error(t("settings.openError", { error: errorMessage(reason) })));
 }
 
 function onKey(event: KeyboardEvent) {

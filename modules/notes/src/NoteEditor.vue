@@ -3,7 +3,6 @@
 // another note is opened, and when the panel is hidden or closed.
 import {
   Bold,
-  Check,
   PanelLeftOpen,
   Ellipsis,
   Eraser,
@@ -29,9 +28,12 @@ import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import { isComposing } from "@tavora/official-ui/lib/keys";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@tavora/official-ui/components/ui/dropdown-menu";
@@ -357,7 +359,7 @@ function onLinkKey(event: KeyboardEvent) {
 // While Ctrl (or Cmd) is held, links show the hand cursor: a click opens them.
 const ctrlHeld = ref(false);
 
-function onModifierKey(event: KeyboardEvent) {
+function onModifierKey(event: KeyboardEvent | PointerEvent) {
   ctrlHeld.value = event.ctrlKey || event.metaKey;
 }
 
@@ -367,16 +369,10 @@ function onWindowBlur() {
 
 onMounted(() => {
   addEventListener("pointerdown", closeLinkPopover, true);
-  addEventListener("keydown", onLinkKey, true);
-  addEventListener("keydown", onModifierKey);
-  addEventListener("keyup", onModifierKey);
   addEventListener("blur", onWindowBlur);
 });
 onBeforeUnmount(() => {
   removeEventListener("pointerdown", closeLinkPopover, true);
-  removeEventListener("keydown", onLinkKey, true);
-  removeEventListener("keydown", onModifierKey);
-  removeEventListener("keyup", onModifierKey);
   removeEventListener("blur", onWindowBlur);
 });
 
@@ -494,7 +490,8 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
 </script>
 
 <template>
-  <section ref="root" class="flex h-full min-w-0 flex-col" :data-ctrl="ctrlHeld" :aria-label="t('editor.note')" data-testid="note-editor" :data-loaded="loadedNote ?? ''">
+  <!-- Ctrl is read from the pointer too, so links show the hand cursor without the focus being here. -->
+  <section ref="root" class="flex h-full min-w-0 flex-col" @keydown.capture="onLinkKey" @keydown="onModifierKey" @keyup="onModifierKey" @pointermove="onModifierKey" :data-ctrl="ctrlHeld" :aria-label="t('editor.note')" data-testid="note-editor" :data-loaded="loadedNote ?? ''">
     <Toolbar variant="bar" :label="t('editor.toolbar')">
       <Button
         v-if="narrow"
@@ -529,16 +526,18 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuLabel>{{ t("editor.font") }}</DropdownMenuLabel>
-            <DropdownMenuItem v-for="font in FONTS" :key="font.id" :data-testid="`font-${font.id}`" @select.prevent="emit('setStyle', { font: font.id })">
-              <span :style="{ fontFamily: font.stack }">{{ font.id === "inter" ? t("font.tavora") : font.name }}</span>
-              <Check v-if="shownFont(look.font) === font.id" class="ml-auto" :aria-label="t('editor.on')" />
-            </DropdownMenuItem>
+            <DropdownMenuRadioGroup :model-value="shownFont(look.font)">
+              <DropdownMenuRadioItem v-for="font in FONTS" :key="font.id" :value="font.id" :data-testid="`font-${font.id}`" @select.prevent="emit('setStyle', { font: font.id })">
+                <span :style="{ fontFamily: font.stack }">{{ font.id === "inter" ? t("font.tavora") : font.name }}</span>
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>{{ t("editor.size") }}</DropdownMenuLabel>
-            <DropdownMenuItem v-for="size in SIZES" :key="size.id" :data-testid="`size-${size.id}`" @select.prevent="emit('setStyle', { size: size.id })">
-              {{ t(`size.${size.id}`) }}
-              <Check v-if="shownSize(look.size) === size.id" class="ml-auto" :aria-label="t('editor.on')" />
-            </DropdownMenuItem>
+            <DropdownMenuRadioGroup :model-value="shownSize(look.size)">
+              <DropdownMenuRadioItem v-for="size in SIZES" :key="size.id" :value="size.id" :data-testid="`size-${size.id}`" @select.prevent="emit('setStyle', { size: size.id })">
+                {{ t(`size.${size.id}`) }}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
             <p class="text-muted-foreground px-2 py-1.5 text-xs">{{ noteId === SCRATCHPAD_ID ? t("editor.appliesScratchpad") : t("editor.appliesNotes") }}</p>
           </DropdownMenuContent>
@@ -553,13 +552,14 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
             <DropdownMenuItem data-testid="image-choose" @select="chooseImages()">{{ t("image.choose") }}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>{{ t("image.quality") }}</DropdownMenuLabel>
-            <DropdownMenuItem v-for="quality in (['optimized', 'original'] as const)" :key="quality" :data-testid="`quality-${quality}`" @select.prevent="store.setImageQuality(quality)">
-              <span class="flex flex-col">
-                <span>{{ t(`image.${quality}`) }}</span>
-                <span class="text-muted-foreground text-xs">{{ t(`image.${quality}Hint`) }}</span>
-              </span>
-              <Check v-if="store.imageQuality.value === quality" class="ml-auto" :aria-label="t('editor.on')" />
-            </DropdownMenuItem>
+            <DropdownMenuRadioGroup :model-value="store.imageQuality.value">
+              <DropdownMenuRadioItem v-for="quality in (['optimized', 'original'] as const)" :key="quality" :value="quality" :data-testid="`quality-${quality}`" @select.prevent="store.setImageQuality(quality)">
+                <span class="flex flex-col">
+                  <span>{{ t(`image.${quality}`) }}</span>
+                  <span class="text-muted-foreground text-xs">{{ t(`image.${quality}Hint`) }}</span>
+                </span>
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
             <template v-if="imageUsage">
               <DropdownMenuSeparator />
               <p class="text-muted-foreground px-2 py-1.5 text-xs" data-testid="image-usage">{{ t("image.usage", { used: formatMegabytes(imageUsage.bytes), total: formatMegabytes(imageUsage.maxBytes) }) }}</p>
@@ -588,11 +588,10 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuItem v-for="tool in moreTools" :key="tool.label" @select="tool.run()">
+            <DropdownMenuCheckboxItem v-for="tool in moreTools" :key="tool.label" :model-value="tool.active" @select="tool.run()">
               <component :is="tool.icon" />
               {{ tool.label }}
-              <Check v-if="tool.active" class="ml-auto" :aria-label="t('editor.on')" />
-            </DropdownMenuItem>
+            </DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -757,7 +756,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
   font-family: var(--font-mono);
   font-size: 0.93em;
   background: var(--muted);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 1px 4px;
 }
 .note-content pre {
@@ -784,14 +783,14 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
   display: block;
   max-width: 100%;
   margin: 4px 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   line-height: 0;
 }
 .note-image img {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 .note-image[data-mode="left"] {
   float: left;
@@ -812,7 +811,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
   display: none;
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--primary);
   cursor: nwse-resize;
   touch-action: none;

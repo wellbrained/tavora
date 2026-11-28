@@ -5,6 +5,7 @@
    Classic stays exactly as it was: every rule here names either the non-Classic scope or a look Classic doesn't use
    (Classic is surface flat, tabs pill, content plain, buttons soft, inputs soft, lists fill, labels normal, status
    none). Plain CSS outside any layer on purpose, so a look wins over the components' Tailwind classes. */
+/* rules-allow-file: color, radius, shadow, all-caps this file draws the app styles */
 
 /* ---------- Sizes and depth (any style but Classic) ---------- */
 

@@ -216,7 +216,7 @@ function choose(action: RowAction) {
     <div class="flex items-start gap-1.5 py-0.5 pr-1 pl-0.5">
       <span
         v-if="!compact"
-        class="text-muted-foreground flex h-8 w-4 flex-none cursor-grab items-center justify-center opacity-0 group-hover/task:opacity-100"
+        class="text-muted-foreground flex h-8 w-4 flex-none cursor-grab items-center justify-center opacity-40 group-hover/task:opacity-100"
         draggable="true"
         aria-hidden="true"
         :title="t('task.drag')"
@@ -271,9 +271,9 @@ function choose(action: RowAction) {
               @keydown="onTitleKey"
               @focusout="onFocusOut"
             />
-            <button
+            <Button
               v-else
-              type="button"
+              variant="bare"
               class="block w-full cursor-text rounded-sm px-1 py-1.5 text-left font-(family-name:--todo-font) text-(length:--todo-text) leading-(--todo-leading) break-words"
               :aria-label="t('task.edit', { title: task.title })"
               data-testid="task-open"
@@ -282,7 +282,7 @@ function choose(action: RowAction) {
             >
               <!-- Done: the line draws across the title and the text fades to muted (the kit's .tavora-strike). -->
               <span :class="cn('tavora-strike', task.done && 'text-muted-foreground')" :data-struck="task.done || undefined" data-testid="task-title">{{ task.title }}</span>
-            </button>
+            </Button>
             <div v-if="hasMeta" class="text-muted-foreground -mt-1 flex min-w-0 items-center gap-2 px-1 pb-1.5 text-xs leading-4">
               <span v-if="compact" class="truncate">{{ group.name }}</span>
               <span
@@ -316,20 +316,20 @@ function choose(action: RowAction) {
             class="block max-h-60 min-h-20 resize-none px-2 py-1.5 text-sm"
             @keydown="onDescriptionKey"
           />
-          <p class="text-muted-foreground mt-1.5 px-0.5 text-[11px]">{{ t("task.descriptionHint") }}</p>
+          <p class="text-muted-foreground mt-1.5 px-0.5 text-xs">{{ t("task.descriptionHint") }}</p>
         </PopoverContent>
       </Popover>
 
       <span v-if="task.pinned && !compact" class="flex h-8 flex-none items-center">
         <Pin class="text-primary size-3.5" :aria-label="t('task.pinned')" />
       </span>
-      <!-- Deleting in one click, shown on hover; the toast can put it back. -->
+      <!-- Deleting in one click; the toast can put it back. -->
       <span class="flex h-8 flex-none items-center">
         <Button
           type="button"
           variant="danger"
           size="icon-sm"
-          class="size-7 opacity-0 group-hover/task:opacity-100 focus-visible:opacity-100"
+          class="size-7"
           :aria-label="t('task.deleteTitle', { title: task.title })"
           :title="t('task.delete')"
           data-testid="task-delete"

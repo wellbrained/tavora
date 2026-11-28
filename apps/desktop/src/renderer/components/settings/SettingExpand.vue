@@ -46,7 +46,7 @@ const tip = useDetails();
               @pointerleave="tip.hide()"
               >{{ label }}</span
             >
-            <Badge v-if="isNew" class="py-0 text-[10px] font-semibold uppercase" data-testid="setting-new">{{ t("settings.new") }}</Badge>
+            <Badge v-if="isNew" class="py-0 font-semibold" data-testid="setting-new">{{ t("settings.new") }}</Badge>
             <slot name="badges" />
           </span>
           <span v-if="description || $slots.description" class="text-muted-foreground text-sm"><slot name="description">{{ description }}</slot></span>

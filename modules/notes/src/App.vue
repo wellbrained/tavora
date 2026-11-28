@@ -3,6 +3,7 @@
 // is narrow. Every Notes panel of a workspace shows the same notes; which note a
 // panel shows is that panel's own state.
 import { connectModule, errorMessage } from "@tavora/official-ui";
+import { bindDrag } from "@tavora/official-ui/lib/bind-drag";
 import { handleUndoKey, Toaster, toast, undoable } from "@tavora/official-ui/components/ui/toast";
 import type { JsonValue, TavoraSDK } from "@tavora/sdk";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
@@ -12,7 +13,6 @@ import { setLanguage, t } from "./i18n";
 import { de, en } from "./locales";
 import { collectImageIds, emptyContent, leftEmpty, otherPanelState, panelStateToSave, restoreCleared, nudged, reordered, SCRATCHPAD_ID, sections, UNTITLED, type NoteData, type NoteEntry, type RichText } from "./notes";
 import { createNotesStore, type NotesStore } from "./store";
-import { createResizeDrag } from "./resize-drag";
 
 /** Below this width the list and the editor take turns. */
 const NARROW_PX = 560;
@@ -72,17 +72,24 @@ function toggleCollapsed() {
   saveLayout();
 }
 
-// Dragging the edge of the sidebar. The handle can also be moved with the arrow keys. A pointer the system takes away puts the
-// width back and stores nothing.
-const sidebarDrag = createResizeDrag({
-  sizeAt: (started, by) => clampSidebar(started + by),
-  show: (width) => (sidebarWidth.value = width),
-  commit: () => saveLayout(),
-});
+// Dragging the edge of the sidebar. The handle can also be moved with the arrow keys. Escape or a pointer the system takes away
+// puts the width back and stores nothing.
+const sidebarDrag = bindDrag();
 
 function onResizeStart(event: PointerEvent) {
-  sidebarDrag.start(event.clientX, sidebarWidth.value);
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  if (event.button !== 0) return;
+  sidebarDrag.start(
+    event,
+    () => {
+      const started = sidebarWidth.value;
+      return {
+        move: (_, delta) => (sidebarWidth.value = clampSidebar(started + delta.x)),
+        drop: saveLayout,
+        cancel: () => (sidebarWidth.value = started),
+      };
+    },
+    { capture: event.currentTarget as Element },
+  );
 }
 
 function onResizeKey(event: KeyboardEvent) {
@@ -295,7 +302,7 @@ async function move(id: string, delta: -1 | 1) {
       />
       <div
         v-if="!narrow && !collapsed"
-        class="hover:bg-primary/40 focus-visible:bg-primary/60 absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize touch-none outline-none"
+        class="hover:bg-primary/40 absolute inset-y-0 -right-[3px] z-(--layer-sticky) w-1.5 cursor-col-resize touch-none"
         role="separator"
         aria-orientation="vertical"
         tabindex="0"
@@ -305,9 +312,6 @@ async function move(id: string, delta: -1 | 1) {
         :aria-valuemin="SIDEBAR_MIN"
         :aria-valuemax="SIDEBAR_MAX"
         @pointerdown.prevent="onResizeStart"
-        @pointermove="sidebarDrag.move($event.clientX)"
-        @pointerup="sidebarDrag.end()"
-        @pointercancel="sidebarDrag.cancel()"
         @keydown="onResizeKey"
         @dblclick="resetSidebarWidth"
       />

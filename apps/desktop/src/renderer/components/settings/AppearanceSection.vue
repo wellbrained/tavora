@@ -193,7 +193,7 @@ const showVariation = computed(() => {
             <template #thumb><StylePreview :look="item" :variation="styleVariation(item)" size="md" /></template>
             <span class="flex items-center gap-2">
               {{ styleText(item, "name") }}
-              <Badge v-if="item.id === appearance.styleId" class="bg-primary/15 text-primary flex-none border-transparent py-0 text-[10px] font-semibold" data-testid="style-in-use">{{
+              <Badge v-if="item.id === appearance.styleId" class="bg-primary/15 text-primary flex-none border-transparent py-0 font-semibold" data-testid="style-in-use">{{
                 t("settings.theme.inUse")
               }}</Badge>
               <!-- Only the user's own are tagged: Tavora's are the norm here, and a tag on every row would be noise. -->
@@ -236,7 +236,7 @@ const showVariation = computed(() => {
             <template #thumb><ThemePreview :variation="previewOf(theme)" size="md" /></template>
             <span class="flex items-center gap-2">
               {{ theme.name }}
-              <Badge v-if="theme.id === appearance.themeId" class="bg-primary/15 text-primary flex-none border-transparent py-0 text-[10px] font-semibold" data-testid="theme-in-use">{{
+              <Badge v-if="theme.id === appearance.themeId" class="bg-primary/15 text-primary flex-none border-transparent py-0 font-semibold" data-testid="theme-in-use">{{
                 t("settings.theme.inUse")
               }}</Badge>
               <Badge v-if="mixedThemes" variant="outline" :class="cn('flex-none py-0 font-normal', theme.provenance === 'official' ? 'border-primary/40 text-primary' : 'text-muted-foreground')">{{

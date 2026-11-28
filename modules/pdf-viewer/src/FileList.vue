@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // The files kept for this game: open one, rename it or remove it. It sits in a popover next to the button that opened it.
-// Each row is the kit's list row (as in ActionList) with a visible ⋯ menu beside it; ActionList has no place for that.
+// Each row is the kit's list row with a visible ⋯ menu beside it.
 import { Ellipsis, FileText, FolderSearch, Image as ImageIcon, Pencil, Trash2 } from "@lucide/vue";
-import { ActionRow } from "@tavora/official-ui/components/ui/action-row";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
+import { ListRow } from "@tavora/official-ui/components/ui/list-row";
 import { useFocusRecovery } from "@tavora/official-ui";
 import { ref } from "vue";
 import type { FileEntry } from "./files";
@@ -32,23 +32,14 @@ function meta(file: FileEntry): string {
     <EmptyState v-if="!files.length" :title="t('list.emptyTitle')" :description="t('list.empty')" data-testid="file-list-empty" />
     <ul v-else class="flex max-h-72 flex-col gap-1 overflow-y-auto px-1">
       <li v-for="file in files" :key="file.id" class="flex items-center gap-1" :data-testid="`file-${file.id}`" :data-focus-row="file.id">
-        <Button
-          variant="ghost"
-          class="h-auto min-w-0 flex-1 justify-start gap-3 p-2 font-normal"
-          :class="file.id === activeId && 'bg-accent'"
-          :aria-current="file.id === activeId ? 'true' : undefined"
-          :title="t('list.open', { name: file.name })"
-          data-testid="file-open"
-          @click="emit('open', file.id)"
-        >
-          <ActionRow :description="meta(file)">
-            <template #icon>
-              <FileText v-if="file.kind === 'pdf'" />
-              <ImageIcon v-else />
-            </template>
-            <span class="[overflow-wrap:anywhere]" data-testid="file-name">{{ file.name }}</span>
-          </ActionRow>
-        </Button>
+        <ListRow wrap class="min-w-0 flex-1 gap-3 p-2" :selected="file.id === activeId" :title="t('list.open', { name: file.name })" data-testid="file-open" @click="emit('open', file.id)">
+          <template #leading>
+            <FileText v-if="file.kind === 'pdf'" />
+            <ImageIcon v-else />
+          </template>
+          <span data-testid="file-name">{{ file.name }}</span>
+          <template #description>{{ meta(file) }}</template>
+        </ListRow>
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon-xs" class="flex-none" :title="t('list.more', { name: file.name })" :aria-label="t('list.more', { name: file.name })" data-testid="file-menu">

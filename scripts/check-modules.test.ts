@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { BASELINE_FILE, RULES, checkFile, checkModule, compareBaseline, findModules, isCatalog, lexScript, main, parseAllow, updatedBaseline } from "./check-modules.mjs";
+import { BASELINE_FILE, RULES, checkFile, checkModule, checkModules, compareBaseline, findModules, isCatalog, lexScript, main, parseAllow, updatedBaseline } from "./check-modules.mjs";
 
 type Finding = { file: string; line: number; rule: string; message: string; text: string };
 
@@ -496,6 +496,9 @@ describe("module rules", () => {
     expect(rules([main, root, board])).toEqual(["window-keys@ui/Board.vue:2"]);
     const rendered = file("overlay.ts", 'import { createApp, h } from "vue";\nimport Card from "./ui/Board.vue";\ncreateApp({ render: () => h(Card) }).mount("#app");');
     expect(rules([rendered, board])).toEqual([]);
+    // Loaded on demand (the whiteboard sets Excalidraw up first), it is still the page's root.
+    const later = file("main.ts", 'import { createApp } from "vue";\nvoid import("./App.vue").then(({ default: App }) => createApp(App).mount("#app"));');
+    expect(rules([later, root])).toEqual([]);
     expect(rules([root])).toEqual(["window-keys@App.vue:5"]);
   });
 
@@ -563,7 +566,6 @@ describe("pnpm check:modules", () => {
     mkdirSync(path.join(dir, "src"), { recursive: true });
     writeFileSync(path.join(dir, "tavora.module.json"), "{}");
     writeFileSync(path.join(dir, "src", "style.css"), ".tray {\n  color: #fff;\n}\n");
-    if (layout === "tavora") mkdirSync(path.join(root, "modules", "shared", "src"), { recursive: true });
     return { root, dir };
   }
   const run = (argv: string[], cwd: string) => {
@@ -584,6 +586,31 @@ describe("pnpm check:modules", () => {
     mkdirSync(path.join(root, "examples", "vue-module"), { recursive: true });
     writeFileSync(path.join(root, "examples", "vue-module", "tavora.module.json"), "{}");
     expect(findModules(root)).toEqual(["modules/dice", "examples/vue-module"]);
+  });
+
+  // Pre-1.0 audit (2026-11-28): the app and the kit were never scanned, so their breaks went unseen.
+  it("checks the app renderer and the kit too, without the module-only rules", () => {
+    const { root } = repo("tavora");
+    const write = (file: string, text: string) => {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), text);
+    };
+    const script = ['import { ref } from "vue";', 'window.addEventListener("keydown", () => {});', "connectModule({});"];
+    const source = vue('<button class="text-white">x</button>', script.join("\n"), ".x { outline: none; }");
+    write("apps/desktop/src/renderer/components/A.vue", source);
+    write("modules/shared/src/components/B.vue", source);
+    const areas = ["apps/desktop/src/renderer", "modules/shared/src"];
+    expect(findModules(root)).toEqual(["modules/dice", ...areas]);
+    expect(findModules(root, ["modules/shared/src"])).toEqual(["modules/shared/src"]);
+    const found = checkModules(root, areas) as Finding[];
+    const rules = (area: string) => found.filter((f) => f.file.startsWith(area)).map((f) => f.rule).sort();
+    expect(rules(areas[0])).toEqual(["focus-ring", "kit-control", "palette"]);
+    // The kit draws the controls and their focus ring.
+    expect(rules(areas[1])).toEqual(["palette"]);
+    expect(run(["--update-baseline"], root).code).toBe(0);
+    expect(run([], root).out).toContain("no new breaks in 1 module and 2 other folders");
+    write("apps/desktop/src/renderer/b.css", ".y { z-index: 7; }");
+    expect(run([], root)).toMatchObject({ code: 1, out: expect.stringContaining("apps/desktop/src/renderer/b.css:1  z-index") });
   });
 
   it("fails on a new break, passes once it is in the baseline, and fails again on the next one", () => {

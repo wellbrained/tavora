@@ -3,11 +3,11 @@
 // back. Taking back removes everything the module was granted, as in the consent dialog; its data stays (decision
 // log, module grants row of 2026-10-16). `testid` names the list: `<testid>-users`, `-user-<id>`, `-revoke-<id>`,
 // and `-users-none` when no module may use it yet.
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { AnimatedList } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ListRow } from "@tavora/official-ui/components/ui/list-row";
-import { Tooltip, tooltipDelay } from "@tavora/official-ui/components/tooltip";
+import { Tooltip, useTooltip } from "@tavora/official-ui/components/tooltip";
 import type { ModuleConnector } from "../../../shared/host-api";
 import type { MessageKey } from "../../../shared/i18n";
 import { state } from "../../host";
@@ -41,21 +41,8 @@ const users = computed(() =>
   ),
 );
 
-/** The full hosts behind the hovered or focused site chip, shown beside it. */
-const tip = ref<{ hosts: string[]; anchor: { left: number; top: number; right: number; bottom: number } } | null>(null);
-let delay: ReturnType<typeof setTimeout> | undefined;
-function showHosts(event: Event, hosts: string[]) {
-  const chip = event.currentTarget as HTMLElement;
-  clearTimeout(delay);
-  delay = setTimeout(() => {
-    const { left, top, right, bottom } = chip.getBoundingClientRect();
-    tip.value = { hosts, anchor: { left, top, right, bottom } };
-  }, tooltipDelay(300));
-}
-function hideHosts() {
-  clearTimeout(delay);
-  tip.value = null;
-}
+/** The full hosts behind the hovered or focused site chip, shown above it. */
+const tip = useTooltip<string[]>({ delay: 300, side: "top" });
 </script>
 
 <template>
@@ -81,10 +68,7 @@ function hideHosts() {
                 class="bg-muted text-foreground rounded px-1.5 py-0.5 text-xs break-all"
                 :aria-label="group.hosts.join(', ')"
                 :data-testid="`${testid}-site-${module.id}-${group.site}`"
-                @pointerenter="showHosts($event, group.hosts)"
-                @pointerleave="hideHosts"
-                @focus="showHosts($event, group.hosts)"
-                @blur="hideHosts"
+                v-bind="tip.on(group.hosts)"
                 >{{ group.site }}</code
               >
             </span>
@@ -104,8 +88,8 @@ function hideHosts() {
         </ListRow>
       </li>
     </AnimatedList>
-    <Tooltip :open="tip !== null" :anchor="tip?.anchor" side="top" compact @dismiss="hideHosts">
-      <span v-for="host in tip?.hosts ?? []" :key="host" class="block font-mono">{{ host }}</span>
+    <Tooltip v-bind="tip.props" compact>
+      <span v-for="host in tip.content ?? []" :key="host" class="block font-mono">{{ host }}</span>
     </Tooltip>
   </div>
 </template>

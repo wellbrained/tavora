@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// rules-allow-file: palette, z-index black and white controls over any picture, stacked between Excalidraw's canvas and its menus
 // A lock on the corner of every picture (placed by locks.ts), over the board. It sits below Excalidraw's menus and
 // above its drawing; a locked picture cannot be clicked in Excalidraw at all, so its lock is the way to free it again.
 import { Lock, LockOpen } from "@lucide/vue";

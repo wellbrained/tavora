@@ -3,9 +3,10 @@
 // away to just its handle. Excalidraw builds the palette itself and shows it only while something is selected or
 // drawn, so excalidrawDom.ts puts the handle into it each time it appears; this fills it, and where the palette sits is
 // kept for the panel. Excalidraw's own options stay Excalidraw's: they are what select, style and undo its elements.
-import { ChevronDown, ChevronRight, GripVertical } from "@lucide/vue";
+import { ChevronDown, ChevronRight, GripVertical, RotateCcw } from "@lucide/vue";
 import { Button } from "@tavora/official-ui/components/ui/button";
-import { onBeforeUnmount, shallowRef, watch } from "vue";
+import { bindDrag } from "@tavora/official-ui/lib/bind-drag";
+import { shallowRef, watch } from "vue";
 import { paletteHome, placePalette, watchPalette, type PaletteParts } from "./excalidrawDom";
 import { t } from "./i18n";
 import { clampPlace, DEFAULT_PALETTE, type PalettePlace } from "./palette";
@@ -21,7 +22,7 @@ const emit = defineEmits<{ place: [place: PalettePlace] }>();
 const parts = shallowRef<PaletteParts | null>(null);
 /** Where the palette is while it is being dragged; stored when it is let go of. */
 let live = props.place;
-let drag: { pointer: number; startX: number; startY: number; from: PalettePlace; moved: boolean } | null = null;
+const drag = bindDrag();
 
 // Finds the palette whenever Excalidraw shows it.
 watch(
@@ -52,41 +53,32 @@ watch(
   { flush: "post" },
 );
 
-onBeforeUnmount(() => (drag = null));
-
 function down(event: PointerEvent) {
   if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
   event.preventDefault();
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-  drag = { pointer: event.pointerId, startX: event.clientX, startY: event.clientY, from: live, moved: false };
-}
-
-function move(event: PointerEvent) {
-  const gesture = drag;
-  const found = parts.value;
-  if (!gesture || gesture.pointer !== event.pointerId || !props.board || !found) return;
-  gesture.moved = true;
-  const kept = clampPlace(gesture.from.x + event.clientX - gesture.startX, gesture.from.y + event.clientY - gesture.startY, paletteHome(found.palette), props.board.getBoundingClientRect());
-  // Only on the page while dragging; stored when the palette is let go of.
-  live = { ...live, ...kept };
-  found.palette.style.transform = `translate(${kept.x}px, ${kept.y}px)`;
-}
-
-function up(event: PointerEvent) {
-  const gesture = drag;
-  if (!gesture || gesture.pointer !== event.pointerId) return;
-  drag = null;
-  if (gesture.moved) emit("place", live);
-}
-
-/** The system took the pointer away (a call, a gesture): the palette goes back to where it was and nothing is stored. */
-function cancel(event: PointerEvent) {
-  const gesture = drag;
-  if (!gesture || gesture.pointer !== event.pointerId) return;
-  drag = null;
-  live = gesture.from;
-  const found = parts.value;
-  if (found && props.board) placePalette(found.palette, props.board, live);
+  drag.start(
+    event,
+    () => {
+      const from = live;
+      return {
+        move: (_, delta) => {
+          const found = parts.value;
+          if (!props.board || !found) return;
+          const kept = clampPlace(from.x + delta.x, from.y + delta.y, paletteHome(found.palette), props.board.getBoundingClientRect());
+          // Only on the page while dragging; stored when the palette is let go of.
+          live = { ...live, ...kept };
+          found.palette.style.transform = `translate(${kept.x}px, ${kept.y}px)`;
+        },
+        drop: () => emit("place", live),
+        // Escape, or the system took the pointer away: back to where it was and nothing is stored.
+        cancel: () => {
+          live = from;
+          if (parts.value && props.board) placePalette(parts.value.palette, props.board, live);
+        },
+      };
+    },
+    { capture: event.currentTarget as Element },
+  );
 }
 
 function fold() {
@@ -97,17 +89,23 @@ function toggleMore() {
   emit("place", { ...live, more: !live.more });
 }
 
+/** Back to where Excalidraw puts it, folded and opened as it is. */
 function putBack(event: MouseEvent) {
-  if (!(event.target as HTMLElement).closest("button")) emit("place", DEFAULT_PALETTE);
+  // A double-click on the Fold button folds twice; it doesn't move the palette.
+  if (event.type === "dblclick" && (event.target as HTMLElement).closest("button")) return;
+  emit("place", { ...live, x: DEFAULT_PALETTE.x, y: DEFAULT_PALETTE.y });
 }
 </script>
 
 <template>
   <template v-if="parts">
     <Teleport :to="parts.handle">
-      <div class="palette-grip" :title="t('palette.move')" data-testid="palette-handle" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="cancel" @dblclick="putBack">
+      <div class="palette-grip" :title="t('palette.move')" data-testid="palette-handle" @pointerdown="down" @dblclick="putBack">
         <GripVertical class="size-3.5 flex-none opacity-50" aria-hidden="true" />
         <span class="flex-1 font-semibold">{{ t("palette.title") }}</span>
+        <Button v-if="place.x || place.y" type="button" variant="ghost" size="icon-xs" :aria-label="t('palette.reset')" :title="t('palette.reset')" data-testid="palette-reset" @click="putBack">
+          <RotateCcw />
+        </Button>
         <Button
           type="button"
           variant="ghost"

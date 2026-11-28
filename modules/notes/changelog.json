@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.6.95",
+    "date": "2026-11-28",
+    "notes": [
+      "Each note's menu always shows.",
+      "Escape cancels dragging the list's edge or a picture's corner."
+    ]
+  },
+  {
     "version": "0.6.94",
     "date": "2026-11-28",
     "notes": [

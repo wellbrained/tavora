@@ -2,6 +2,7 @@
 // The System section: a card for each block the panel shows (CPU, graphics card, memory, one for each drive), in
 // a grid that follows the panel's width (container queries in CSS, no script): 1 column under 420 px, 2 up to 720 px,
 // 3 above. A Connection section can sit next to it later; it gets its own component like this one.
+import { Card } from "@tavora/official-ui/components/ui/card";
 import { Cpu, Gpu, List } from "@lucide/vue";
 import { cn } from "@tavora/official-ui";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -119,8 +120,7 @@ const drives = computed(() => {
 // Neutral unless a drive is low (driveTone also counts the free gigabytes, so it isn't a limit on the share alone).
 const BAR_TONE: Record<DriveTone, MeterTone> = { ok: "muted", warning: "warning", danger: "destructive" };
 const TEXT_TONE: Record<DriveTone, string> = { ok: "", warning: "text-warning", danger: "text-destructive" };
-const CARD = "bg-card text-card-foreground flex flex-col gap-1.5 rounded-lg border p-2.5";
-const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium tracking-wide uppercase";
+const LABEL = "text-muted-foreground flex-none text-xs font-medium";
 </script>
 
 <template>
@@ -180,7 +180,7 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
     <p v-if="blocks.drives && drives.length === 0" class="text-muted-foreground col-span-full text-xs" data-testid="no-drives">{{ t("drive.none") }}</p>
     <!-- Drives flow in their own grid under the cards: one per row in one column, else as many as stay readable (about 250 px each). -->
     <div v-if="blocks.drives && drives.length" class="col-span-full grid grid-cols-1 items-start gap-2 @min-[620px]:grid-cols-[repeat(auto-fill,minmax(250px,1fr))]">
-      <section v-for="drive in drives" :key="drive.id" class="bg-card text-card-foreground flex flex-col gap-1 rounded-lg border px-2.5 py-2" :data-testid="`drive-${drive.id}`">
+      <Card v-for="drive in drives" :key="drive.id" as="section" size="sm" class="gap-1 py-2" :data-testid="`drive-${drive.id}`">
         <div class="flex items-baseline gap-2">
           <span class="text-muted-foreground flex-none text-xs font-medium">{{ drive.id }}</span>
           <span class="min-w-0 flex-1 truncate">{{ drive.label }}</span>
@@ -191,7 +191,7 @@ const LABEL = "text-muted-foreground flex-none text-[0.6875rem] font-medium trac
           <Meter :model-value="drive.used" :tone="BAR_TONE[drive.tone]" :aria-label="`${drive.id} ${drive.text}`" :value-text="drive.spoken" />
           <p class="text-muted-foreground text-xs tabular-nums" data-testid="drive-io">{{ drive.io }}</p>
         </template>
-      </section>
+      </Card>
     </div>
   </div>
 </template>

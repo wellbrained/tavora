@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@tavora/official-ui/components/ui/combobox";
+import { Combobox, ComboboxAnchor, ComboboxEmpty, ComboboxGroup, ComboboxInput, ComboboxItem, ComboboxLabel, ComboboxList } from "@tavora/official-ui/components/ui/combobox";
 import { ref } from "vue";
 
-const GAMES = ["Path of Exile 2", "Diablo IV", "Final Fantasy XIV", "Guild Wars 2", "Satisfactory", "Stardew Valley", "Enshrouded"];
+const GROUPS = [
+  { name: "Action", games: ["Path of Exile 2", "Diablo IV", "Final Fantasy XIV", "Guild Wars 2"] },
+  { name: "Building", games: ["Satisfactory", "Stardew Valley", "Enshrouded"] },
+];
 const picked = ref<string>();
 </script>
 
@@ -14,7 +17,10 @@ const picked = ref<string>();
       </ComboboxAnchor>
       <ComboboxList>
         <ComboboxEmpty>No game found</ComboboxEmpty>
-        <ComboboxItem v-for="game in GAMES" :key="game" :value="game">{{ game }}</ComboboxItem>
+        <ComboboxGroup v-for="group in GROUPS" :key="group.name">
+          <ComboboxLabel>{{ group.name }}</ComboboxLabel>
+          <ComboboxItem v-for="game in group.games" :key="game" :value="game">{{ game }}</ComboboxItem>
+        </ComboboxGroup>
       </ComboboxList>
     </Combobox>
     <span class="text-muted-foreground text-sm">{{ picked ?? "Nothing picked" }}</span>

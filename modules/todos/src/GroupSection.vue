@@ -179,7 +179,7 @@ function menuEntries(): MenuEntry[] {
         radio: true,
       })),
     },
-    { type: "item", id: "clear-done", label: t("group.deleteFinished"), disabled: !doneCount.value },
+    { type: "item", id: "clear-done", label: t("group.deleteFinished"), danger: true, disabled: !doneCount.value },
     { type: "separator" },
     { type: "item", id: "delete", label: t("group.delete"), danger: true },
   ];
@@ -365,8 +365,8 @@ function dropMark(position: number): "before" | "after" | null {
       <!-- How much of the group is done, as a thin line along the header's bottom edge. -->
       <span
         v-if="group.tasks.length && !collapsed"
-        class="absolute bottom-[-1px] left-0 h-px bg-[var(--tint,var(--primary))] transition-[width] duration-300 motion-reduce:transition-none"
-        :style="{ width: `${(doneCount / group.tasks.length) * 100}%` }"
+        class="absolute bottom-[-1px] left-0 h-px w-full origin-left bg-[var(--tint,var(--primary))] transition-transform duration-(--duration-move) motion-reduce:transition-none"
+        :style="{ transform: `scaleX(${doneCount / group.tasks.length})` }"
         aria-hidden="true"
       />
       <Button

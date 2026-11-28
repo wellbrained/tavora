@@ -19,6 +19,7 @@ export type Font = (typeof FONTS)[number];
 export const ALIGNS = ["left", "center", "right"] as const;
 export type Align = (typeof ALIGNS)[number];
 /** Text colours for the overlay. */
+// rules-allow: color the colours the user picks from for the overlay text
 export const COLORS = ["#ffffff", "#facc15", "#fb923c", "#f87171", "#f472b6", "#a78bfa", "#60a5fa", "#2dd4bf", "#4ade80", "#111111"] as const;
 
 /**

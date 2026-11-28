@@ -94,7 +94,7 @@ async function onMove(id: string, delta: -1 | 1) {
   emit("move", id, delta);
   // The row is moved in the list, which drops keyboard focus; give it back.
   await nextTick();
-  setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="note-${id}"] button`)?.focus(), 60);
+  setTimeout(() => root.value?.querySelector<HTMLElement>(`[data-testid="note-${id}"] button`)?.focus(), 60);
 }
 
 function dropClass(entry: NoteEntry): string | false {

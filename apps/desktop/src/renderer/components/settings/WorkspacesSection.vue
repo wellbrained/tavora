@@ -85,7 +85,7 @@ function removeSelected() {
       <div class="py-3">
         <Input v-model="filter" :placeholder="t('steamImport.filter')" :aria-label="t('settings.workspaces.filterLabel')" autocomplete="off" maxlength="80" data-testid="workspaces-filter" />
       </div>
-      <div class="bg-card sticky top-0 z-[5] -mx-5 flex min-h-12 flex-wrap items-center gap-3 border-y px-5 py-2">
+      <div class="bg-card sticky top-0 z-(--layer-sticky) -mx-5 flex min-h-12 flex-wrap items-center gap-3 border-y px-5 py-2">
         <CheckboxField
           :model-value="allShown ? true : someShown ? 'indeterminate' : false"
           :label="t('settings.workspaces.selectAll')"

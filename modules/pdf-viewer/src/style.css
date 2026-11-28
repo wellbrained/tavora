@@ -22,7 +22,7 @@
 }
 .textLayer > :not(.markedContent),
 .textLayer .markedContent span:not(.markedContent) {
-  z-index: 1;
+  z-index: var(--layer-lift);
   --font-height: 0;
   font-size: calc(var(--text-scale-factor) * var(--font-height));
   --scale-x: 1;
@@ -46,7 +46,7 @@
 .linkLayer {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: var(--layer-sticky);
   pointer-events: none;
 }
 .linkLayer button {

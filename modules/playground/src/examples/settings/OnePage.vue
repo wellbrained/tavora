@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// rules-allow-file: color swatches the user picks from
 // A module with only one page of settings: no menu, the rows straight on the dialog, and a narrower dialog that asks for
 // its size with settingsDialogSize (here five rows, so it keeps the height of six).
 import { PanelsTopLeft } from "@lucide/vue";

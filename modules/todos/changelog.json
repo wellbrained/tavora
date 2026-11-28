@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.2.101",
+    "date": "2026-11-28",
+    "notes": [
+      "Delete and the drag handle show without hovering.",
+      "A message appears when the settings can't open."
+    ]
+  },
+  {
     "version": "0.2.100",
     "date": "2026-11-28",
     "notes": [

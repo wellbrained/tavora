@@ -3,7 +3,7 @@
 // Overlays: what the overlay says and how it looks (with a live preview, the same in game and on stream), and where it shows (in game, on stream). Tavora shows them as a dialog over the workspace
 // and names it after the item; every change saves at once. Text and number fields save when they lose focus or on Enter, not on
 // every key, and whatever is still typed saves when the page changes or this goes away.
-import { Hash, Hourglass, Keyboard, Link, Paintbrush, Plus, Timer, Type, X } from "@lucide/vue";
+import { ChevronDown, Copy, Eye, Hash, Hourglass, Keyboard, Link, Paintbrush, Plus, Timer, Type, X } from "@lucide/vue";
 import { ConfirmDialog, errorMessage, SegmentedControl, useFocusRecovery } from "@tavora/official-ui";
 import { undoable } from "@tavora/official-ui/components/ui/toast";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -597,7 +597,7 @@ onBeforeUnmount(saveFields);
               <SettingsRow :label="t('edit.links')" :hint="t('edit.linksHint')">
                 <DropdownMenu v-if="unlinked.length && item.links.length < MAX.links">
                   <DropdownMenuTrigger as-child>
-                    <Button variant="secondary" size="sm" data-testid="link-add"><Plus /> {{ t("edit.linkAdd") }}</Button>
+                    <Button variant="secondary" size="sm" data-testid="link-add">{{ t("edit.linkAdd") }}<ChevronDown data-icon="end" /></Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
                     <DropdownMenuLabel>{{ t("edit.linkPick") }}</DropdownMenuLabel>
@@ -616,7 +616,7 @@ onBeforeUnmount(saveFields);
                   @keydown.enter="!isComposing($event) && saveLinkAmount(link.target)"
                 />
                 <Link class="text-muted-foreground size-3.5 flex-none" aria-hidden="true" />
-                <Button variant="ghost" size="icon-sm" :aria-label="t('edit.linkRemove', { label: link.label })" :title="t('edit.linkRemove', { label: link.label })" @click="removeLink(link.target)">
+                <Button variant="danger" size="icon-sm" :aria-label="t('edit.linkRemove', { label: link.label })" :title="t('edit.linkRemove', { label: link.label })" @click="removeLink(link.target)">
                   <X />
                 </Button>
               </SettingsRow>
@@ -732,8 +732,8 @@ onBeforeUnmount(saveFields);
         <SettingsPage v-else :title="t('edit.title.stream')" :description="t('edit.about.stream')">
           <template #main>
             <SettingsMainBar :label="t('edit.obsLink')" :hint="t('edit.obsLinkHint')">
-              <Button variant="secondary" size="sm" :data-testid="`copy-link-${item.id}`" @click="copyLink">{{ t("edit.copyLink") }}</Button>
-              <Button variant="secondary" size="sm" :data-testid="`preview-${item.id}`" @click="previewOverlay">{{ t("edit.previewOverlay") }}</Button>
+              <Button variant="secondary" size="sm" :data-testid="`copy-link-${item.id}`" @click="copyLink"><Copy />{{ t("edit.copyLink") }}</Button>
+              <Button variant="secondary" size="sm" :data-testid="`preview-${item.id}`" @click="previewOverlay"><Eye />{{ t("edit.previewOverlay") }}</Button>
             </SettingsMainBar>
           </template>
           <SettingsSection>

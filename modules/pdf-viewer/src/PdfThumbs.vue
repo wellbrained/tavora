@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// rules-allow-file: palette the paper of a document page, the same in every theme
 // Small pictures of every page, for jumping through a long PDF. A picture is drawn only while it is near the
 // visible part of the list and let go again far from it, so a long PDF does not fill the memory. The page the
 // reader is on is marked and kept in view.

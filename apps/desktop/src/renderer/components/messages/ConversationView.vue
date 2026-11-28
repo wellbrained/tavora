@@ -175,7 +175,7 @@ async function afterChange() {
           <Button v-if="open && item.kind === 'developer'" size="sm" variant="ghost" data-testid="conversation-close" @click="closeOwn"><X /> {{ t("inbox.close") }}</Button>
           <Button v-if="item.kind === 'developer'" size="sm" variant="ghost" data-testid="conversation-block" :disabled="!open" @click="block"><Ban /> {{ t("inbox.block") }}</Button>
           <Button v-if="item.kind === 'developer'" size="sm" variant="ghost" data-testid="conversation-report" @click="reporting = true"><Flag /> {{ t("inbox.report") }}</Button>
-          <Button size="sm" variant="ghost" data-testid="conversation-delete" @click="remove"><Trash2 /> {{ t("inbox.delete") }}</Button>
+          <Button size="sm" variant="danger" data-testid="conversation-delete" @click="remove"><Trash2 /> {{ t("inbox.delete") }}</Button>
         </div>
       </header>
 

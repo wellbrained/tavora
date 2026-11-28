@@ -143,12 +143,7 @@ defineExpose({ startRename });
         <Button
           variant="ghost"
           size="icon-sm"
-          :class="
-            cn(
-              'text-muted-foreground hover:text-foreground mt-1.5 mr-1 opacity-0 group-hover:opacity-100 hover:bg-transparent focus-visible:opacity-100',
-              (selected || menuOpen) && 'opacity-100',
-            )
-          "
+          class="text-muted-foreground hover:text-foreground mt-1.5 mr-1 hover:bg-transparent"
           :aria-label="t('row.moreFor', { title })"
           :title="t('row.more')"
           data-testid="note-menu"

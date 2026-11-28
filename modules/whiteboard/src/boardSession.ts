@@ -64,8 +64,6 @@ export interface BoardSession extends Controls {
   onState(fn: (state: BoardState) => void): () => void;
   /** A message for the user, such as a picture that cannot be kept. */
   onNotice(fn: (message: string) => void): () => void;
-  /** Shift+Alt+C, Excalidraw's own shortcut for copying as PNG, which asks the page to copy. */
-  onCopyShortcut(fn: () => void): () => void;
   imageAt(clientX: number, clientY: number): string | null;
   /** Excalidraw's onChange. */
   change(elements: readonly OrderedExcalidrawElement[], appState: AppState, files: BinaryFiles): void;
@@ -106,7 +104,6 @@ export function createBoardSession(options: SessionOptions): BoardSession {
   let state: BoardState = { ...initialBoardState(data), ...saver.state };
   const stateListeners = new Set<(state: BoardState) => void>();
   const noticeListeners = new Set<(message: string) => void>();
-  const copyListeners = new Set<() => void>();
   const set = (patch: Partial<BoardState>) => {
     const next = { ...state, ...patch };
     if ((Object.keys(next) as (keyof BoardState)[]).every((key) => next[key] === state[key])) return;
@@ -240,14 +237,6 @@ export function createBoardSession(options: SessionOptions): BoardSession {
 
   // Saves when the panel goes away, is hidden or the window closes.
   const flushNow = () => void saver.flush();
-  // Excalidraw's own copy as PNG uses the browser clipboard, which module pages cannot write; its shortcut copies
-  // through Tavora instead (its menu item is hidden in style.css). Before Excalidraw sees the key.
-  const copyKey = (event: KeyboardEvent) => {
-    if (event.code !== "KeyC" || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
-    event.preventDefault();
-    event.stopPropagation();
-    for (const fn of [...copyListeners]) fn();
-  };
   // A background picked in the palette is saved as picked, also when Excalidraw shows that colour already (see pickBackground).
   const pickKey = (event: MouseEvent) => {
     const state = api?.getAppState();
@@ -255,7 +244,6 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     if (color) saver.pickBackground(color);
   };
   document.addEventListener("click", pickKey, true);
-  addEventListener("keydown", copyKey, true);
   addEventListener("pagehide", flushNow);
   document.addEventListener("visibilitychange", flushNow);
 
@@ -270,7 +258,6 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     },
     onState: (fn) => listen(stateListeners, fn),
     onNotice: (fn) => listen(noticeListeners, fn),
-    onCopyShortcut: (fn) => listen(copyListeners, fn),
 
     addNote: () => api && insert(api, noteCard(0, 0, t("card.heading"), t("card.body"))),
     async addPicture(file) {
@@ -349,7 +336,6 @@ export function createBoardSession(options: SessionOptions): BoardSession {
     copy: () => saver.copy(),
     async dispose() {
       disposed = true;
-      removeEventListener("keydown", copyKey, true);
       removeEventListener("pagehide", flushNow);
       document.removeEventListener("visibilitychange", flushNow);
       document.removeEventListener("click", pickKey, true);
@@ -360,7 +346,6 @@ export function createBoardSession(options: SessionOptions): BoardSession {
       set({ ready: false });
       stateListeners.clear();
       noticeListeners.clear();
-      copyListeners.clear();
     },
   };
 }

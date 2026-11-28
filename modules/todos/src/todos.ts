@@ -44,14 +44,14 @@ export type GroupColor = (typeof GROUP_COLORS)[number] | "";
 
 /** Each color as a CSS color: the header's tint, and the dot in the Color menu Tavora draws. */
 export const GROUP_TINTS: Readonly<Record<Exclude<GroupColor, "">, string>> = {
-  red: "oklch(0.64 0.2 25)",
-  orange: "oklch(0.72 0.17 55)",
-  yellow: "oklch(0.82 0.16 95)",
-  green: "oklch(0.7 0.17 150)",
-  teal: "oklch(0.7 0.12 195)",
-  blue: "oklch(0.65 0.17 255)",
-  violet: "oklch(0.63 0.2 295)",
-  pink: "oklch(0.7 0.19 350)",
+  red: "oklch(0.64 0.2 25)", // rules-allow: color a group colour the user picks from
+  orange: "oklch(0.72 0.17 55)", // rules-allow: color a group colour the user picks from
+  yellow: "oklch(0.82 0.16 95)", // rules-allow: color a group colour the user picks from
+  green: "oklch(0.7 0.17 150)", // rules-allow: color a group colour the user picks from
+  teal: "oklch(0.7 0.12 195)", // rules-allow: color a group colour the user picks from
+  blue: "oklch(0.65 0.17 255)", // rules-allow: color a group colour the user picks from
+  violet: "oklch(0.63 0.2 295)", // rules-allow: color a group colour the user picks from
+  pink: "oklch(0.7 0.19 350)", // rules-allow: color a group colour the user picks from
 };
 
 export interface Group {

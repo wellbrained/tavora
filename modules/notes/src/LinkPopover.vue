@@ -32,7 +32,7 @@ const style = computed(() => ({ left: `${Math.max(8, Math.min(props.left, window
     <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="link-edit" :aria-label="t('link.edit')" :title="t('link.edit')" @click="emit('edit')">
       <Pencil />
     </Button>
-    <Button variant="ghost" size="icon-sm" class="flex-none" data-testid="link-remove" :aria-label="t('link.remove')" :title="t('link.remove')" @click="emit('remove')">
+    <Button variant="danger" size="icon-sm" class="flex-none" data-testid="link-remove" :aria-label="t('link.remove')" :title="t('link.remove')" @click="emit('remove')">
       <Unlink />
     </Button>
   </Toolbar>

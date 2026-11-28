@@ -3,9 +3,10 @@ import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { ref } from "vue";
 
 // The colours a user picks from: data, not the theme, so they are written out.
+// rules-allow: color swatches the user picks from
 const SWATCHES = ["#ffffff", "#facc15", "#fb923c", "#f87171", "#60a5fa", "#4ade80", "#111111"];
 const NAMES = ["White", "Yellow", "Orange", "Red", "Blue", "Green", "Black"];
-const colour = ref("#60a5fa");
+const colour = ref("#60a5fa"); // rules-allow: color a swatch picked to start with
 </script>
 
 <template>

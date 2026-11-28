@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// rules-allow-file: font-weight a letter drawn bold stands for the Bold button
 import { Bold, History, Pin, Volume2 } from "@lucide/vue";
 import { Toggle } from "@tavora/official-ui/components/ui/toggle";
 import { ref } from "vue";

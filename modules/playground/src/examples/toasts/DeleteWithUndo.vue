@@ -26,7 +26,7 @@ function remove(name: string) {
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button v-for="name in items" :key="name" variant="secondary" @click="remove(name)"><Trash2 />{{ name }}</Button>
+    <Button v-for="name in items" :key="name" variant="danger" @click="remove(name)"><Trash2 />{{ name }}</Button>
     <Button v-if="!items.length" variant="ghost" @click="items = [...ALL]">Bring them back</Button>
   </div>
 </template>

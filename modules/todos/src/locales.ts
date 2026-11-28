@@ -7,6 +7,7 @@ export const en = {
   more: "More",
 
   "app.toolbar": "To-do controls",
+  "settings.openError": "Can't open the settings: {error}",
   "app.open.one": "{count} open",
   "app.open.other": "{count} open",
   "app.allDone": "All done",
@@ -126,6 +127,7 @@ export const de: Record<keyof typeof en, string> = {
   more: "Mehr",
 
   "app.toolbar": "To-Do-Steuerung",
+  "settings.openError": "Die Einstellungen gehen nicht auf: {error}",
   "app.open.one": "{count} offen",
   "app.open.other": "{count} offen",
   "app.allDone": "Alles erledigt",

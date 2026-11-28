@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// rules-allow-file: color, font-weight swatches and a made-up overlay look
 // A small module settings dialog with made-up settings, to try the module-settings parts together.
 import { Keyboard, Music, Paintbrush, Trash2, Type } from "@lucide/vue";
 import { SegmentedControl } from "@tavora/official-ui";

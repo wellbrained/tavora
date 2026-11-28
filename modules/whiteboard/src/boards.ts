@@ -41,7 +41,7 @@ export const MAX_BOARD_BYTES = 4 * 1024 * 1024;
 export const WARN_BOARD_BYTES = 3 * 1024 * 1024;
 export const MAX_NAME = 60;
 
-export const DEFAULT_BACKGROUND = "#ffffff";
+export const DEFAULT_BACKGROUND = "#ffffff"; // rules-allow: color the paper of a new board, saved with it
 
 /** The background the board draws: a colour or transparent; white for one a newer version added (it stays saved as it is). */
 export const shownBackground = (background: string): string => (/^#[0-9a-fA-F]{3,8}$|^transparent$/.test(background) ? background : DEFAULT_BACKGROUND);
