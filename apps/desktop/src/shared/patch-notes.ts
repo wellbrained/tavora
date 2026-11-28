@@ -28,6 +28,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.26.5",
+    date: "2026-11-28",
+    title: "Tidier buttons and menus",
+    notes: [
+      "Delete and Remove buttons are red before you point at them.",
+      "Search fields, toolbars and buttons look and behave the same across settings, the library and the Overlay page.",
+    ],
+    prs: [
+      { number: 1061, title: "Module rules cleanup in the app, kit and built-in modules" },
+    ],
+    tags: ["accounts", "calculator", "catalog", "clock-counter", "modules", "notes", "overlays", "pdf-viewer", "publishing", "rail", "settings", "system-monitor", "todos", "ui-kit", "whiteboard", "workspace"],
+  },
+  {
     version: "0.26.4",
     date: "2026-11-28",
     title: "Safer deleting",
