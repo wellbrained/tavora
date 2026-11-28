@@ -4,10 +4,21 @@
 // host's heartbeat, which stops when the page's main thread is stuck. The port
 // the module gets is one end of a channel that ends here, in relayBridge,
 // which checks every message before the main process sees it.
-import { ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
 import { HELLO_MESSAGE, PORT_MESSAGE, PROTOCOL_VERSION } from "@tavora/sdk/protocol";
+import { guardPickerEvents, lockPickersInMainWorld } from "./file-pickers";
 import { countsAsPress } from "./press";
 import { relayBridge } from "./relay";
+
+// No system file or folder picker: files come only through Tavora's own dialogs (file-pickers.ts). Before any of
+// the page's scripts run.
+guardPickerEvents(window);
+try {
+  contextBridge.executeInMainWorld({ func: lockPickersInMainWorld });
+} catch (error) {
+  // The bridge below must still start; the window's guards above still hold.
+  console.error("[tavora] the page's file pickers couldn't be locked:", error);
+}
 
 window.addEventListener("message", (event) => {
   if (event.source !== window || event.data?.type !== HELLO_MESSAGE) return;

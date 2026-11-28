@@ -2,12 +2,13 @@
  * Reads which window is in front, straight from Windows inside Tavora's own process, for game overlays
  * (game-overlay-service.ts): the program that owns it, where its client area is on screen, and whether Windows
  * thinks a full-screen game owns the screen exclusively. Like the game watcher (program-list.ts) it only reads, with
- * the same limited access Task Manager uses, and sends nothing anywhere. The one thing it changes is `focus`, which
- * gives the keyboard back to the game after the user arranged overlays. Windows only: koffi is loaded on the first
- * look, never elsewhere.
+ * the same limited access Task Manager uses, asks each process for its path once in its life, and sends nothing
+ * anywhere. The one thing it changes is `focus`, which gives the keyboard back to the game after the user arranged
+ * overlays. Windows only: koffi is loaded on the first look, never elsewhere.
  */
-import { loadWindows, programPath, type Windows } from "./program-list";
+import { loadWindows, programPath, type ListedProcess, type Windows } from "./program-list";
 import type { Rect } from "./game-overlays";
+import { readProcesses } from "./system-apps";
 
 /** The window in front. */
 export interface Foreground {
@@ -65,6 +66,24 @@ function loadUser32(): User32 {
   };
 }
 
+/**
+ * The path of process `pid`, asked once in that process's life, as the game watcher does (program-list.ts): `paths`
+ * keeps what Windows said by id and start time (Windows reuses ids), from its list of processes, which opens none.
+ * Only paths of processes still in the list are kept. A process the list doesn't have (it just started or ended) is
+ * asked without being kept.
+ */
+export function programPathOnce(paths: Map<string, string | null>, listed: readonly ListedProcess[] | null, pid: number, ask: (pid: number) => string | null): string | null {
+  const started = listed?.find((entry) => entry.pid === pid)?.startTime;
+  if (started === undefined) return ask(pid);
+  const key = `${pid}:${started}`;
+  if (paths.has(key)) return paths.get(key)!;
+  const running = new Set(listed!.map((entry) => `${entry.pid}:${entry.startTime}`));
+  for (const kept of paths.keys()) if (!running.has(kept)) paths.delete(kept);
+  const program = ask(pid);
+  paths.set(key, program);
+  return program;
+}
+
 /** A probe for this PC. */
 export function windowsForegroundProbe(): ForegroundProbe {
   let user32: User32 | null = null;
@@ -75,6 +94,16 @@ export function windowsForegroundProbe(): ForegroundProbe {
   // A program keeps its path while it runs, so the same window of the same process is asked about once. The window
   // counts too: Windows reuses process ids, and a new process must not be given the path of one that ended.
   let known: { handle: string; pid: number; program: string | null } | null = null;
+  // And each process is asked once in its life, however often its windows come to the front (alt-tab, a splash, a
+  // dialog): a game and its anti-cheat see at most one request from here.
+  const paths = new Map<string, string | null>();
+  const listed = (): readonly ListedProcess[] | null => {
+    try {
+      return readProcesses();
+    } catch {
+      return null;
+    }
+  };
   const name = new Uint16Array(1024);
   return {
     look() {
@@ -98,7 +127,10 @@ export function windowsForegroundProbe(): ForegroundProbe {
         }
       }
       const handle = user32.handleOf(window);
-      if (known?.pid !== pid[0] || known.handle !== handle) known = { handle, pid: pid[0], program: programPath(windows, pid[0], name) };
+      if (known?.pid !== pid[0] || known.handle !== handle) {
+        const system = windows;
+        known = { handle, pid: pid[0], program: programPathOnce(paths, listed(), pid[0], (id) => programPath(system, id, name)) };
+      }
       const size = new Int32Array(4);
       const origin = new Int32Array(2);
       if (!user32.getClientRect(window, size) || !user32.clientToScreen(window, origin)) return null;

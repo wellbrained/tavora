@@ -1395,7 +1395,7 @@ export class Host {
    *
    * A downloaded version installs only when Tavora's signature checks out against the keys pinned in
    * update-keys.ts (update-signature.ts); a refused installer is deleted, and Tavora goes on with its version.
-   * Every answer from the feed also has its second signature checked (update-freshness.ts): logged only for now.
+   * Every answer from the feed also has its second signature checked (update-freshness.ts), and enforced.
    */
   private async startUpdates(): Promise<void> {
     try {
@@ -2619,7 +2619,12 @@ export class Host {
     const id = this.openModule(BROWSER_MODULE_ID, { openedFrom: { instanceId: fromInstanceId, background } });
     if (!id) return;
     if (url) this.browser(id).restore(url, referrer);
-    else setTimeout(() => this.window.webContents.send("host:shortcut", `address:${id}`), 100);
+    else {
+      // The window may close in those 100 ms; sending to it then would throw from the timer.
+      setTimeout(() => {
+        if (!this.window.isDestroyed() && !this.window.webContents.isDestroyed()) this.window.webContents.send("host:shortcut", `address:${id}`);
+      }, 100);
+    }
   }
 
   /**

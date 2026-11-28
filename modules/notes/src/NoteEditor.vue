@@ -98,7 +98,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 /** The editor has typing of its own that another panel's copy must not replace: waiting for the store, or being saved. */
 const busy = () => contentDirty || titleDirty || saveState.value === "pending" || saveState.value === "saving";
 
-const { adding, lightbox, fileInput, imageUsage, imageBar, addImages, onFiles, onFilePicked, refreshImageUsage, updateImageBar, setImage, openSelectedImage, removeSelectedImage } = useNoteImages({
+const { adding, lightbox, fileInput, imageUsage, imageBar, addImages, onFiles, chooseImages, onFilePicked, refreshImageUsage, updateImageBar, setImage, openSelectedImage, removeSelectedImage } = useNoteImages({
   store: () => props.store,
   editor: () => editor.value,
   loadedNote: () => loadedNote.value,
@@ -550,7 +550,7 @@ const statusText = (state: SaveState): string => (state === "idle" ? "" : t(`sav
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" class="min-w-60">
-            <DropdownMenuItem data-testid="image-choose" @select="fileInput?.click()">{{ t("image.choose") }}</DropdownMenuItem>
+            <DropdownMenuItem data-testid="image-choose" @select="chooseImages()">{{ t("image.choose") }}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>{{ t("image.quality") }}</DropdownMenuLabel>
             <DropdownMenuItem v-for="quality in (['optimized', 'original'] as const)" :key="quality" :data-testid="`quality-${quality}`" @select.prevent="store.setImageQuality(quality)">

@@ -74,6 +74,18 @@ export function useNoteImages(host: NoteImagesHost) {
     return true;
   }
 
+  /** Choose pictures: Tavora's open dialog, or the file input on a Tavora without one. */
+  async function chooseImages() {
+    let files: File[] | null;
+    try {
+      files = await host.store().pickImages();
+    } catch (error) {
+      return reportImageProblem(error);
+    }
+    if (files === null) fileInput.value?.click();
+    else if (files.length) void addImages(files);
+  }
+
   function onFilePicked(event: Event) {
     const input = event.target as HTMLInputElement;
     const files = [...(input.files ?? [])];
@@ -124,5 +136,5 @@ export function useNoteImages(host: NoteImagesHost) {
     host.editor()?.chain().focus().deleteSelection().run();
   }
 
-  return { adding, lightbox, fileInput, imageUsage, imageBar, addImages, onFiles, onFilePicked, refreshImageUsage, updateImageBar, setImage, openSelectedImage, removeSelectedImage };
+  return { adding, lightbox, fileInput, imageUsage, imageBar, addImages, onFiles, chooseImages, onFilePicked, refreshImageUsage, updateImageBar, setImage, openSelectedImage, removeSelectedImage };
 }

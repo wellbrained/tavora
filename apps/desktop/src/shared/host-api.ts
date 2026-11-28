@@ -709,7 +709,7 @@ export interface PanelBounds {
 export type UpdateState =
   /**
    * failed: the last check didn't reach the feed ("check"), or reached it but couldn't confirm it is the newest
-   * ("unconfirmed": its second signature didn't check out or expired; only once that check is enforced).
+   * ("unconfirmed": its second signature didn't check out or expired).
    */
   | { status: "idle"; checkedAt: string | null; failed: false | "check" | "unconfirmed" }
   | { status: "checking" }

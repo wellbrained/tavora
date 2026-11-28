@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.97",
+    "date": "2026-11-28",
+    "notes": [
+      "Picture cards and screenshot boards open Tavora's own file dialog. The drawing tools no longer have their own picture button: add pictures with a picture card."
+    ]
+  },
+  {
     "version": "0.3.96",
     "date": "2026-11-28",
     "notes": [

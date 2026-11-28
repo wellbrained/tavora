@@ -89,7 +89,7 @@ export interface UpdateManagerOptions {
    */
   checkFeed?: (info: UpdateInfoLike) => FeedFreshness;
   /**
-   * Off: the feed check is only logged (this release). On: a feed that can't be confirmed (or expired) makes a check
+   * Off: the feed check is only logged. On (ENFORCE_FEED_FRESHNESS): a feed that can't be confirmed (or expired) makes a check
    * end as idle with failed "unconfirmed", and a downloaded version whose feed is refused (not merely expired) is not
    * installed.
    */

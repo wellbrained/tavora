@@ -27,6 +27,7 @@ import { de, en } from "./locales";
 import { DEFAULT_PALETTE, palettePlace, type PalettePlace } from "./palette";
 import { otherPanelState, panelStateToSave } from "./panelState";
 import { unusedFiles } from "./pictures";
+import { pickPictures } from "./pickPictures";
 import { toolbarPlace, type ToolbarPlace } from "./toolbar";
 import type { ConnectorKind } from "./connectors";
 
@@ -154,7 +155,7 @@ watch(
 const creationProblem = (reason: unknown) => (reason instanceof BoardNotSaved ? t("save.staysOpen") : t("starter.failed", { error: errorMessage(reason) }));
 
 async function createBoard(kind: BoardKind = "blank") {
-  if (kind === "screenshot") { screenshotInput.value?.click(); return; }
+  if (kind === "screenshot") { void choosePicture(screenshotInput.value, createScreenshotFrom, creationProblem); return; }
   const lib = library.value;
   if (!lib || creatingBoard.value) return;
   creatingBoard.value = true;
@@ -168,13 +169,36 @@ async function createBoard(kind: BoardKind = "blank") {
   finally { creatingBoard.value = false; }
 }
 
-async function createScreenshot(event: Event) {
+/**
+ * Lets the user choose one picture in Tavora's open dialog and hands it to `use`; on a Tavora without that dialog the
+ * file input opens instead, and its change does the rest.
+ */
+async function choosePicture(input: HTMLInputElement | null, use: (file: File) => Promise<void>, problem: (reason: unknown) => string) {
+  const connected = sdk.value;
+  if (!connected) return;
+  let files: File[] | null;
+  try {
+    files = await pickPictures(connected, false);
+  } catch (reason) {
+    notify(problem(reason));
+    return;
+  }
+  if (files === null) input?.click();
+  else if (files[0]) await use(files[0]);
+}
+
+/** The file input's change (a Tavora without its own open dialog): its picture goes on like a chosen one. */
+const fromInput = (use: (file: File) => Promise<void>) => (event: Event) => {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   input.value = "";
+  if (file) void use(file);
+};
+
+async function createScreenshotFrom(file: File) {
   const lib = library.value;
   const connected = sdk.value;
-  if (!file || !lib || !connected || creatingBoard.value) return;
+  if (!lib || !connected || creatingBoard.value) return;
   creatingBoard.value = true;
   try {
     const { readBoardPicture } = await import("./readPicture");
@@ -187,6 +211,7 @@ async function createScreenshot(event: Event) {
   } catch (reason) { notify(creationProblem(reason)); }
   finally { creatingBoard.value = false; }
 }
+const createScreenshot = fromInput(createScreenshotFrom);
 
 async function select(id: string) {
   try {
@@ -385,14 +410,13 @@ function finishConnector(event: Event) {
 }
 function setGrid(enabled: boolean) { board.value?.setGrid(enabled); }
 
-async function addPicture(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = "";
-  if (!file || !board.value) return;
+const cardProblem = (reason: unknown) => t("card.failed", { error: errorMessage(reason) });
+async function addPictureFrom(file: File) {
+  if (!board.value) return;
   try { await board.value.addPicture(file); }
-  catch (reason) { notify(t("card.failed", { error: errorMessage(reason) })); }
+  catch (reason) { notify(cardProblem(reason)); }
 }
+const addPicture = fromInput(addPictureFrom);
 </script>
 
 <template>
@@ -439,7 +463,7 @@ async function addPicture(event: Event) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem data-testid="add-note-card" @select="addNote"><StickyNote class="size-4" aria-hidden="true" />{{ t("card.note") }}</DropdownMenuItem>
-          <DropdownMenuItem data-testid="add-picture-card" @select="pictureInput?.click()"><ImagePlus class="size-4" aria-hidden="true" />{{ t("card.picture") }}</DropdownMenuItem>
+          <DropdownMenuItem data-testid="add-picture-card" @select="choosePicture(pictureInput, addPictureFrom, cardProblem)"><ImagePlus class="size-4" aria-hidden="true" />{{ t("card.picture") }}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <input ref="pictureInput" class="hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-testid="card-file" :aria-label="t('card.picture')" @change="addPicture" />

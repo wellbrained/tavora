@@ -2,18 +2,17 @@
 // for this channel and platform, must not be older than the newest one this install has seen, and its expiry is
 // compared with the clock. The vault's Github/Tavora/docs/update-signature-binding.md has the design and the rollout.
 //
-// This release only reports: the outcome goes to the update log, and nothing is refused or shown
-// (ENFORCE_FEED_FRESHNESS). The release that enforces it turns the switch on: then a feed that doesn't check out, or
-// has expired, makes "Check for updates" say Tavora can't confirm it is up to date (UpdateState idle, failed
-// "unconfirmed"), and a downloaded update whose feed doesn't check out is refused. An expired feed never stops a
-// newer signed version from installing.
+// Enforced (ENFORCE_FEED_FRESHNESS): a feed that doesn't check out, or has expired, makes "Check for updates" say
+// Tavora can't confirm it is up to date (UpdateState idle, failed "unconfirmed"), and a downloaded update whose feed
+// doesn't check out is refused. An expired feed never stops a newer signed version from installing. Every outcome
+// also goes to the update log. The release before this one only reported.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "./fsutil";
 import { checkFeedFreshness, FEED_CLOCK_LEEWAY_MS, UPDATE_SIGNATURE2_FIELD, type FeedFreshness, type UpdateChannel } from "./update-signature";
 
-/** Off in this release: the outcome is only logged. The enforcing release turns it on (and nothing else). */
-export const ENFORCE_FEED_FRESHNESS = false;
+/** On: the release that enforces the feed's date. Off, the outcome would only be logged (the release before). */
+export const ENFORCE_FEED_FRESHNESS = true;
 /** Tavora has one channel: latest.yml, the stable one. */
 export const FEED_CHANNEL: UpdateChannel = "stable";
 /** Where the newest issue time is kept, in the app's data folder (not in backups or the cloud copy: a restore must never take it back). */
@@ -81,7 +80,7 @@ export function describeFreshness(result: FeedFreshness): string {
   return `feed fresh: signed ${issuedAt}, good until ${expiresAt} (${result.key} key)`;
 }
 
-/** Whether a result means Tavora can't confirm it is up to date (once enforced). */
+/** Whether a result means Tavora can't confirm it is up to date. */
 export function unconfirmed(result: FeedFreshness): boolean {
   return result.status === "refused" || result.status === "expired";
 }

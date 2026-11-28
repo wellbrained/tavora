@@ -6,6 +6,7 @@ import { TavoraError, type DocumentSummary, type TavoraSDK } from "@tavora/sdk";
 import { openDocument, openItems, type DocumentHandle, type DocumentStatus } from "@tavora/sdk/store";
 import { ref, shallowRef, triggerRef } from "vue";
 import { ACCEPT_ATTRIBUTE, isAcceptedType, prepareImage, type ImageQuality } from "./images";
+import { pickPictures } from "./pickPictures";
 import {
   cleanTitle,
   collectImageIds,
@@ -256,6 +257,8 @@ export async function createNotesStore(sdk: TavoraSDK, options: { debounceMs?: n
     addImage,
     removeUnusedImages,
     acceptAttribute: ACCEPT_ATTRIBUTE,
+    /** Pictures the user picks in Tavora's open dialog; null on a Tavora without it (the file input opens there). */
+    pickImages: () => pickPictures(sdk, true),
     blobUrl: (id: string) => sdk.blobs.url(id),
     imageUsage: () => sdk.blobs.usage(),
     setImageQuality: async (quality: ImageQuality) => {

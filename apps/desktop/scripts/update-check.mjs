@@ -10,8 +10,8 @@
 //     Packages this version (A) and the next (B) with the local feed's address, installs A like a user and
 //     starts it against one feed after another:
 //       unsigned latest.yml, a signature by a key the app does not pin, a changed installer under a genuine
-//       signature, and a genuine signature relabelled as a newer version: each refused, A keeps running, and
-//       quitting installs nothing;
+//       signature, a genuine signature relabelled as a newer version, and a feed dated (its second signature) by a
+//       key the app does not pin: each refused, A keeps running, and quitting installs nothing;
 //       signed by the backup key: checked (then killed, so nothing installs);
 //       signed by the release key: checked, and quitting installs B, which then starts.
 import { spawn, spawnSync } from "node:child_process";
@@ -19,10 +19,10 @@ import { createHash, createPrivateKey } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { makeUpdateKey, signUpdate } from "../src/main/update-signature.ts";
+import { makeUpdateKey, signUpdate, signUpdate2 } from "../src/main/update-signature.ts";
 import { installedVersion as readInstalledVersion } from "./installed-version.mjs";
 import { checkStart, visibleWindows } from "./start-check.mjs";
-import { addSignatureToLatestYml } from "./update-feed.mjs";
+import { addSignature2ToLatestYml, addSignatureToLatestYml, freshStatement } from "./update-feed.mjs";
 
 const desktop = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repo = path.dirname(path.dirname(desktop));
@@ -223,7 +223,12 @@ async function check(work) {
 
   const name = path.basename(second.installer);
   const genuine = { version: b, file: name, sha512: sha512(second.installer) };
-  const signed = (key, latestYml = second.latestYml) => addSignatureToLatestYml(latestYml, signUpdate(genuine, key));
+  // Both lines, as a release writes them: the first signature, and the second that dates the feed (`dateKey`, by
+  // default the same key). A Tavora that enforces the date refuses a download whose second line doesn't hold.
+  const signed = (key, latestYml = second.latestYml, dateKey = key) => {
+    const first = addSignatureToLatestYml(latestYml, signUpdate(genuine, key));
+    return addSignature2ToLatestYml(first, signUpdate2({ ...genuine, ...freshStatement() }, dateKey));
+  };
   const realFiles = { [name]: second.installer, [`${name}.blockmap`]: second.blockmap, [path.basename(first.blockmap)]: first.blockmap };
   const stillA = async () => {
     // Nothing installs after a refused version, not even on a clean quit.
@@ -250,6 +255,9 @@ async function check(work) {
   await scenario("A genuine signature relabelled as a newer version is refused", { files: { ...realFiles, "latest.yml": relabel(signed(keys.release), b, later) }, expect: new RegExp(`update ${later} refused: the Tavora signature does not match`), end: "quit" });
   await stillA();
 
+  await scenario("A feed dated by a key the app does not pin is refused", { files: { ...realFiles, "latest.yml": signed(keys.release, second.latestYml, keys.stranger) }, expect: new RegExp(`update ${b} refused: feed can't be confirmed`), end: "quit" });
+  await stillA();
+
   await scenario("A signature by the backup key is taken", { files: { ...realFiles, "latest.yml": signed(keys.backup) }, expect: new RegExp(`update ${b} signature checked \\(backup key\\)`), end: "kill" });
   if (installedVersion() !== a) fail(`The installed version is ${installedVersion()} after a kill, not ${a}.`);
 
@@ -258,7 +266,7 @@ async function check(work) {
   await waitFor("the installer to finish", () => !running(name) && !tavoraRunning(), 2 * 60_000, 2000);
   say(`${b} is installed; starting it`);
   await checkStart(exe);
-  console.log(`\nSigned updates hold end to end: ${a} refused four bad feeds, took the backup and the release key, and installed ${b} on quit.`);
+  console.log(`\nSigned updates hold end to end: ${a} refused five bad feeds, took the backup and the release key, and installed ${b} on quit.`);
 }
 
 const [command, work] = [process.argv[2], process.argv[3] ? path.resolve(process.argv[3]) : null];

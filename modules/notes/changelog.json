@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.94",
+    "date": "2026-11-28",
+    "notes": [
+      "Choose pictures opens Tavora's own file dialog."
+    ]
+  },
+  {
     "version": "0.6.93",
     "date": "2026-11-28",
     "notes": [

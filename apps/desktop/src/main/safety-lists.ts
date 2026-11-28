@@ -9,6 +9,7 @@ import {
   type CatalogListKind,
   type CatalogListOf,
 } from "@tavora/pack";
+import { readTextCapped } from "./capped-body";
 import { writeFileAtomic } from "./fsutil";
 import type { OwnerRecords } from "./installer";
 import { readJsonOrSetAside } from "./json";
@@ -135,10 +136,7 @@ export class SafetyLists implements SafetyCheck {
         headers: { Accept: "application/json" },
       });
       if (!response.ok) return null;
-      const declared = Number(response.headers.get("content-length"));
-      if (Number.isFinite(declared) && declared > MAX_CATALOG_LIST_BYTES) return null;
-      const bytes = await response.arrayBuffer();
-      return bytes.byteLength > MAX_CATALOG_LIST_BYTES ? null : new TextDecoder().decode(bytes);
+      return await readTextCapped(response, MAX_CATALOG_LIST_BYTES);
     } catch {
       return null;
     }

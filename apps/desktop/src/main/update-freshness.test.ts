@@ -249,8 +249,8 @@ function manager({ enforce, verify = async () => ({ ok: true, key: "release" }) 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 describe("UpdateManager and the feed check", () => {
-  it("this release only reports: the switch is off", () => {
-    expect(ENFORCE_FEED_FRESHNESS).toBe(false);
+  it("this release enforces: the switch is on", () => {
+    expect(ENFORCE_FEED_FRESHNESS).toBe(true);
   });
 
   it("report-only: an answer whose feed can't be confirmed still ends as up to date, with the outcome in the log", async () => {
@@ -293,7 +293,7 @@ describe("UpdateManager and the feed check", () => {
     expect(logs.at(-1)).toMatch(/^update 1\.0\.1 available; feed fresh: /);
   });
 
-  it("enforced (the next release): an unconfirmed or expired feed says so; a fresh one is up to date", async () => {
+  it("enforced: an unconfirmed or expired feed says so; a fresh one is up to date", async () => {
     for (const [signature2, now, failed] of [
       [undefined, at(DAY), "unconfirmed"],
       [sign2(), at(40 * DAY), "unconfirmed"],

@@ -318,3 +318,72 @@ window.hang = () => {
     for (;;);
   }, 0);
 };
+
+// ── The system's file and folder picker (security.md, "The system's file picker") ──
+
+/**
+ * Notes every click and DOMActivate that reaches `input`, and whether it was cancelled by the end of its dispatch
+ * ("click:cancelled", "DOMActivate:ahead"): Chromium opens a file input's picker from a DOMActivate no one cancelled.
+ */
+function watchActivation(input) {
+  const seen = [];
+  for (const type of ["click", "DOMActivate"]) {
+    input.addEventListener(type, (event) => queueMicrotask(() => seen.push(`${type}:${event.defaultPrevented ? "cancelled" : "ahead"}`)));
+  }
+  return seen;
+}
+
+// The visible file input the test clicks for real.
+const realInput = document.createElement("input");
+realInput.type = "file";
+realInput.setAttribute("webkitdirectory", "");
+realInput.dataset.testid = "file-input";
+realInput.style.cssText = "display:block;width:200px;height:40px";
+document.body.append(realInput);
+window.realClickSeen = watchActivation(realInput);
+
+// Every way a script could open the picker, run while the page has the user's activation.
+window.filePickers = async () => {
+  const fileInput = (connected) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    if (connected) document.body.append(input);
+    return input;
+  };
+  const tries = {
+    click: (input) => input.click(),
+    detachedClick: () => fileInput(false).click(),
+    dispatched: (input) => input.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })),
+    label: (input) => {
+      const label = document.createElement("label");
+      document.body.append(label);
+      label.append(input);
+      label.click();
+    },
+    turnsIntoFile: (input) => {
+      input.type = "text";
+      input.addEventListener("click", () => (input.type = "file"), { once: true });
+      input.click();
+    },
+  };
+  const results = {};
+  for (const [name, run] of Object.entries(tries)) {
+    const input = fileInput(true);
+    const seen = watchActivation(input);
+    try {
+      run(input);
+    } catch (error) {
+      seen.push(`threw ${error?.name}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    results[name] = seen;
+  }
+  try {
+    fileInput(true).showPicker();
+    results.showPicker = "opened";
+  } catch (error) {
+    results.showPicker = error?.name ?? String(error);
+  }
+  results.fileSystemPickers = ["showOpenFilePicker", "showSaveFilePicker", "showDirectoryPicker"].filter((name) => name in window);
+  return results;
+};

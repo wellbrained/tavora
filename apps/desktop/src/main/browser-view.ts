@@ -4,7 +4,7 @@
 import { session, WebContentsView, type Referrer, type Session, type WebContents } from "electron";
 import type { PanelCorners } from "./panel-corners";
 import type { BrowserError, BrowserState, InstanceStatus } from "../shared/host-api";
-import { judgedTopUrl, judgeRequest, type AdBlocker } from "./browser-filter";
+import { judgedTopUrl, judgeRequest, requestingOrigins, type AdBlocker } from "./browser-filter";
 import { addressToUrl, displayHost, isPrivateUrl, isWebUrl, parseUrl, siteOfUrl } from "./browser-url";
 import { shortcutIn } from "../shared/shortcuts";
 import { BROWSER_MODULE_ID } from "./registry";
@@ -113,7 +113,7 @@ export function browserSession(partition: string, hooks: BrowserSessionHooks): S
   ses.setSpellCheckerEnabled(false);
   ses.webRequest.onBeforeRequest((details, callback) => {
     const verdict = judgeRequest(
-      { url: details.url, resourceType: details.resourceType, topUrl: hooks.topUrlOf(details.webContentsId) },
+      { url: details.url, resourceType: details.resourceType, topUrl: hooks.topUrlOf(details.webContentsId), frameOrigins: requestingOrigins(details) },
       hooks.ads,
       hooks.adblockOn,
     );

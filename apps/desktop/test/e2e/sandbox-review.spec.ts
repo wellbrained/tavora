@@ -8,7 +8,7 @@ import { readdir, stat } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { expectModuleText, HOSTILE, inModule, launch, openModule, panels, VANILLA } from "./harness";
+import { expectModuleText, HOSTILE, inModule, launch, openModule, panels, realClick, VANILLA } from "./harness";
 
 async function hostileReady(app: ElectronApplication): Promise<void> {
   await expect.poll(() => inModule(app, HOSTILE, "typeof window.flood").catch(() => null)).toBe("function");
@@ -126,5 +126,28 @@ test("a module cannot fill the disk through its own browser storage (G8)", async
   await expect.poll(() => inModule(app, HOSTILE, "typeof window.fillStorage").catch(() => null)).toBe("function");
   expect(await inModule<number>(app, HOSTILE, "navigator.storage.estimate().then((e) => e.usage)")).toBeLessThan(16 * 1024 * 1024);
   expect(await folderSize(path.join(userData, "Partitions"))).toBeLessThan(64 * 1024 * 1024);
+  await app.close();
+});
+
+test("a module page can't open the system's file or folder picker (security.md, The system's file picker)", async () => {
+  const { app, page } = await launch();
+  await openModule(page, HOSTILE);
+  await hostileReady(app);
+  await expect.poll(() => inModule(app, HOSTILE, "typeof window.filePickers")).toBe("function");
+
+  // The user's own click on a folder input: cancelled before Chromium opens anything.
+  await realClick(app, HOSTILE, '[data-testid="file-input"]');
+  await expect.poll(() => inModule<string[]>(app, HOSTILE, "window.realClickSeen")).toEqual(["click:cancelled"]);
+
+  // A script's tries, with the user's activation (executeJavaScript with a gesture). Nothing reaches the input, or
+  // what does is cancelled; an input that turns into a file input during its click has its DOMActivate cancelled.
+  const tried = await inModule<Record<string, string[] | string>>(app, HOSTILE, "filePickers()");
+  if (process.env.TAVORA_PRINT_PROBES) console.log(JSON.stringify(tried, null, 2));
+  for (const name of ["click", "detachedClick", "dispatched", "label"]) {
+    expect((tried[name] as string[]).filter((seen) => !seen.endsWith(":cancelled")), name).toEqual([]);
+  }
+  expect(tried.turnsIntoFile).toEqual(["click:ahead", "DOMActivate:cancelled"]);
+  expect(tried.showPicker).toBe("NotAllowedError");
+  expect(tried.fileSystemPickers).toEqual([]);
   await app.close();
 });

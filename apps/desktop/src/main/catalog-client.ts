@@ -8,6 +8,7 @@ import { apiReason, isConnector, MAX_FOLDERS, parseFolderKey, isGameId, isHomepa
 import { ZIP_LIMITS } from "@tavora/pack";
 import type { CatalogListResult, CatalogModuleView, CatalogOwnReview, CatalogRating } from "../shared/host-api";
 import { isWebUrl } from "./browser-url";
+import { readJsonCapped } from "./capped-body";
 import { catalogGame } from "./catalog";
 import type { MessageKey } from "../shared/i18n";
 import { UserError } from "./messages";
@@ -22,6 +23,11 @@ export const LIST_TIMEOUT_MS = 8000;
 export const DOWNLOAD_TIMEOUT_MS = 60_000;
 /** Most modules one listing is read for. */
 const MAX_MODULES = 500;
+/** The most a catalog answer of JSON may hold: the index (every listed module), and one module with its versions and readme. */
+const MAX_INDEX_BYTES = 32 * 1024 * 1024;
+const MAX_DETAILS_BYTES = 8 * 1024 * 1024;
+/** The answers of the review and account calls are small. */
+const MAX_ANSWER_BYTES = 1024 * 1024;
 /** Widest and tallest catalog icon, in pixels: what the catalog takes. */
 const MAX_ICON_PIXELS = 1024;
 /** An icon that did not come is not asked for again until this long after. */
@@ -370,7 +376,7 @@ export class CatalogClient {
       const response = await this.get("/v1/catalog", this.listTimeoutMs, "application/json");
       const failed = failure(response.status);
       if (failed) return { status: failed };
-      const body = (await response.json()) as { modules?: unknown } | null;
+      const body = (await readJsonCapped(response, MAX_INDEX_BYTES)) as { modules?: unknown } | null;
       const raw = Array.isArray(body?.modules) ? body.modules.slice(0, MAX_MODULES) : [];
       const seen = new Set<string>();
       const parsed = raw
@@ -398,7 +404,7 @@ export class CatalogClient {
     try {
       const response = await this.get(official ? "/v1/catalog?include=official" : "/v1/catalog", this.listTimeoutMs, "application/json");
       if (failure(response.status)) return null;
-      const body = (await response.json()) as { modules?: unknown } | null;
+      const body = (await readJsonCapped(response, MAX_INDEX_BYTES)) as { modules?: unknown } | null;
       const raw = Array.isArray(body?.modules) ? body.modules.slice(0, MAX_MODULES) : [];
       const seen = new Set<string>();
       const entries = raw.map(parseCatalogEntry).filter((entry): entry is CatalogEntry => entry !== null && !seen.has(entry.id) && Boolean(seen.add(entry.id)));
@@ -425,7 +431,7 @@ export class CatalogClient {
     }
     if (response.status === 404) throw new CatalogError("error.catalogNotListed");
     throwFailure(response.status);
-    const body = (await response.json().catch(() => null)) as { module?: unknown; versions?: unknown; readme?: unknown } | null;
+    const body = (await readJsonCapped(response, MAX_DETAILS_BYTES).catch(() => null)) as { module?: unknown; versions?: unknown; readme?: unknown } | null;
     const entry = parseCatalogEntry(body?.module);
     if (!entry || entry.id !== id) throw new CatalogError("error.catalogNotListed");
     this.noteGames([entry]);
@@ -635,7 +641,7 @@ export class CatalogClient {
       throw new CatalogError("error.catalogUnreachable");
     }
     if (response.status === 204) return {};
-    const json = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    const json = (await readJsonCapped(response, MAX_ANSWER_BYTES).catch(() => null)) as Record<string, unknown> | null;
     if (response.ok) return json && typeof json === "object" && !Array.isArray(json) ? json : {};
     const reason = apiReason(json);
     const key = reason ? REVIEW_REASONS[reason] : undefined;

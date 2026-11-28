@@ -3,7 +3,7 @@ import path from "node:path";
 import { app, protocol, session } from "electron";
 import { GAME_OVERLAY_SCHEME, HOST_SCHEME, MODULE_SCHEME } from "./assets";
 import { parseWindowStart } from "./background-window";
-import { recordCrash, useCrashLog } from "./crash-log";
+import { catchMainErrors, recordCrash, useCrashLog } from "./crash-log";
 import { errorLog } from "./diagnostics";
 import { Host } from "./host";
 import { parseTestHosts } from "./network";
@@ -18,6 +18,9 @@ import { refuseDevices } from "./devices";
 
 // The last errors of this run, for Settings > Copy diagnostic info.
 errorLog.capture();
+// An error nothing caught is logged there (and in crashes.log once it knows the data folder), never shown in
+// Electron's own box (crash-log.ts).
+catchMainErrors();
 
 // Installed and development runs keep separate state, independent of the app name.
 // Installed data stays in %APPDATA%\@tavora\desktop; dev uses desktop-dev.

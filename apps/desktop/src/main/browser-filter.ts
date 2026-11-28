@@ -46,6 +46,34 @@ export interface RequestInfo {
   resourceType: string;
   /** The address of the page the request belongs to; null when unknown (treated as a public page). */
   topUrl: string | null;
+  /** The origins of the frames it comes from (requestingOrigins); a public one is kept off local addresses too. */
+  frameOrigins?: readonly string[];
+}
+
+/** A frame of a request, as Electron gives it: may be gone, which makes reading it throw. */
+interface RequestFrame {
+  readonly origin: string;
+  readonly parent: RequestFrame | null;
+}
+
+/**
+ * The origins a request comes from: its frame's and, for a frame going to another page, the page the frame is in. A
+ * frame already gone gives none, and the request is judged by its tab's page alone.
+ */
+export function requestingOrigins(details: { frame?: RequestFrame | null; resourceType: string }): string[] {
+  try {
+    const frame = details.frame;
+    if (!frame) return [];
+    const parent = details.resourceType === "subFrame" ? frame.parent : null;
+    return parent ? [frame.origin, parent.origin] : [frame.origin];
+  } catch {
+    return [];
+  }
+}
+
+/** A web origin (http or https) that is not this PC or the local network. An opaque one ("null") counts as neither. */
+function isPublicOrigin(origin: string): boolean {
+  return /^https?:\/\//.test(origin) && !isPrivateUrl(origin);
 }
 
 export interface AdBlocker {
@@ -96,7 +124,8 @@ export function judgeRequest(request: RequestInfo, ads: AdBlocker | null, adbloc
   if (!SCHEMES.has(url.protocol)) return "scheme";
   if (request.resourceType === "mainFrame") return "allow";
   const top = request.topUrl ?? "";
-  if (isPrivateUrl(request.url) && !isPrivateUrl(top)) return "private";
+  // A public page can't reach a local address, nor can a public frame (an ad, an embed) inside a local page.
+  if (isPrivateUrl(request.url) && (!isPrivateUrl(top) || (request.frameOrigins ?? []).some(isPublicOrigin))) return "private";
   const type = (request.resourceType in AD_TYPES ? request.resourceType : "other") as ResourceType;
   if (ads && top && adblockOn(top) && ads.blocks(request.url, top, type)) return "ad";
   return "allow";
