@@ -40,9 +40,6 @@ export default function ExcalidrawRoot({ initialData, langCode, theme, saveState
       autoFocus
       UIOptions={{
         canvasActions: { loadScene: false, saveToActiveFile: false, export: false, saveAsImage: false, toggleTheme: false },
-        // Its picture tool opens the system's file picker, which a panel can't (security.md); the picture card
-        // goes through Tavora's own dialog.
-        tools: { image: false },
       }}
     >
       <Footer>

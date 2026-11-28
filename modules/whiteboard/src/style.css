@@ -12,6 +12,10 @@ body {
 }
 
 .whiteboard-app { container-type: inline-size; }
+/* Excalidraw's picture button opens the system's file picker, which a panel can't (security.md); pictures go in
+   through the picture card (Tavora's own dialog), a paste or a drop. The tool itself stays on: without it Excalidraw
+   refuses pasted and dropped pictures too. */
+.whiteboard-app .excalidraw .ToolIcon:has(> [data-testid="toolbar-image"]) { display: none; }
 .board-switcher { min-width: 0; max-width: 32%; }
 .board-switcher [data-testid="board-menu"] { max-width: 100%; }
 .board-actions-menu { display: none; }
