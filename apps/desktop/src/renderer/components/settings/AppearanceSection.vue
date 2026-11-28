@@ -17,6 +17,8 @@ import { cn } from "@tavora/official-ui/lib/utils";
 import type { HostViewState, StyleView, ThemeVariationView, ThemeView } from "../../../shared/host-api";
 import { fontFamily, UI_FONTS, uiFont } from "../../../shared/ui-fonts";
 import { act, state, tryToasts } from "../../host";
+import { hasMessageIn } from "../../../shared/i18n-core";
+import { en } from "../../../shared/locales/en";
 import { t } from "../../i18n";
 import SettingGroup from "./SettingGroup.vue";
 import SettingRow from "./SettingRow.vue";
@@ -40,6 +42,11 @@ function styleText(style: StyleView, part: "name" | "description"): string {
   return style.provenance === "official" && ["tavora.classic", "tavora.hardware", "tavora.glass"].includes(style.id)
     ? t(key as Parameters<typeof t>[0])
     : (part === "name" ? style.name : (style.description ?? ""));
+}
+/** Tavora's own themes have their line in both languages; another theme shows what its file says. */
+function themeAbout(theme: { id: string; provenance: "official" | "local"; description: string | null }): string {
+  const key = `themeAbout.${theme.id.replace("tavora.", "")}`;
+  return theme.provenance === "official" && hasMessageIn(en, key) ? t(key) : (theme.description ?? "");
 }
 /** The style's own themes first (under its name), then all the others. */
 const themeGroups = computed(() => {
@@ -216,7 +223,7 @@ const showVariation = computed(() => {
             <ThemePreview v-if="active" :variation="previewOf(active)" size="sm" />
             <span class="flex min-w-0 flex-col">
               <span class="truncate font-medium">{{ active?.name }}</span>
-              <span v-if="active?.description" class="text-muted-foreground truncate text-xs" :title="active.description">{{ active.description }}</span>
+              <span v-if="active && themeAbout(active)" class="text-muted-foreground truncate text-xs" :title="themeAbout(active)">{{ themeAbout(active) }}</span>
             </span>
           </template>
         </SelectTrigger>
@@ -228,7 +235,7 @@ const showVariation = computed(() => {
             v-for="theme in group.themes"
             :key="theme.id"
             :value="theme.id"
-            :description="theme.description ?? undefined"
+            :description="themeAbout(theme) || undefined"
             class="items-center! gap-3 pr-2"
             :data-testid="`theme-${theme.id}`"
           >

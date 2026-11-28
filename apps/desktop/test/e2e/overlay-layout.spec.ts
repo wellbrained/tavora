@@ -155,7 +155,7 @@ test("Reset position and Reset size work from the page, Take picture says why it
     await expect(page.locator("[role=tooltip] kbd")).toHaveText([/^(Ctrl|Cmd)$/, "Z"]);
     expect((await state(page)).pictureHint).toBe("start");
 
-    // Alt-tab: the toolbar shows Settings > Overlays' "Keep overlays on the game when you alt-tab" (on at first) and changes it.
+    // Alt-tab: the toolbar shows Settings > Overlays & Streaming's "Overlays on alt-tab" (on at first) and changes it.
     const saved = async () => (JSON.parse(await readFile(path.join(userData, "library.json"), "utf8")) as { overlaysStay?: boolean }).overlaysStay;
     const stay = page.getByRole("button", { name: "When you alt-tab out of the game", exact: true });
     await expect(stay).toContainText("Stay on the game");

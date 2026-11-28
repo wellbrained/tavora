@@ -2,8 +2,8 @@
   "$schema": "../../packages/module-schema/schema/tavora.module.schema.json",
   "id": "tavora.whiteboard",
   "name": "Whiteboard",
-  "description": "Sketch, annotate and plan on a board per game: draw, add shapes and text, and scribble on screenshots. Saved as you draw.",
-  "version": "0.3.99",
+  "description": "A board per game for drawing, text and notes on screenshots. Saved as you draw.",
+  "version": "0.3.100",
   "apiVersion": "1",
   "entry": "dist/index.html",
   "changelog": "changelog.json",
@@ -11,7 +11,7 @@
   "viewport": { "minWidth": 360, "minHeight": 280, "preferredWidth": 760, "preferredHeight": 560 },
   "translations": {
     "de": {
-      "description": "Skizziere, markiere und plane auf einer Tafel pro Spiel: zeichne, füge Formen und Text hinzu und kritzle auf Screenshots. Wird beim Zeichnen gespeichert."
+      "description": "Eine Tafel pro Spiel zum Zeichnen, Schreiben und Markieren von Screenshots. Wird beim Zeichnen gespeichert."
     }
   },
   "permissions": { "network": [], "webAssembly": true }

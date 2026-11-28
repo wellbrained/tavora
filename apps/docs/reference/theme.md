@@ -10,7 +10,7 @@ A theme recolours Tavora and every module in it. It is data only: one `tavora.th
 2. Change the colours in its `tavora.theme.json`, and its `id` and `name` before you share it (ids starting with `tavora.` are reserved).
 3. Press **Reload**.
 
-The theme shows up next to the official ones. If something is wrong, Appearance lists the folder and the first problem instead, for example a colour pair without enough contrast. Picking a theme applies it at once. **Reset to Tavora Default** always brings the default back.
+The theme shows up next to the official ones. If something is wrong, Appearance lists the folder and the first problem instead, for example a colour pair without enough contrast. Picking a theme applies it at once. **Reset** next to **Reset theme** always brings the default back.
 
 ```json
 {
@@ -37,7 +37,7 @@ The theme shows up next to the official ones. If something is wrong, Appearance 
 
 ## Fields
 
-Unknown fields are refused, so a typo fails loudly rather than being ignored.
+Unknown fields are refused, so a typo is reported as an error, not ignored.
 
 | Field | Required | Rules |
 | --- | --- | --- |

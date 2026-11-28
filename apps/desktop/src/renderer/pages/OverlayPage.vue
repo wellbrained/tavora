@@ -154,7 +154,7 @@ const previewChoice = computed({
 });
 const picture = computed(() => (view.value?.picture ? `${PICTURE_ORIGIN}${view.value.picture}` : null));
 /**
- * What overlays do when you alt-tab out of the game: Settings > Overlays' "Keep overlays on the game when you alt-tab", here where it
+ * What overlays do when you alt-tab out of the game: Settings > Overlays & Streaming's "Overlays on alt-tab", here where it
  * is noticed. One setting for every overlay, not this setup's own.
  */
 const stay = computed({

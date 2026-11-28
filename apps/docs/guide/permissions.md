@@ -32,7 +32,7 @@ When a user adds your module, Tavora shows its own dialog, which your page can't
 
 How to get your name there is in [Your publisher key](./publisher-key.md#show-your-name).
 
-If the user cancels, the module isn't added. They can take a grant back any time in Settings (Modules > Website access for websites, Integrations for AI usage and Discord, which is paused for now and hidden there, Streaming for overlays), which removes the module's panels. An update that asks for more keeps what was granted, and its panels offer the user to review the new hosts, which they can put off with **Not now**.
+If the user cancels, the module isn't added. They can take a grant back any time in Settings > Connections (websites, AI usage and the other connectors; Discord is paused for now and hidden there) or Settings > Overlays & Streaming (stream overlays), which removes the module's panels. An update that asks for more keeps what was granted, and its panels offer the user to review the new hosts, which they can put off with **Not now**.
 
 ## Check before you call
 
@@ -43,7 +43,7 @@ const tavora = await connect();
 const canFetch = tavora.host.capabilities.includes("network");
 ```
 
-Without a grant, the call fails with `PERMISSION_DENIED`, and `error.capability` names what is missing. Show something useful instead, such as "Allow api.example.com in Settings > Modules to load prices", rather than an empty panel.
+Without a grant, the call fails with `PERMISSION_DENIED`, and `error.capability` names what is missing. Show something useful instead, such as "Allow api.example.com in Settings > Connections to load prices", rather than an empty panel.
 
 ```ts
 try {

@@ -673,6 +673,7 @@ export class Host {
       library,
       userData: options.userData,
       sources: { themes: Host.themeSources(options), styles: Host.styleSources(options) },
+      language: () => this.language,
       appVersion: app.getVersion(),
       installed: { themes, themeProblems, themeHints, styles: prepared.styles.styles, styleProblems: prepared.styles.problems, styleHints: prepared.styles.hints },
       systemMode: () => Host.systemMode(options),

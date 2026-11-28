@@ -137,7 +137,7 @@ describe("GameIcons.share", () => {
     expect(saveLibrary).toHaveBeenCalled();
     expect(pushState).toHaveBeenCalled();
     expect(icons.view(game).shareIcon).toBeNull();
-    expect(await icons.share([id])).toEqual({ ok: false, error: "There is nothing to share right now." });
+    expect(await icons.share([id])).toEqual({ ok: false, error: "There's nothing to share right now." });
   });
 
   it("asks a signed-out user to sign in first", async () => {
@@ -175,7 +175,7 @@ describe("GameIcons.share", () => {
 
   it("offers nothing before the service's list is in", async () => {
     const { icons, id, offered } = await setup();
-    expect(await icons.share([id])).toEqual({ ok: false, error: "There is nothing to share right now." });
+    expect(await icons.share([id])).toEqual({ ok: false, error: "There's nothing to share right now." });
     expect(offered).toEqual([]);
   });
 });
@@ -189,7 +189,7 @@ describe("GameIcons.steamShareIcons", () => {
     expect(await unreachable.icons.steamShareIcons([1])).toMatchObject({ status: "error" });
     const noSteam = await setup();
     expect(await noSteam.icons.steamShareIcons([1])).toMatchObject({ status: "error" });
-    expect(await noSteam.icons.shareSteam([1])).toEqual({ ok: false, error: "There is nothing to share right now." });
+    expect(await noSteam.icons.shareSteam([1])).toEqual({ ok: false, error: "There's nothing to share right now." });
   });
 });
 

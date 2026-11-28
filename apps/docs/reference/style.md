@@ -45,7 +45,7 @@ If something is wrong, "Your styles" lists the folder and the first problem inst
 
 ## Fields
 
-Unknown fields, parts and looks are refused, so a typo fails loudly rather than being ignored.
+Unknown fields, parts and looks are refused, so a typo is reported as an error, not ignored.
 
 | Field | Required | Rules |
 | --- | --- | --- |

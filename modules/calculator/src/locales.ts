@@ -2,11 +2,11 @@
 export const en = {
   loading: "Loading…",
   cancel: "Cancel",
-  connectError: "Could not connect: {error}",
-  saveError: "Could not save your history: {error}",
+  connectError: "Couldn't connect: {error}",
+  saveError: "Couldn't save your history: {error}",
   copyError: "Can't copy right now",
-  settingsError: "Could not save your choice: {error}",
-  valuesError: "Could not save your values: {error}",
+  settingsError: "Couldn't save your choice: {error}",
+  valuesError: "Couldn't save your values: {error}",
 
   "mode.label": "Keypad",
   "calc.toolbar": "Calculator controls",
@@ -50,7 +50,7 @@ export const en = {
   "calc.saveAs": "Save as",
 
   "error.divide": "Can't divide by 0",
-  "error.invalid": "That doesn't add up",
+  "error.invalid": "Can't work that out",
   "error.tooBig": "Too big to show",
   "error.incomplete": "Not finished yet",
   "error.negativeRoot": "No root of a minus number",
@@ -64,7 +64,7 @@ export const en = {
   "history.use": "Use {result}",
 
   "values.title": "Values",
-  "values.empty": "Save a result with Save as… to use it in your sums.",
+  "values.empty": "Save a result with Save as to use it in your sums.",
   "values.use": "Use {name}",
   "values.more": "More for {name}",
   "values.rename": "Rename",
@@ -132,7 +132,7 @@ export const de: Record<keyof typeof en, string> = {
   "calc.saveAs": "Speichern als",
 
   "error.divide": "Durch 0 geht nicht",
-  "error.invalid": "Das geht nicht auf",
+  "error.invalid": "Das lässt sich nicht rechnen",
   "error.tooBig": "Zu groß zum Anzeigen",
   "error.incomplete": "Noch nicht fertig",
   "error.negativeRoot": "Keine Wurzel aus Minuszahlen",
@@ -146,7 +146,7 @@ export const de: Record<keyof typeof en, string> = {
   "history.use": "{result} nehmen",
 
   "values.title": "Werte",
-  "values.empty": "Speichere ein Ergebnis mit „Speichern als…“, um damit zu rechnen.",
+  "values.empty": "Speichere ein Ergebnis mit „Speichern als“, um damit zu rechnen.",
   "values.use": "{name} nehmen",
   "values.more": "Mehr zu {name}",
   "values.rename": "Umbenennen",

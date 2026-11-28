@@ -5,6 +5,7 @@ import { Badge } from "@tavora/official-ui/components/ui/badge";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { Card } from "@tavora/official-ui/components/ui/card";
 import { ArrowLeft } from "@lucide/vue";
+import { computed } from "vue";
 import { t } from "../../i18n";
 import AppSkeleton from "./AppSkeleton.vue";
 
@@ -12,11 +13,12 @@ export type FirstChoice = "game" | "personal";
 
 defineEmits<{ pick: [FirstChoice]; back: [] }>();
 
-// Names of modules: the built-in ones, and the game modules the catalog has.
-const EXAMPLES: Record<FirstChoice, string[]> = {
+// Names of modules: the built-in ones (in the app's language where their manifests translate them), and the game
+// modules the catalog has.
+const examples = computed<Record<FirstChoice, string[]>>(() => ({
   game: ["Palworld", "Satisfactory Planner", "Enshrouded Builds", "PoE2 Builds"],
-  personal: ["Notes", "To-Dos", "Clock & Counter", "Whiteboard", "PDF Viewer"],
-};
+  personal: [t("onboarding.choice.example.notes"), "To-Dos", "Clock & Counter", "Whiteboard", t("onboarding.choice.example.pdf")],
+}));
 </script>
 
 <template>
@@ -39,7 +41,7 @@ const EXAMPLES: Record<FirstChoice, string[]> = {
           <span class="text-muted-foreground text-sm">{{ t(`onboarding.choice.${kind}.text`) }}</span>
         </span>
         <span class="flex flex-wrap gap-1" :aria-label="t('onboarding.choice.examples')">
-          <Badge v-for="example in EXAMPLES[kind]" :key="example" variant="secondary">{{ example }}</Badge>
+          <Badge v-for="example in examples[kind]" :key="example" variant="secondary">{{ example }}</Badge>
         </span>
       </Card>
     </div>

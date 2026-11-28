@@ -5,8 +5,8 @@
  */
 export function footerTexts(source: string, state: { pinned: boolean; pinnable: boolean }, de: boolean): string[] {
     if (state.pinned)
-        return [source, de ? "Angeheftet · Esc zum Schließen" : "Pinned · Escape to close"];
+        return [source, de ? "Angeheftet · Esc zum Schließen" : "Pinned · Esc to close"];
     if (!state.pinnable)
         return [source];
-    return [source, de ? "Klicken zum Anheften" : "Click to pin item details"];
+    return [source, de ? "Klicken zum Anheften" : "Click to pin"];
 }

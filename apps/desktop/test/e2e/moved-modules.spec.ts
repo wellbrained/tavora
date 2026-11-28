@@ -53,7 +53,7 @@ test("panels of the old Discord and AI Usage modules say they moved, and their s
     const paused = page.locator('[data-testid^="panel-paused-"]');
     if (DISCORD_VOICE_PAUSED) {
       await expect(paused).toHaveCount(1);
-      await expect(paused).toContainText("Discord is taking a break");
+      await expect(paused).toContainText("Discord voice is paused");
       await expect(moved).toHaveCount(1);
       await expect(moved).toContainText("AI Usage");
       await expect(page.getByTestId("install-moved-module")).toHaveCount(1);

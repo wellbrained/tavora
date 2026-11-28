@@ -589,12 +589,12 @@ test("a button Tavora refuses for a panel over the game says what to do, in the 
     );
     const note = `document.querySelector('[data-testid="link-note"]')?.textContent?.trim() ?? ""`;
     await inModule(app, ID, `document.querySelector('[data-testid^="preview-"]').click()`);
-    await expect.poll(() => inModule<string>(app, ID, note)).toBe("Close the game layer to do this.");
+    await expect.poll(() => inModule<string>(app, ID, note)).toBe("Close Tavora over game to do this.");
     await inModule(app, ID, `document.querySelector('[data-testid^="copy-link-"]').click()`);
-    await expect.poll(() => inModule<string>(app, ID, note)).toBe("Close the game layer to do this.");
+    await expect.poll(() => inModule<string>(app, ID, note)).toBe("Close Tavora over game to do this.");
     await click(app, "page-hotkeys");
     await inModule(app, ID, `document.querySelector('[aria-label^="Count up: "]').click()`);
-    await expect(async () => expect(await text(app, "hotkey-note")).toBe("Close the game layer to do this.")).toPass();
+    await expect(async () => expect(await text(app, "hotkey-note")).toBe("Close Tavora over game to do this.")).toPass();
   } finally {
     await app.close();
   }

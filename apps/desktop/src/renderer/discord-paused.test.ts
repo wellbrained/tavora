@@ -77,7 +77,7 @@ describe.runIf(DISCORD_VOICE_PAUSED)("Discord voice, paused", () => {
   it("shows a Discord panel as paused, with nothing to install, review or remove", async () => {
     mountPanel({ instanceId: "p1", moduleId: "wellbrained.discord", panelType: "voice", name: "Discord", status: "unavailable", waiting: false, content: null, paused: true });
     await nextTick();
-    expect(shown('[data-testid="panel-paused-p1"]')?.textContent).toBe("Discord is taking a break");
+    expect(shown('[data-testid="panel-paused-p1"]')?.textContent).toBe("Discord voice is paused");
     expect(root.textContent).toContain("We've paused Discord voice in Tavora for now.");
     expect(shown('[data-testid="install-moved-module"]')).toBeNull();
     expect(shown('[data-testid="remove-unavailable-panel"]')).toBeNull();

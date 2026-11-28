@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.96",
+    "date": "2026-11-28",
+    "notes": [
+      "Clearer texts for links and saving."
+    ]
+  },
+  {
     "version": "0.6.95",
     "date": "2026-11-28",
     "notes": [
@@ -18,14 +25,14 @@
     "version": "0.6.93",
     "date": "2026-11-28",
     "notes": [
-      "Dialogs: the message sits under the title row, never beside the icon."
+      "Dialog messages now sit below the title."
     ]
   },
   {
     "version": "0.6.92",
     "date": "2026-11-28",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -39,84 +46,84 @@
     "version": "0.6.90",
     "date": "2026-11-28",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.89",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.88",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.87",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.86",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.85",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.84",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.83",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.82",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.81",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.80",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.79",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -130,14 +137,14 @@
     "version": "0.6.77",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.76",
     "date": "2026-11-27",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -151,7 +158,7 @@
     "version": "0.6.74",
     "date": "2026-11-26",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -165,7 +172,7 @@
     "version": "0.6.72",
     "date": "2026-11-26",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -179,7 +186,7 @@
     "version": "0.6.70",
     "date": "2026-11-26",
     "notes": [
-      "Small changes to the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -193,7 +200,7 @@
     "version": "0.6.68",
     "date": "2026-11-26",
     "notes": [
-      "New hover rows in the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -207,7 +214,7 @@
     "version": "0.6.66",
     "date": "2026-11-26",
     "notes": [
-      "The shared controls gained cards and checkbox rows."
+      "Small fixes."
     ]
   },
   {
@@ -242,7 +249,7 @@
     "version": "0.6.61",
     "date": "2026-11-25",
     "notes": [
-      "Small fixes in the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -263,14 +270,14 @@
     "version": "0.6.58",
     "date": "2026-11-25",
     "notes": [
-      "Buttons in the shared controls can say how it went: Copied, Saved, or a spinner while they work."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.57",
     "date": "2026-11-25",
     "notes": [
-      "New stat tiles, fact lists and bar charts in the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -284,28 +291,28 @@
     "version": "0.6.55",
     "date": "2026-11-25",
     "notes": [
-      "Built with the newer shared controls. Nothing changes for you."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.54",
     "date": "2026-11-25",
     "notes": [
-      "New hover card in the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.53",
     "date": "2026-11-25",
     "notes": [
-      "New tree view in the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.52",
     "date": "2026-11-25",
     "notes": [
-      "Built with the newer shared controls. Nothing changes for you."
+      "Small fixes."
     ]
   },
   {
@@ -334,35 +341,35 @@
     "version": "0.6.48",
     "date": "2026-11-25",
     "notes": [
-      "Built with the newer shared controls. Nothing changes for you."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.47",
     "date": "2026-11-25",
     "notes": [
-      "The shared list with search shows its no-match note in a frame."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.46",
     "date": "2026-11-25",
     "notes": [
-      "Small fixes in the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.45",
     "date": "2026-11-25",
     "notes": [
-      "A new list with search in the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.44",
     "date": "2026-11-25",
     "notes": [
-      "New chips and a tag field in the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -376,49 +383,49 @@
     "version": "0.6.42",
     "date": "2026-11-25",
     "notes": [
-      "Built with the newer shared controls. Nothing changes for you."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.41",
     "date": "2026-11-25",
     "notes": [
-      "A new calendar in the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.40",
     "date": "2026-11-25",
     "notes": [
-      "New text link and list row in the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.39",
     "date": "2026-11-25",
     "notes": [
-      "New table options in the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.38",
     "date": "2026-11-25",
     "notes": [
-      "New item card pieces in the shared controls."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.37",
     "date": "2026-11-25",
     "notes": [
-      "Built with the newer SDK. Nothing changes for you."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.36",
     "date": "2026-11-25",
     "notes": [
-      "New tooltip pieces in the shared controls."
+      "Small fixes."
     ]
   },
   {
@@ -469,7 +476,7 @@
     "version": "0.6.30",
     "date": "2026-11-24",
     "notes": [
-      "Tidied up inside. Nothing looks or works differently."
+      "Small fixes."
     ]
   },
   {
@@ -516,21 +523,21 @@
     "version": "0.6.24",
     "date": "2026-11-18",
     "notes": [
-      "Updated parts under the hood."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.23",
     "date": "2026-11-17",
     "notes": [
-      "Updated parts under the hood."
+      "Small fixes."
     ]
   },
   {
     "version": "0.6.22",
     "date": "2026-11-17",
     "notes": [
-      "Small fixes under the hood."
+      "Small fixes."
     ]
   },
   {
@@ -572,7 +579,7 @@
     "version": "0.6.16",
     "date": "2026-11-03",
     "notes": [
-      "Under the hood: newer libraries."
+      "Small fixes."
     ]
   },
   {
@@ -615,7 +622,7 @@
     "version": "0.6.10",
     "date": "2026-11-02",
     "notes": [
-      "Small update to the shared look; nothing changes for you here."
+      "Small fixes."
     ]
   },
   {

@@ -815,7 +815,7 @@ test("screenshot starter cancellation creates nothing, then a chosen image is lo
     await expect.poll(() => app.evaluate(() => (globalThis as { openAsked?: number }).openAsked)).toBe(1);
     expect(Object.keys(await storedBoards(userData))).toEqual(["Board 1"]);
     await inModule(app,WHITEBOARD,`(() => {const files=new DataTransfer();files.items.add(new File(['broken'],'bad.png',{type:'image/png'}));${q("starter-file")}.files=files.files;${q("starter-file")}.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-    await expect.poll(() => inModule(app,WHITEBOARD,`${NEWEST_TOAST}?.textContent ?? ''`)).toContain("Could not create the board");
+    await expect.poll(() => inModule(app,WHITEBOARD,`${NEWEST_TOAST}?.textContent ?? ''`)).toContain("Couldn't create the board");
     expect(Object.keys(await storedBoards(userData))).toEqual(["Board 1"]);
     await inModule(app,WHITEBOARD,`(async()=>{
       const canvas=document.createElement('canvas');canvas.width=1600;canvas.height=900;
@@ -824,9 +824,9 @@ test("screenshot starter cancellation creates nothing, then a chosen image is lo
       const files=new DataTransfer();files.items.add(new File([blob],'map.png',{type:'image/png'}));
       ${q("starter-file")}.files=files.files;${q("starter-file")}.dispatchEvent(new Event('change',{bubbles:true}));
     })()`);
-    await expect.poll(() => inModule(app,WHITEBOARD,`${q("board-name")}.textContent`)).toBe("Screenshot annotation");
+    await expect.poll(() => inModule(app,WHITEBOARD,`${q("board-name")}.textContent`)).toBe("Marked screenshot");
     await expect.poll(() => inModule(app,WHITEBOARD,`${q("board")}.dataset.pictures`)).toBe("1");
-    const board=(await storedBoard(userData,"Screenshot annotation"))!;
+    const board=(await storedBoard(userData,"Marked screenshot"))!;
     expect(board.elements).toHaveLength(1);
     expect(board.elements[0]!.locked).toBe(true);
     expect(board.elements[0]!.width).toBe(1440);

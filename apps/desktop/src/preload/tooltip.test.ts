@@ -44,7 +44,7 @@ describe("tooltip preload", () => {
         expect(item.querySelector(".per, .per-heading")).toBeNull();
         expect(item.querySelector(".effect")!.textContent).toBe("Shoots for 12 damage");
         expect(Array.from(item.querySelectorAll(".effect .accent")).map(a => a.textContent)).toEqual(["12"]);
-        expect(el.querySelector(".footer")!.textContent).toContain("Click to pin item details");
+        expect(el.querySelector(".footer")!.textContent).toContain("Click to pin");
         expect(el.querySelector("#layout")).toBeNull();
         expect(ipc.sent.some(m => m[0] === "tooltip:size")).toBe(true);
     });

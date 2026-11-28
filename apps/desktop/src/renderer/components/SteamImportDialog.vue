@@ -96,7 +96,7 @@ const status = (game: SteamGameView) => (game.status === "trash" ? t("steamImpor
       <Input
         id="steam-profile"
         v-model="profile"
-        placeholder="https://steamcommunity.com/id/yourname"
+        :placeholder="t('steamImport.profilePlaceholder')"
         autocomplete="off"
         maxlength="200"
         data-testid="steam-profile"

@@ -110,7 +110,7 @@ describe("menu row action", () => {
     await wait()
     expect(open.value).toBe(false)
     expect(toasts.value).toHaveLength(1)
-    expect(toasts.value[0]).toMatchObject({ variant: "error", title: "Something went wrong. Please try again.", description: "The folder is gone." })
+    expect(toasts.value[0]).toMatchObject({ variant: "error", title: "That didn't work. Try again.", description: "The folder is gone." })
   })
 
   it("an action that throws at once shows the toast too", async () => {
