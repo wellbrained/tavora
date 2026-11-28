@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.125",
+    "date": "2026-11-28",
+    "notes": [
+      "Tool strip: the main action is a filled button."
+    ]
+  },
+  {
     "version": "0.1.124",
     "date": "2026-11-28",
     "notes": [

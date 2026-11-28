@@ -19,7 +19,7 @@ const pages = ref(true);
       <Toolbar label="Tasks" variant="bar">
         <p class="text-muted-foreground min-w-0 flex-1 truncate px-1 text-xs tabular-nums">4 open</p>
         <Button variant="ghost" size="icon-sm" aria-label="Fold all" title="Fold all"><FoldVertical /></Button>
-        <Button variant="ghost" size="sm"><Plus /> Add list</Button>
+        <Button size="sm"><Plus /> Add list</Button>
         <Button variant="ghost" size="icon-sm" aria-label="More" title="More"><Ellipsis /></Button>
       </Toolbar>
       <p class="text-muted-foreground p-3 text-sm">Buy potions · Clear the keep · Sell loot</p>
