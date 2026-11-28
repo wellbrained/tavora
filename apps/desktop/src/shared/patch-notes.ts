@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.26.8",
+    date: "2026-11-28",
+    title: "Safer updates",
+    notes: [
+      "Tavora checks an update once more right before it installs it.",
+      "Moving your pictures folder no longer fails because a panel keeps saving files.",
+      "Pages in the Browser can't reach a few more special addresses on your network.",
+    ],
+    prs: [
+      { number: 1062, title: "Last security items before 1.0 (audit L6-L10)" },
+    ],
+    tags: ["catalog", "modules", "overlays", "privacy", "publishing", "security", "service", "updates", "website"],
+  },
+  {
     version: "0.26.7",
     date: "2026-11-28",
     title: "Safer removing",
