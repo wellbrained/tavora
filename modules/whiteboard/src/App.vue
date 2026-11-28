@@ -97,7 +97,7 @@ function notify(message: string) {
 }
 
 /**
- * A message with an Undo button: the kit's undoable, so each delete or clear has its own offer, and one that can't come back
+ * A message with an Undo button: the kit's undoable, so each clear has its own offer, and one that can't come back
  * says so. Ctrl+Z stays Excalidraw's own undo on the board.
  */
 function offerUndo(message: string, run: () => Promise<void>) {

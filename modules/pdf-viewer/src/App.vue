@@ -329,10 +329,13 @@ async function rename(id: string, name: string) {
   await store.value?.rename(id, name).catch(() => notice(t("save.renameFailed", { name: before })));
 }
 
-function askRemove(id: string) {
+async function askRemove(id: string) {
+  if (!byId.value.has(id)) return;
+  listOpen.value = false;
+  // Looked at now: only open tabs are checked as they go, and the question must not promise an original that is gone.
+  await checkOriginal(id);
   const file = byId.value.get(id);
   if (!file) return;
-  listOpen.value = false;
   removing.value = { file, gone: statuses.value.get(id) === "gone" };
 }
 

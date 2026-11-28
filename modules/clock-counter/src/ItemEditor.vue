@@ -371,7 +371,11 @@ function removeLink(target: string) {
   const label = links.value.find((link) => link.target === target)?.label ?? t("kind.counter");
   const touched = [id.value, target];
   delete amountDrafts[target];
-  updateCounter((counter) => (counter.links = counter.links.filter((link) => link.target !== target)));
+  // Both counters hear of it: taking the link away can split their group.
+  change(touched, (data) => {
+    const counter = find(data, lost.source);
+    if (counter?.kind === "counter") counter.links = counter.links.filter((link) => link.target !== target);
+  });
   undoable({
     title: t("edit.linkRemoved", { label }),
     undo: () => {
