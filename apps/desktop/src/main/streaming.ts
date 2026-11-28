@@ -76,7 +76,7 @@ export interface OverlayKeys {
    * Whether an item of this module from this workspace (an overlay, or a panel's live view) is in a setup whose keys work
    * now: the module's own keys work then too, also while its workspace isn't shown in Tavora.
    */
-  moduleShowing?(module: Pick<HotkeyRecord, "owner" | "moduleId" | "workspaceId">): boolean;
+  moduleShowing(module: Pick<HotkeyRecord, "owner" | "moduleId" | "workspaceId">): boolean;
 }
 
 interface PendingHotkey {
@@ -341,7 +341,7 @@ export class Streaming {
 
   /** Whether the record's module has an item on screen over a game or the screen, and a panel of its workspace runs for it. */
   private runsForOverlay(record: HotkeyRecord, listeners: readonly HotkeyListener[]): boolean {
-    if (!this.overlayKeys?.showing() || !this.overlayKeys.moduleShowing?.(record)) return false;
+    if (!this.overlayKeys?.showing() || !this.overlayKeys.moduleShowing(record)) return false;
     return listeners.some((panel) => panel.moduleId === record.moduleId && panel.workspaceId === record.workspaceId);
   }
 

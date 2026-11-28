@@ -2447,8 +2447,9 @@ export class Host {
       publish: (key, state) => {
         overlay.publish(key, state);
         const subject = { owner: module.owner, moduleId: module.manifest.id, workspaceId, key };
-        if (!this.gameOverlays.has(subject) && !this.streaming.overlayStore.peek(subject)) return;
-        if (this.overlayFeeders.published(subject, record.instanceId)) this.syncOverlayPanels();
+        if (!this.gameOverlays?.has(subject) && !this.streaming.overlayStore.peek(subject)) return;
+        // After the module's call, not inside it: syncing starts and lets go of panels.
+        if (this.overlayFeeders.published(subject, record.instanceId)) queueMicrotask(() => this.syncOverlayPanels());
       },
     };
   }

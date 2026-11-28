@@ -330,7 +330,7 @@ describe("publishing without the connector", () => {
   it("keeps state for a key that has a game overlay", async () => {
     const { streaming, overlay, world } = await setup();
     world.granted = false;
-    streaming.useOverlayKeys({ showing: () => false, wants: () => false, has: (subject) => subject.key === "item-2", pressed: () => {}, general: () => false });
+    streaming.useOverlayKeys({ showing: () => false, wants: () => false, has: (subject) => subject.key === "item-2", pressed: () => {}, general: () => false , moduleShowing: () => false });
     overlay.publish("item-2", { value: 2 });
     expect(stored(streaming, "item-2")?.state).toEqual({ value: 2 });
   });
@@ -346,7 +346,7 @@ describe("publishing without the connector", () => {
   it("removes what was published for a game overlay, with or without the connector", async () => {
     const { streaming, overlay, world } = await setup();
     world.granted = false;
-    streaming.useOverlayKeys({ showing: () => false, wants: () => false, has: () => true, pressed: () => {}, general: () => false });
+    streaming.useOverlayKeys({ showing: () => false, wants: () => false, has: () => true, pressed: () => {}, general: () => false , moduleShowing: () => false });
     overlay.publish("item-1", { value: 4 });
     expect(stored(streaming, "item-1")?.state).toEqual({ value: 4 });
     overlay.remove("item-1");
@@ -379,7 +379,7 @@ describe("keys of game overlays", () => {
     const heard: string[] = [];
     let front: string | null = null;
     // As the service decides: the keys work while something shows; the layer key over any game in front, a toggle key over its own.
-    made.streaming.useOverlayKeys({ showing: () => front !== null, wants: (record) => record.workspaceId === "$all" || record.workspaceId === front, has: () => false, pressed: (record) => void heard.push(`${record.action}:${record.target}`), general: (binding) => binding.workspaceId === "$all" });
+    made.streaming.useOverlayKeys({ showing: () => front !== null, wants: (record) => record.workspaceId === "$all" || record.workspaceId === front, has: () => false, pressed: (record) => void heard.push(`${record.action}:${record.target}`), general: (binding) => binding.workspaceId === "$all" , moduleShowing: () => false });
     return { ...made, heard, front: (id: string | null) => (front = id) };
   }
 
@@ -447,7 +447,7 @@ describe("keys of game overlays", () => {
 
   it("lets a general overlay's key collide with the keys of every game", async () => {
     const made = await setup();
-    made.streaming.useOverlayKeys({ showing: () => false, wants: () => false, has: () => false, pressed: () => {}, general: (binding) => binding.workspaceId === "personal" || binding.workspaceId === "$all" });
+    made.streaming.useOverlayKeys({ showing: () => false, wants: () => false, has: () => false, pressed: () => {}, general: (binding) => binding.workspaceId === "personal" || binding.workspaceId === "$all" , moduleShowing: () => false });
     const wide = { ...toggle, workspaceId: "personal" };
     const asked = made.streaming.askOverlayKey(wide, "Clock", words);
     made.streaming.answer(made.streaming.request()!.id, "set", "F6");
