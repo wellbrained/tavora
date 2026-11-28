@@ -58,6 +58,22 @@ export class UserProfile {
     this.options.changed();
   }
 
+  /**
+   * The user took their picture away. Answers with how to give it back (for Undo), or null when there was nothing to
+   * keep; that says false once another picture is there.
+   */
+  async takePicture(): Promise<(() => Promise<boolean>) | null> {
+    const { profile, dir } = this.options;
+    const png = profile.picture ? await readFile(path.join(dir, profile.picture)).then((bytes) => bytes.toString("base64"), () => null) : null;
+    await this.setPicture(null);
+    if (png === null) return null;
+    return async () => {
+      if (profile.picture !== null) return false;
+      await this.setPicture(png);
+      return true;
+    };
+  }
+
   /** The profile as it goes to the account: the picture as a base64 PNG. */
   async data(): Promise<ProfileData> {
     const { profile, dir } = this.options;

@@ -2158,7 +2158,9 @@ export class Host {
       "set-overlay-port": (action) => this.streaming.setPort(action.port),
       "reset-overlay-links": () => this.streaming.resetLinks(),
       "hotkey-answer": (action) => this.streaming.answer(action.id, action.choice, action.accelerator),
-      "remove-hotkey": (action) => this.streaming.removeHotkey(action),
+      // This, remove-overlay-picture and remove-profile-picture answer with the token that puts it back (undo-delete).
+      "remove-hotkey": (action) => this.keepUndo(this.streaming.removeHotkey(action)),
+      "remove-overlay-picture": async () => this.keepUndo(await this.layout.removePicture()),
       "connector-answer": (action) => this.connectorQuestions.answer(action.id, action.allow),
       "leaderboard-answer": (action) => this.panelQuestions.answerLeaderboard(action.id, action.allow),
       "set-language": saved((action) => {
@@ -2206,7 +2208,7 @@ export class Host {
       // Resolves once it is on disk, so the host UI can say "Saved"; the account gets it after.
       "save-profile": (action) => this.userProfile.rename(action.name, action.initials),
       "set-profile-picture": (action) => this.userProfile.setPicture(action.png),
-      "remove-profile-picture": () => this.userProfile.setPicture(null),
+      "remove-profile-picture": async () => this.keepUndo(await this.userProfile.takePicture()),
 
       // Modules
       "open-modules-folder": () => this.modulesFolder.open(),
@@ -2535,6 +2537,14 @@ export class Host {
     if (!restore) return undefined;
     return this.undos.keep(() => {
       if (!restore()) throw new UndoGoneError();
+    });
+  }
+
+  /** Keeps how to put a removal back (`restore` says false when it can't any more) and answers with its token. */
+  private keepUndo(restore: (() => boolean | Promise<boolean>) | null): string | undefined {
+    if (!restore) return undefined;
+    return this.undos.keep(async () => {
+      if (!(await restore())) throw new UndoGoneError();
     });
   }
 

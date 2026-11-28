@@ -380,7 +380,7 @@ The UI Playground (Tavora features > Settings) shows one page, several pages and
   view's root as `data-status`, so tests and tools read one value.
 - **Add, edit, delete**: What people can add, they can edit and delete; deletes of simple things use Undo, deletes of things with more to them ask first (see [Deleting](#deleting)). Fixed built-ins are the exception.
 - **Deleting**<a id="deleting"></a>: a simple thing that can be put back exactly as it was (an item of the module's own
-  document: a to-do, a group, a saved value) is deleted at once and saved, then `undoable({ title, undo })` shows "<Thing> deleted" with Undo
+  document: a to-do, an empty group, a saved value) is deleted at once and saved, then `undoable({ title, undo })` shows "<Thing> deleted" with Undo
   for a few seconds; Ctrl+Z outside text fields takes back the newest one (`handleUndoKey(event)` in the page's
   keydown; it stands down while a kit dialog is open and for keys pressed inside a menu, list or popover). The focus stays in the list ([`useFocusRecovery`](#2-kit-map)); its `restore(id)` in `undo` gives the thing back the focus. Each delete gets its own toast; `undo` puts back only its own thing, in its place, with its id, and
   answers `false` when it can't any more (its place is gone, something took its name): the kit then says so. Check that

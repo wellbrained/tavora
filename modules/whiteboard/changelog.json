@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.3.101",
+    "date": "2026-11-28",
+    "notes": [
+      "Pressing 9 now adds a picture, like Picture card."
+    ]
+  },
+  {
     "version": "0.3.100",
     "date": "2026-11-28",
     "notes": [

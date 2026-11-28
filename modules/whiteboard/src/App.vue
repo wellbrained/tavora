@@ -534,6 +534,7 @@ const addPicture = fromInput(addPictureFrom);
         @closed="sessionClosed"
         @toolbar="placeToolbar"
         @palette="placePalette"
+        @picture="choosePicture(pictureInput, addPictureFrom, cardProblem)"
       />
       <EmptyState v-if="boardState.empty" variant="bare" :title="t('empty.hint')" class="text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-(--layer-lift) w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 bg-transparent p-0" data-testid="empty-hint" />
     </main>

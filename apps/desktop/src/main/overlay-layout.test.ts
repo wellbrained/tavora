@@ -1072,7 +1072,6 @@ describe("the game picture", () => {
     layout.open("elden");
     layout.handle({ type: "take-picture" }, false);
     layout.handle({ type: "choose-picture" }, false);
-    layout.handle({ type: "remove-picture" }, false);
     await flush();
     expect(world.captured).toEqual([]);
   });
@@ -1115,9 +1114,19 @@ describe("the game picture", () => {
     layout.handle({ type: "game", gameId: "elden" }, true);
     await flush();
     expect(layout.view().picture).not.toBeNull();
-    layout.handle({ type: "remove-picture" }, true);
+    const restore = (await layout.removePicture())!;
     await flush();
     expect(layout.view().picture).toBeNull();
+    expect(await pictures.has("elden")).toBe(false);
+    // Undo puts it back once; a second try finds a picture there already.
+    expect(await restore()).toBe(true);
+    await flush();
+    expect(layout.view().picture).not.toBeNull();
+    expect(await restore()).toBe(false);
+    // After the workspace left the library, no Undo brings it back.
+    const again = (await layout.removePicture())!;
+    layout.forgetWorkspace("elden");
+    expect(await again()).toBe(false);
     expect(await pictures.has("elden")).toBe(false);
   });
 
@@ -1166,7 +1175,7 @@ describe("a picture for every setup", () => {
     expect(layout.view().picture).toBeNull();
     layout.handle({ type: "game", gameId: LAYOUT_EVERYWHERE }, true);
     await flush();
-    layout.handle({ type: "remove-picture" }, true);
+    await layout.removePicture();
     await flush();
     expect(layout.view().picture).toBeNull();
     expect(await pictures.has(LAYOUT_EVERYWHERE)).toBe(false);

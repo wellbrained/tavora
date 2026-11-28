@@ -17,7 +17,7 @@ import { ListRow } from "@tavora/official-ui/components/ui/list-row";
 import { cn } from "@tavora/official-ui/lib/utils";
 import { hotkeyKeys } from "../../../shared/hotkey-keys";
 import type { HotkeyView } from "../../../shared/host-api";
-import { act, confirmAction, state, submitAction } from "../../host";
+import { act, confirmAction, deleteWithUndo, state, submitAction } from "../../host";
 import { t } from "../../i18n";
 import GrantedModules from "./GrantedModules.vue";
 import SettingExpand from "./SettingExpand.vue";
@@ -94,7 +94,7 @@ const hotkeyWorkspaces = computed(() => {
   return [...workspaces.entries()].map(([id, workspace]) => ({ id, ...workspace })).sort((a, b) => a.name.localeCompare(b.name));
 });
 function removeHotkey(hotkey: HotkeyView) {
-  void act({ type: "remove-hotkey", owner: hotkey.owner, moduleId: hotkey.moduleId, workspaceId: hotkey.workspaceId, action: hotkey.action, target: hotkey.target });
+  void deleteWithUndo({ type: "remove-hotkey", owner: hotkey.owner, moduleId: hotkey.moduleId, workspaceId: hotkey.workspaceId, action: hotkey.action, target: hotkey.target }, t("streaming.hotkeys.removed"));
 }
 
 /** The lists opened; a search result opens its own. */

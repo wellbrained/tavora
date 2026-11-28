@@ -226,7 +226,6 @@ export type LayoutMessage =
   | { type: "done" }
   | { type: "take-picture" }
   | { type: "choose-picture" }
-  | { type: "remove-picture" }
   | { type: "dismiss-notice" };
 
 /** The ids a message is about: its `ids`, or its one `id`. */
@@ -336,7 +335,6 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | null {
     case "drag-end":
     case "take-picture":
     case "choose-picture":
-    case "remove-picture":
     case "dismiss-notice":
     case "done":
       return { type: raw.type };

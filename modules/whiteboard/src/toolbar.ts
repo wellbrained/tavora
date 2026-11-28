@@ -8,6 +8,16 @@ export function toolbarPlace(value: unknown): ToolbarPlace {
   return value === "bottom" ? "bottom" : "top";
 }
 
+/**
+ * Whether this key press is Excalidraw's shortcut for its picture tool (9) on the drawing. Typing a 9 into a text on
+ * the board or into one of Excalidraw's fields is not.
+ */
+export function isPictureToolKey(event: KeyboardEvent): boolean {
+  if (event.key !== "9" || event.ctrlKey || event.altKey || event.metaKey) return false;
+  const target = event.target;
+  return target instanceof Element && !!target.closest(".excalidraw") && !target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])");
+}
+
 /** Space between the toolbar and the buttons below it, in pixels. */
 export const TOOLBAR_GAP = 8;
 

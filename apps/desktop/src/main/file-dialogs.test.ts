@@ -312,6 +312,18 @@ describe("a module's pickers (files.pickReadOnly, folders.choose)", () => {
     expect(await pickers("en", null).dialogs.pickReadOnly("Planner", { extensions: ["sav"], multiple: true })).toEqual([]);
   });
 
+  it("says a picture is added, not linked, when only pictures are asked for", async () => {
+    const wording = async (language: Language, extensions: string[]) => {
+      const { dialogs, asked } = pickers(language, ["/p/a.png"]);
+      await dialogs.pickReadOnly("Notes", { extensions, multiple: false });
+      return [asked[0]!.title, asked[0]!.buttonLabel];
+    };
+    expect(await wording("en", ["png", "jpg", "jpeg", "gif", "webp"])).toEqual(["Add a picture to Notes", "Add picture"]);
+    expect(await wording("de", ["PNG"])).toEqual(["Bild zu Notes hinzufügen", "Bild hinzufügen"]);
+    // A pick that also takes something else links a file.
+    expect(await wording("en", ["png", "sav"])).toEqual(["Link a file to Notes", "Link file"]);
+  });
+
   it("chooses a module's folder with a dialog that names the module and the folder, starting where it was told", async () => {
     const { dialogs, asked } = pickers("en", ["/home/me/Documents/My Game"]);
     expect(await dialogs.pickFolder("Planner", "Documents/My Game", "/home/me/Documents")).toBe("/home/me/Documents/My Game");

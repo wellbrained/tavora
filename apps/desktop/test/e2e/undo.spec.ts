@@ -210,44 +210,40 @@ async function deleteGroup(app: ElectronApplication, page: Page, name: string) {
   await expect(page.getByTestId("module-menu")).toHaveCount(0);
 }
 
-test("to-dos: a deleted group comes back with its to-dos; a to-do whose group went after it can't come back alone", async () => {
+test("to-dos: a group with to-dos asks first; an empty one goes at once and comes back; a to-do whose group went can't", async () => {
   const { app, page } = await launch();
   await openModule(page, TODOS);
   await expect.poll(() => inModule(app, TODOS, `!!${q("empty")}`).catch(() => false), { timeout: 15_000 }).toBe(true);
   await addInto(app, q("first-task"), "Find the Ancient Crypt");
   await addInto(app, q("group-name-new"), "Bosses");
-  await expect.poll(() => groupNames(app)).toEqual(["To-Dos", "Bosses"]);
+  await addInto(app, q("group-name-new"), "Places");
+  await expect.poll(() => groupNames(app)).toEqual(["To-Dos", "Bosses", "Places"]);
   for (const title of ["Defeat the Elder", "Defeat Count Geonor"]) await addInto(app, `${groupNamed("Bosses")}.querySelector("form")`, title);
   await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt", "Defeat the Elder", "Defeat Count Geonor"]);
   await waitForShown(app, TODOS);
 
-  // The group goes at once, with its to-dos; no question. Its menu entry no longer promises a dialog.
-  await deleteGroup(app, page, "Bosses");
-  await expect(page.getByTestId("confirm")).toHaveCount(0);
-  await expect.poll(() => groupNames(app)).toEqual(["To-Dos"]);
-  await expect.poll(() => toasts(app)).toEqual(["Deleted “Bosses”"]);
-  await expect.poll(() => inModule(app, TODOS, `${q("toast-status")}?.textContent`)).toBe("Deleted “Bosses”");
+  // An empty group goes at once, no question; Undo on its toast brings it back.
+  await deleteGroup(app, page, "Places");
+  await expect.poll(() => groupNames(app)).toEqual(["To-Dos", "Bosses"]);
+  await expect.poll(() => toasts(app)).toEqual(["Deleted “Places”"]);
+  await expect.poll(() => inModule(app, TODOS, `${q("toast-status")}?.textContent`)).toBe("Deleted “Places”");
   // The Undo button is a real, focusable button in the panel.
   expect(await inModule(app, TODOS, `${q("undo")}.tagName === "BUTTON" && ${q("undo")}.tabIndex >= 0`)).toBe(true);
   await inModule(app, TODOS, `${q("undo")}.click()`);
-  await expect.poll(() => groupNames(app)).toEqual(["To-Dos", "Bosses"]);
-  await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt", "Defeat the Elder", "Defeat Count Geonor"]);
+  await expect.poll(() => groupNames(app)).toEqual(["To-Dos", "Bosses", "Places"]);
 
-  // A to-do, then its group: each has its own toast. The to-do alone can't come back (its group is gone), the user
-  // is told so; the group's own Undo brings the group back as it was when it went.
+  // A to-do, then its group, which asks first and says how many to-dos go with it.
   await inModule(app, TODOS, `[...document.querySelectorAll('[data-done]')].find((el) => el.querySelector('[data-testid="task-title"]')?.textContent.trim() === "Defeat the Elder").querySelector('[data-testid="task-delete"]').click()`);
   await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor"]);
   await deleteGroup(app, page, "Bosses");
-  await expect.poll(() => toasts(app)).toEqual(["Deleted “Defeat the Elder”", "Deleted “Bosses”"]);
-  // The older toast sits behind the newer one until the stack is spread out (the pointer or the focus on it).
-  await inModule(app, TODOS, `document.querySelector(".tavora-toast-layer").dispatchEvent(new FocusEvent("focusin", { bubbles: true }))`);
-  await expect.poll(() => inModule(app, TODOS, `[...document.querySelectorAll(".tavora-toast-slot")].every((slot) => !slot.inert)`)).toBe(true);
+  await expect.poll(() => inModule(app, TODOS, `${q("confirm")}?.textContent ?? ""`)).toContain("Its 1 to-do goes too.");
+  expect(await groupNames(app)).toEqual(["To-Dos", "Bosses", "Places"]);
+  await inModule(app, TODOS, `${q("confirm-submit")}.click()`);
+  await expect.poll(() => groupNames(app)).toEqual(["To-Dos", "Places"]);
+  // Deleted for good: only the to-do's toast is left, and it can't bring the to-do back without its group.
+  await expect.poll(() => toasts(app)).toEqual(["Deleted “Defeat the Elder”"]);
   await inModule(app, TODOS, `[...document.querySelectorAll('[data-testid="undo-toast"]')].find((el) => el.innerText.includes("Defeat the Elder")).querySelector('[data-testid="undo"]').click()`);
   await expect.poll(() => inModule(app, TODOS, `!!${q("undo-gone")}`)).toBe(true);
-  await expect.poll(() => groupNames(app)).toEqual(["To-Dos"]);
-  // Ctrl+Z (outside a text field) takes back the newest open delete: the group.
-  await inModule(app, TODOS, `document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }))`);
-  await expect.poll(() => groupNames(app)).toEqual(["To-Dos", "Bosses"]);
-  await expect.poll(() => taskTitles(app)).toEqual(["Find the Ancient Crypt", "Defeat Count Geonor"]);
+  await expect.poll(() => groupNames(app)).toEqual(["To-Dos", "Places"]);
   await app.close();
 });

@@ -10,7 +10,7 @@ import { Button } from "@tavora/official-ui/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@tavora/official-ui/components/ui/dialog";
 import { NavList, type NavGroup } from "@tavora/official-ui/components/ui/nav-list";
 import { cn } from "@tavora/official-ui/lib/utils";
-import { account, act, cloudCopy, inbox, profileOpen, profileTarget, state, type ProfileSection } from "../../host";
+import { account, act, cloudCopy, deleteWithUndo, inbox, profileOpen, profileTarget, state, type ProfileSection } from "../../host";
 import { t } from "../../i18n";
 import { everWanted } from "../../lib/ever-wanted";
 import AccountSection from "../settings/AccountSection.vue";
@@ -141,7 +141,7 @@ async function savePicture(png: string) {
               data-testid="profile-remove-picture"
               :aria-label="t('profile.removePicture')"
               :title="t('profile.removePicture')"
-              @click="act({ type: 'remove-profile-picture' })"
+              @click="deleteWithUndo({ type: 'remove-profile-picture' }, t('profile.pictureRemoved'))"
             >
               <X class="size-3.5" />
             </Button>

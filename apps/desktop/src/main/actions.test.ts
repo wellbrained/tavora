@@ -194,6 +194,7 @@ const ACCEPTED: [{ type: string; [field: string]: unknown }][] = [
   [{ type: "save-profile", name: "", initials: "" }],
   [{ type: "set-profile-picture", png: "iVBORw0KGgo=" }],
   [{ type: "remove-profile-picture" }],
+  [{ type: "remove-overlay-picture" }],
   [{ type: "account-rename-device", deviceId: "dev_1-x", name: "Living room PC" }],
   [{ type: "set-rail", expanded: true }],
   [{ type: "set-rail", width: 300 }],

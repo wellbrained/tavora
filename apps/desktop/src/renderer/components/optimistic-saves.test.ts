@@ -123,6 +123,26 @@ async function mountReviews(first: CatalogReviewsResult) {
 }
 
 describe("ratings and reviews", () => {
+  it("asks before deleting your review, and keeps it on Cancel", async () => {
+    const mine = { stars: 5, text: null, version: "1.0.0", hidden: false, held: false };
+    host.act.mockResolvedValue(ok);
+    host.api.catalogReviews.mockResolvedValue(reviews());
+    await mountReviews(reviews({ mine }));
+    const inDialog = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+    await click("catalog-reviews-delete");
+    expect(document.body.textContent).toContain("Delete your review?");
+    expect(host.act).not.toHaveBeenCalled();
+    [...document.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Cancel")!.click();
+    await settle();
+    expect(inDialog("confirm-submit")).toBeNull();
+    expect(host.act).not.toHaveBeenCalled();
+    await click("catalog-reviews-delete");
+    inDialog("confirm-submit")!.click();
+    await settle();
+    expect(host.act).toHaveBeenCalledWith({ type: "unrate-catalog-module", moduleId: "wellbrained.tracker" }, { quiet: true });
+    expect(inDialog("confirm-submit")).toBeNull();
+  });
+
   it("posting shows the rating at once, without disabling anything, and Delete waits for the save", async () => {
     const saving = deferred<{ ok: boolean }>();
     host.act.mockReturnValueOnce(saving.promise);

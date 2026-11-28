@@ -56,6 +56,18 @@ describe("UserProfile", () => {
     expect(calls.filter((call) => call === "account told")).toHaveLength(3);
   });
 
+  it("gives a picture the user took away back, unless there is another by then", async () => {
+    const { user, dir, profile } = await setup();
+    expect(await user.takePicture()).toBeNull();
+    await user.setPicture(png());
+    const restore = (await user.takePicture())!;
+    expect(await readdir(dir)).toEqual([]);
+    expect(await restore()).toBe(true);
+    expect(await readdir(dir)).toEqual([profile.picture]);
+    expect((await user.data()).picture).toBe(png());
+    expect(await restore()).toBe(false);
+  });
+
   it("refuses a picture that isn't a 256 px PNG, and keeps the one it had", async () => {
     const { user, calls, profile } = await setup();
     await expect(user.setPicture(png(10, 10))).rejects.toMatchObject({ key: "error.pictureNotSaved" });

@@ -610,7 +610,7 @@ for (const mode of [
       await page.getByTestId("layout-game-option-$all").click();
       await expect.poll(async () => (await state(page)).preview.choice).toBe("32:9");
 
-      // Remove picture takes the file away and brings the hint back.
+      // Remove picture takes the file away and brings the hint back (its toast offers Undo).
       await page.getByTestId("layout-remove-picture").click();
       await expect.poll(async () => (await state(page)).picture).toBeNull();
       await expect(page.getByTestId("layout-picture-hint")).toBeVisible();
