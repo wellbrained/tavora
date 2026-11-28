@@ -1,7 +1,7 @@
 // To-Dos' texts in English and German. Keys are flat; `.one` / `.other` pair up for numbers.
 export const en = {
   loading: "Loading to-dos…",
-  connectError: "Could not connect: {error}",
+  connectError: "Couldn't connect: {error}",
   cancel: "Cancel",
   moreFor: "More for {name}",
   more: "More",
@@ -27,7 +27,7 @@ export const en = {
   "app.finishedDeleted.other": "Deleted {count} finished to-dos",
   "app.undoFinished": "Finished “{title}”",
   "app.undoDeleted": "Deleted “{title}”",
-  "store.saveError": "Could not save: {error}",
+  "store.saveError": "Couldn't save: {error}",
 
   "settings.title": "Settings",
   "settings.overlays": "Overlays",
@@ -86,7 +86,7 @@ export const en = {
   "group.hidden.one": "{count} finished to-do hidden.",
   "group.hidden.other": "{count} finished to-dos hidden.",
   "group.addTo": "Add to {name}",
-  "group.addSub": "Add a sub-to-do",
+  "group.addSub": "Add sub-to-do",
   "group.addHint": "Tab and Shift+Tab change the level",
 
   "task.drag": "Drag to move",
@@ -147,7 +147,7 @@ export const de: Record<keyof typeof en, string> = {
   "app.finishedDeleted.other": "{count} erledigte To-Dos gelöscht",
   "app.undoFinished": "„{title}“ erledigt",
   "app.undoDeleted": "„{title}“ gelöscht",
-  "store.saveError": "Konnte nicht gespeichert werden: {error}",
+  "store.saveError": "Speichern ging nicht: {error}",
 
   "settings.title": "Einstellungen",
   "settings.overlays": "Overlays",
@@ -196,7 +196,7 @@ export const de: Record<keyof typeof en, string> = {
   "color.teal": "Türkis",
   "color.blue": "Blau",
   "color.violet": "Violett",
-  "color.pink": "Rosa",
+  "color.pink": "Pink",
   "color.white": "Weiß",
   "color.black": "Schwarz",
   "group.moveUp": "Gruppe nach oben",
@@ -236,5 +236,5 @@ export const de: Record<keyof typeof en, string> = {
   "task.deleteTitle": "„{title}“ löschen",
   "task.addBelow": "To-Do darunter hinzufügen",
   "task.addSub": "Unter-To-Do hinzufügen",
-  "task.addSub.off": "Sub-To-Dos können höchstens {count} Ebenen tief gehen.",
+  "task.addSub.off": "Unter-To-Dos können höchstens {count} Ebenen tief gehen.",
 };

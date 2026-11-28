@@ -2,7 +2,7 @@
 
 **Status:** `apiVersion` `"1"`, stable from Tavora 1.0.
 
-Every module package has a `tavora.module.json` at its root. Tavora refuses to load a module whose manifest has errors, including fields it does not know: a typo should fail loudly, not be ignored.
+Every module package has a `tavora.module.json` at its root. Tavora refuses to load a module whose manifest has errors, including fields it does not know: a typo is reported as an error, not ignored.
 
 ```json
 {

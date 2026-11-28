@@ -127,6 +127,6 @@ const { boards } = await tavora.leaderboards.mine();
 
 A period is `null` where the user isn't on the board, and all of them are while signed out or not shown. Tavora also lists these ranks in the user's profile card for every catalog module they joined; the user can hide that list.
 
-## What users can trust
+## What your module learns about users
 
 Your module never learns who a user is: no account id, email or anything made from one, only their public name on your boards and which line is theirs. Results come from the user's PC, so these are casual rankings, not verified competition. See the [security model](./security.md#leaderboards).

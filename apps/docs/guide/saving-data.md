@@ -7,7 +7,7 @@ Your page has no files of its own to write. Everything it keeps goes through the
 | `tavora.storage` | Small settings: a filter, a sort order, a counter | All panels of your module in this workspace | The user deletes the module's data |
 | `tavora.storage.app` | Settings that should be the same in every workspace | All panels of your module in every workspace | As above |
 | `tavora.documents` | The user's work: a plan, a list, a note | All panels of your module in this workspace, with revisions | As above |
-| `tavora.blobs` | Pictures too big for a document | All panels of your module in this workspace | The workspace is deleted |
+| `tavora.blobs` | Pictures, PDFs and sounds too big for a document | All panels of your module in this workspace | The workspace is deleted |
 | `tavora.panel` state | Where this one panel is: open tab, scroll position | This panel only | The panel closes |
 
 A module never sees another module's data, or its own data from another workspace (except `storage.app`). Values must be plain JSON: no `Date`, `Map`, `undefined` or typed arrays. The limits are in the [protocol reference](../reference/protocol.md#limits).
@@ -176,7 +176,7 @@ const info = await tavora.blobs.put(file); // a File or Blob from an <input> or 
 img.src = tavora.blobs.url(info.id);
 ```
 
-PNG, JPEG, GIF and WebP pictures and PDF files only, up to 50 MB each and 500 MB per module and workspace. Keep the returned `id` in a document. Tavora picks the ids; you never name a file.
+PNG, JPEG, GIF and WebP pictures, PDF files and MP3, Ogg and WAV sounds (Tavora 0.23.101 and newer) only, up to 50 MB each and 500 MB per module and workspace. Keep the returned `id` in a document. Tavora picks the ids; you never name a file.
 
 ## Panel state
 

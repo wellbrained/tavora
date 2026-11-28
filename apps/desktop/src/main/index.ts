@@ -256,6 +256,7 @@ if (!app.requestSingleInstanceLock()) {
         "Something went wrong while Tavora was starting.",
         error instanceof Error ? (error.stack ?? error.message) : String(error),
         windowStart === "behind" || windowStart === "minimized",
+        "startupFailure.message",
       );
       app.exit(1);
     });

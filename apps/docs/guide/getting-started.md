@@ -3,7 +3,7 @@
 A Tavora module is a web page that runs in a sandboxed panel inside Tavora Desktop, next to a game or any other workspace. Tavora runs on Windows 10 and 11 only. It talks to the host through `@tavora/sdk`, and it ships as a folder with a [`tavora.module.json`](../reference/manifest.md) manifest and its built files.
 
 ::: tip Stable from 1.0
-`@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md), and from Tavora 1.0 a module you build keeps working. Things are added, not taken away: anything that has to go is deprecated first, and removed only in a new major version. The [changelog](../reference/changelog.md) says what changed and which Tavora a version needs.
+`@tavora/sdk` speaks [bridge protocol v1](../reference/protocol.md), and from Tavora 1.0 a module you build keeps working. We only add things. Anything that has to go is deprecated first, and removed only in a new major version. The [changelog](../reference/changelog.md) says what changed and which Tavora a version needs.
 :::
 
 ## Make a project
@@ -176,7 +176,7 @@ Settings go in `tavora.storage`, the user's work in `tavora.documents`, pictures
 | API | What it does |
 | --- | --- |
 | `tavora.ui.getLanguage()`, `onLanguageChange` | The language of Tavora's own texts (`"en"`, `"de"`). Show your module in it, or in English when you have no translation. |
-| `tavora.blobs` | Pictures too big for a document: up to 50 MB each and 500 MB per module and workspace. `put` a file, show it with `url(id)`. See [Files](../reference/protocol.md#files-blobs). |
+| `tavora.blobs` | Pictures, PDFs and sounds too big for a document: up to 50 MB each and 500 MB per module and workspace. `put` a file, show it with `url(id)`. See [Files](../reference/protocol.md#files-blobs). |
 | `tavora.clipboard.writeImage(png)` | Puts a PNG on the system clipboard. Call it from the click or key press that asked for it. See [Clipboard](../reference/protocol.md#clipboard). |
 | `tavora.links.open(url)` | Opens a web address in the workspace's Browser panel, from a click or key press. |
 | `tavora.network.fetch(url, init)` | A web request to a host listed in `permissions.network`, once the user granted it. See [Network](../reference/protocol.md#network). |
@@ -232,6 +232,6 @@ Tell users what changed in `changelog.json`, which the starter makes and the man
 ]
 ```
 
-Users read them under the module in **Settings > Modules > Patch notes**. After an update, the notes newer than the version they had are marked New until they open them. Each line is plain text of at most 500 characters, at most 20 lines per version and 100 versions; Publishing refuses a changelog Tavora could not show; **Save to project** drops the oldest version of a full one. Needs Tavora 0.18.2 or newer, so set `minTavora` to at least `0.18.2`.
+Users read them under the module in **Settings > Modules > Patch notes**. After an update, the notes newer than the version they had are marked New until they open them. Each line is plain text of at most 500 characters, at most 20 lines per version and 100 versions. Publishing refuses a changelog Tavora could not show, and **Save to project** drops the oldest version of a full one. Needs Tavora 0.18.2 or newer, so set `minTavora` to at least `0.18.2`.
 
 Something not working? See [Troubleshooting](./troubleshooting.md).

@@ -45,7 +45,7 @@ If something blocks the upload, the screen says what and offers the fix:
 - **The id doesn't start with one of your prefixes:** type a new id. For a prefix you hold, press **Use it**; Tavora saves the id in `tavora.module.json`, then **Publish** works. For a prefix you don't hold yet, press **Check** first, then **Claim it**. **Publish** stays off, and says why when you point at it, until the review has nothing left to fix.
 - **Nothing is built yet:** run the `build` script, then press **Check again**.
 
-Press **Publish** on the review screen to sign the zip with your key and upload it with your sign-in. That press is your yes; nothing else asks. Your secret key never leaves Tavora, and the key alone can't publish: the service also checks that the account signed in is the one the key is linked to.
+Press **Publish** on the review screen to sign the zip with your key and upload it with your sign-in. Pressing it confirms the upload. Nothing else asks. Your secret key never leaves Tavora, and the key alone can't publish: the service also checks that the account signed in is the one the key is linked to.
 
 Every upload sends an email to your account's address (up to 10 a day), naming the module, the version and whether it came from Tavora or which publish token. On a busy day a mail can be skipped, and an account without an email address gets none; **Settings > Developer > Publishing** then lists each one under **Emails not sent**. If you didn't publish it, write to [tavora.app@gmail.com](mailto:tavora.app@gmail.com) right away, and change your email: that signs every device out, stops every publish token and pauses your publisher keys until you link them again.
 

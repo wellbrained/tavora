@@ -2,14 +2,16 @@
 // closed on every start without a word, and nobody could tell what had happened.
 import os from "node:os";
 import path from "node:path";
-import { dialog } from "electron";
+import { app, dialog } from "electron";
 import { appendStartupLog } from "./diagnostics";
+import { resolveLanguage, translate, type MessageKey } from "../shared/i18n";
 
 /**
  * Writes the startup log and shows a message box. Waits until the user closes it; the caller then quits. `quiet`
  * leaves the box out: a development start in the background only logs, and comes back after the next build.
+ * The log keeps `message` as it is; the box shows `shown` in the system's language when one is given.
  */
-export function reportStartupFailure(userData: string, message: string, detail?: string, quiet = false): void {
+export function reportStartupFailure(userData: string, message: string, detail?: string, quiet = false, shown?: MessageKey): void {
   console.error(`[tavora] ${message}${detail ? `\n${detail}` : ""}`);
   const log = path.join(userData, "logs", "startup.log");
   try {
@@ -18,5 +20,7 @@ export function reportStartupFailure(userData: string, message: string, detail?:
     // The message box still tells the user; a full or read-only disk shouldn't hide it.
   }
   if (quiet) return;
-  dialog.showErrorBox("Tavora could not start", `${message}\n\nIf this keeps happening, send this file to whoever helps you with Tavora:\n${log}`);
+  const language = resolveLanguage("system", app.getLocale());
+  const text = shown ? translate(language, shown) : message;
+  dialog.showErrorBox(translate(language, "startupFailure.title"), `${text}\n\n${translate(language, "startupFailure.send")}\n${log}`);
 }

@@ -87,8 +87,8 @@ test('a card that says pinnable: false has no pin hint, and one without the fiel
             await expect.poll(async () => (await tooltip(app))?.visible).toBe(false);
             return spans as string[];
         };
-        expect((await footer('pin:default', '')).join(' ')).toContain('Click to pin item details');
-        expect((await footer('pin:yes', ',pinnable:true')).join(' ')).toContain('Click to pin item details');
+        expect((await footer('pin:default', '')).join(' ')).toContain('Click to pin');
+        expect((await footer('pin:yes', ',pinnable:true')).join(' ')).toContain('Click to pin');
         const none = await footer('pin:no', ',pinnable:false');
         expect(none).toHaveLength(1);
         expect(none.join(' ')).not.toMatch(/pin/i);

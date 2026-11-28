@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { styleMarks, type TavoraTheme } from "@tavora/sdk/protocol";
 import type { AppearanceView, HostAction } from "../shared/host-api";
-import { translate } from "../shared/i18n";
+import { translate, type Language } from "../shared/i18n";
 import { CLASSIC_STYLE_ID, resolveFontId, resolveRadius } from "../shared/styles";
 import { themeFont } from "../shared/ui-fonts";
 import { writeFileAtomic } from "./fsutil";
@@ -41,6 +41,8 @@ export interface AppearanceOptions {
   userData: string;
   /** Where themes and styles come from: Tavora's own, then the user's (their data folder's themes and styles folders). */
   sources: { themes: ThemeSources; styles: StyleSources };
+  /** The app's language, which names a new copy of a theme or style. */
+  language?: () => Language;
   /** Tavora's version, for themes that need a newer one. */
   appVersion: string;
   /** What Host.create found at the start. */
@@ -183,11 +185,11 @@ export class Appearance {
     const starter =
       kind === "theme"
         ? (n: number) => {
-            const theme = starterTheme(this.looks.themes, n);
+            const theme = starterTheme(this.looks.themes, n, this.options.language?.());
             return { id: theme.id, folder: path.join(root, n > 1 ? `my-theme-${n}` : "my-theme"), taken: this.looks.themes.has(theme.id), files: { [THEME_MANIFEST]: themeManifest(theme), "README.txt": STARTER_README } };
           }
         : (n: number) => {
-            const style = starterStyle(base, n);
+            const style = starterStyle(base, n, this.options.language?.());
             return { id: style.id, folder: path.join(root, style.id.replace(/^local\./, "")), taken: this.looks.styles.has(style.id), files: { [STYLE_MANIFEST]: styleManifest(style), "README.txt": STYLE_README } };
           };
     let suffix = 1;

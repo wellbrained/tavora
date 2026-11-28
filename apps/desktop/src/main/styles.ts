@@ -10,6 +10,7 @@ import { candidates, glassOpacity, insetPanelTheme, moduleTheme, withRadius, typ
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
 import { CLASSIC_STYLE_ID, resolveFontId, resolveRadius, STYLE_RADIUS } from "../shared/styles";
 import { DEFAULT_FONT_ID, themeFont, UI_FONTS, type UiFontId } from "../shared/ui-fonts";
+import { translate, type Language } from "../shared/i18n";
 import { isRecord } from "../shared/is-record";
 
 export const STYLE_MANIFEST = "tavora.style.json";
@@ -248,14 +249,14 @@ function starterId(base: StylePackage, suffix: number): string {
  * A style to copy and change: `base` (the style in use) under a new id and name ("My Hardware", "My Hardware 2"), with
  * its looks, values, radius, font and themes. Built from a checked style, so it always passes validation.
  */
-export function starterStyle(base: StylePackage, suffix: number): StylePackage {
+export function starterStyle(base: StylePackage, suffix: number, language: Language = "en"): StylePackage {
   const tag = suffix > 1 ? ` ${suffix}` : "";
-  const name = `My ${base.name}`.slice(0, STYLE_LIMITS.name - tag.length).trimEnd() + tag;
+  const name = translate(language, "starter.styleName", { name: base.name }).slice(0, STYLE_LIMITS.name - tag.length).trimEnd() + tag;
   return {
     id: starterId(base, suffix),
     name,
-    description: `A copy of ${base.name} to make your own.`.slice(0, STYLE_LIMITS.description),
-    author: "You",
+    description: translate(language, "starter.styleDescription", { name: base.name }).slice(0, STYLE_LIMITS.description),
+    author: translate(language, "starter.author"),
     version: "1.0.0",
     looks: { ...base.looks },
     values: { ...base.values },

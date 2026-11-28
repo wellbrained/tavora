@@ -9,7 +9,7 @@ import { Notice } from "@tavora/official-ui/components/ui/notice";
     <Notice variant="success">Imported 24 to-dos.</Notice>
     <Notice variant="warning" title="Almost full">This note is almost at its size limit.</Notice>
     <Notice variant="destructive">
-      Could not save. Your change is kept and will be tried again.
+      Couldn't save. Your change is kept and will be tried again.
       <template #action><Button size="xs" variant="secondary">Retry</Button></template>
     </Notice>
   </div>

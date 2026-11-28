@@ -1,6 +1,6 @@
 # Your publisher key
 
-Every version you publish, and every zip you share, is signed with your publisher key. To Tavora, the key is who you are: not your name, not your account.
+Every version you publish, and every zip you share, is signed with your publisher key. Tavora identifies you by this key, not by your name or account.
 
 ## What the key decides
 

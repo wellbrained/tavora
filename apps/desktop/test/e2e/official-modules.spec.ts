@@ -166,7 +166,7 @@ test("notes: write, pin and search notes, and find them again after a restart", 
   );
   await expect.poll(() => noteTitles(app)).toEqual(["Count Geonor"]);
   await inModule(app, NOTES, `(() => { const input = ${q("search")}; input.value = "nothing like this"; input.dispatchEvent(new Event("input")); })()`);
-  await expectModuleText(app, NOTES, "no-results", `No notes match "nothing like this".`);
+  await expectModuleText(app, NOTES, "no-results", `No notes match “nothing like this”.`);
 
   // Notes belong to their game.
   await openWorkspace(page, "satisfactory");

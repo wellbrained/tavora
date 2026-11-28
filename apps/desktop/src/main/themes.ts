@@ -10,6 +10,7 @@ import { isModuleId, isReleaseVersion, needsNewerTavora } from "@tavora/module-s
 import { DEFAULT_THEME_FONT, OPTIONAL_THEME_TOKENS, THEME_TOKENS, type TabOverflow, type TavoraStyle, type TavoraTheme, type ThemeFont, type ThemeToken, type ToastPosition } from "@tavora/sdk/protocol";
 import { THEME } from "./games";
 import { OFFICIAL_PREFIX, type Provenance } from "./registry";
+import { translate, type Language } from "../shared/i18n";
 import { isRecord } from "../shared/is-record";
 import { compareModuleVersions } from "../shared/module-version";
 
@@ -586,14 +587,14 @@ https://docs.mytavora.app/reference/theme
  * A theme to copy and change: the Tavora default's variations under a new id
  * and name. Built from the installed default, so it always passes validation.
  */
-export function starterTheme(themes: Map<string, InstalledTheme>, suffix: number): ThemePackage {
+export function starterTheme(themes: Map<string, InstalledTheme>, suffix: number, language: Language = "en"): ThemePackage {
   const base = themes.get(DEFAULT_THEME.id)?.theme ?? FALLBACK_THEME;
   const tag = suffix > 1 ? ` ${suffix}` : "";
   return {
     id: `local.my-theme${suffix > 1 ? `-${suffix}` : ""}`,
-    name: `My theme${tag}`,
-    description: "A copy of the Tavora theme to make your own.",
-    author: "You",
+    name: `${translate(language, "starter.themeName")}${tag}`,
+    description: translate(language, "starter.themeDescription"),
+    author: translate(language, "starter.author"),
     version: "1.0.0",
     minTavora: null,
     variations: base.variations.map((variation) => ({ ...variation, colors: { ...variation.colors } })),
