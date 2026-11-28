@@ -83,6 +83,23 @@ describe("over the game", () => {
     expect(document.documentElement.classList.contains("over-game")).toBe(false);
   });
 
+  it("drops an open delete question when the panel goes over the game, and doesn't ask again after", async () => {
+    const host = await mount();
+    host.answer("ui.showMenu", () => "delete");
+    $("[data-testid=group-menu]")!.click();
+    await settle();
+    expect($("[data-testid=confirm]")).not.toBeNull();
+
+    host.setPanelOverGame(true);
+    await settle();
+    expect($("[data-testid=confirm]")).toBeNull();
+
+    host.setPanelOverGame(false);
+    await settle();
+    expect($("[data-testid=confirm]")).toBeNull();
+    expect(stored(host).groups).toHaveLength(1);
+  });
+
   it("shows the plate when the page loads while the panel is already over the game", async () => {
     await mount({ overGame: true });
     expect($("[data-testid=edit-plate]")).not.toBeNull();

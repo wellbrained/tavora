@@ -1130,6 +1130,25 @@ describe("the game picture", () => {
     expect(await pictures.has("elden")).toBe(false);
   });
 
+  it("undoes a removal for a game added again, never one from before it left", async () => {
+    const { layout, flush, pictures } = setup([clock("a")], { choose: PNG });
+    const choose = async () => {
+      layout.handle({ type: "choose-picture" }, true);
+      await flush();
+    };
+    layout.open("elden");
+    await choose();
+    const before = (await layout.removePicture())!;
+    layout.forgetWorkspace("elden");
+    await flush();
+    // The same id is given out again, with a new picture.
+    await choose();
+    const after = (await layout.removePicture())!;
+    expect(await before()).toBe(false);
+    expect(await after()).toBe(true);
+    expect(await pictures.has("elden")).toBe(true);
+  });
+
   it("is removed with the game", async () => {
     const { layout, flush, pictures } = setup([clock("a")], { choose: PNG });
     layout.open("elden");
