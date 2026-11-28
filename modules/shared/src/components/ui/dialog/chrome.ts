@@ -1,5 +1,5 @@
 // What DialogContent shares with the header inside it: whether the dialog has a close X at all, and whether the
-// header draws it (centred against the title) or DialogContent has to place it at the corner.
+// header draws it (at the top of the title row) or DialogContent has to place it at the corner.
 import type { InjectionKey, Ref } from "vue"
 
 export interface DialogChrome {

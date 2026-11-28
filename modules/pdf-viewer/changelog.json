@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.95",
+    "date": "2026-11-28",
+    "notes": [
+      "Dialogs: the message sits under the title row, never beside the icon."
+    ]
+  },
+  {
     "version": "0.1.94",
     "date": "2026-11-28",
     "notes": [

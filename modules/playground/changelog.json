@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.126",
+    "date": "2026-11-28",
+    "notes": [
+      "Dialogs: the message sits under the title row, never beside the icon. Path of Exile 2 cards get a new frame."
+    ]
+  },
+  {
     "version": "0.1.125",
     "date": "2026-11-28",
     "notes": [

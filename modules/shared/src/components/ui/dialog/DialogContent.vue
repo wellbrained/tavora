@@ -53,7 +53,7 @@ const root = injectDialogRootContext()
 const attrs = useAttrs()
 const layer = useLayer("dialog", root.open, { name: () => attrs["data-testid"] as string | undefined, kept: () => !!props.forceMount })
 
-// A DialogHeader with a title draws the close X itself (centred against the title); without one the X sits in the corner.
+// A DialogHeader with a title draws the close X itself (at the top of the title row); without one the X sits in the corner.
 const headerClose = ref(false)
 provide(dialogChromeKey, { showClose: toRef(props, "showCloseButton"), headerClose })
 

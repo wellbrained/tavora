@@ -107,12 +107,12 @@ describe("tooltip page and the kit's card: the PoE look's frame", () => {
         expect(TOOLTIP_DOCUMENT).toContain("body.poe .art img{border-color:var(--frame-mid)}");
     });
 
-    it("is a border picture reaching 3px out in both, with a diamond on each divider", () => {
-        expect(KIT_CSS).toContain("border-image:var(--ic-frame) 26 / 26px / 3px stretch");
-        expect(TOOLTIP_DOCUMENT).toContain("border-image:var(--frame) 26 / 26px / 3px stretch");
+    it("is a nine-slice border picture reaching 3px out in both, with a soft glow inside and fading divider bars", () => {
+        expect(KIT_CSS).toContain("border-image:var(--ic-frame) 15 / 15px / 3px stretch;box-shadow:inset 0 0 22px -6px color-mix(in srgb,var(--ic-frame-mid) 70%,transparent)");
+        expect(TOOLTIP_DOCUMENT).toContain("border-image:var(--frame) 15 / 15px / 3px stretch;box-shadow:inset 0 0 22px -6px color-mix(in srgb,var(--frame-mid) 70%,transparent)");
         // The window keeps the 3px the pieces reach out by (preload/tooltip.ts adds the card's margin to its size).
         expect(TOOLTIP_DOCUMENT).toContain("body.poe #card{margin:3px;max-height:calc(100vh - 6px);");
         for (const css of [KIT_CSS, TOOLTIP_DOCUMENT])
-            expect(css).toContain("top:-3.5px;box-sizing:border-box;width:6px;height:6px;margin-left:-3px;rotate:45deg;");
+            expect(css).toContain("left:0;right:0;height:1px;top:-1px;background:linear-gradient(90deg,transparent,");
     });
 });
