@@ -28,6 +28,18 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.26.3",
+    date: "2026-11-28",
+    title: "Safer start",
+    notes: [
+      "Tavora now also refuses to start with an unsafe switch hidden behind an unusual space.",
+    ],
+    prs: [
+      { number: 1058, title: "Fix security audit run 3 findings" },
+    ],
+    tags: ["accounts", "privacy", "service", "website"],
+  },
+  {
     version: "0.26.2",
     date: "2026-11-28",
     title: "Safer files and updates",
