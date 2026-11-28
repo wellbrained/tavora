@@ -245,5 +245,10 @@ test("to-dos: a group with to-dos asks first; an empty one goes at once and come
   await inModule(app, TODOS, `[...document.querySelectorAll('[data-testid="undo-toast"]')].find((el) => el.innerText.includes("Defeat the Elder")).querySelector('[data-testid="undo"]').click()`);
   await expect.poll(() => inModule(app, TODOS, `!!${q("undo-gone")}`)).toBe(true);
   await expect.poll(() => groupNames(app)).toEqual(["To-Dos", "Places"]);
+  // Ctrl+Z (outside a text field) takes back the newest open delete: the empty group.
+  await deleteGroup(app, page, "Places");
+  await expect.poll(() => groupNames(app)).toEqual(["To-Dos"]);
+  await inModule(app, TODOS, `document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }))`);
+  await expect.poll(() => groupNames(app)).toEqual(["To-Dos", "Places"]);
   await app.close();
 });

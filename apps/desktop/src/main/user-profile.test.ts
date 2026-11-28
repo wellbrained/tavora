@@ -19,6 +19,7 @@ function png(width = 256, height = 256): string {
 
 async function setup() {
   const calls: string[] = [];
+  const signedIn = { id: null as string | null };
   const dir = await mkdtemp(path.join(tmpdir(), "tavora-profile-"));
   const profile = sanitizeProfile({});
   const library = emptyLibrary();
@@ -29,10 +30,11 @@ async function setup() {
     library,
     save: async () => void calls.push(`saved ${profile.name} ${profile.picture ?? "no picture"}`),
     changed: () => void calls.push("account told"),
+    accountId: () => signedIn.id,
     pushState: () => void calls.push("push"),
     now: () => new Date("2026-11-22T10:00:00Z"),
   });
-  return { user, calls, dir, profile, library };
+  return { user, calls, dir, profile, library, signedIn };
 }
 
 describe("UserProfile", () => {
@@ -66,6 +68,18 @@ describe("UserProfile", () => {
     expect(await readdir(dir)).toEqual([profile.picture]);
     expect((await user.data()).picture).toBe(png());
     expect(await restore()).toBe(false);
+  });
+
+  it("doesn't give a picture back once another account is signed in", async () => {
+    const { user, profile, signedIn } = await setup();
+    signedIn.id = "account-a";
+    await user.setPicture(png());
+    const restore = (await user.takePicture())!;
+    signedIn.id = "account-b";
+    expect(await restore()).toBe(false);
+    expect(profile.picture).toBeNull();
+    signedIn.id = "account-a";
+    expect(await restore()).toBe(true);
   });
 
   it("refuses a picture that isn't a 256 px PNG, and keeps the one it had", async () => {

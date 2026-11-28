@@ -18,6 +18,8 @@ export interface UserProfileOptions {
   save: () => Promise<void>;
   /** The account hears the profile changed, so it goes up. */
   changed: () => void;
+  /** Who is signed in now (null: nobody); Undo of a removed picture checks it is still the same account. */
+  accountId: () => string | null;
   /** Something the host UI shows changed. */
   pushState: () => void;
   now?: () => Date;
@@ -60,15 +62,16 @@ export class UserProfile {
 
   /**
    * The user took their picture away. Answers with how to give it back (for Undo), or null when there was nothing to
-   * keep; that says false once another picture is there.
+   * keep; that says false once another picture is there or another account is signed in.
    */
   async takePicture(): Promise<(() => Promise<boolean>) | null> {
     const { profile, dir } = this.options;
     const png = profile.picture ? await readFile(path.join(dir, profile.picture)).then((bytes) => bytes.toString("base64"), () => null) : null;
+    const account = this.options.accountId();
     await this.setPicture(null);
     if (png === null) return null;
     return async () => {
-      if (profile.picture !== null) return false;
+      if (profile.picture !== null || this.options.accountId() !== account) return false;
       await this.setPicture(png);
       return true;
     };

@@ -211,6 +211,14 @@ describe("removing a hotkey in Settings", () => {
     expect(streaming.removeHotkey({ ...binding, target: "none" })).toBeNull();
   });
 
+  it("brings nothing back once the module removed the item's key itself", async () => {
+    const { streaming, hotkeys } = await withKey();
+    const restore = streaming.removeHotkey(binding)!;
+    hotkeys.remove("item-1", null);
+    expect(restore()).toBe(false);
+    expect(streaming.keyOf(binding)).toBeNull();
+  });
+
   it("stays removed once its workspace is gone", async () => {
     const { streaming } = await withKey();
     const restore = streaming.removeHotkey(binding)!;

@@ -906,6 +906,7 @@ export class Host {
       library,
       save: () => this.saveProfile(),
       changed: () => void this.account.profileChanged(),
+      accountId: () => this.account.accountId(),
       pushState: () => this.pushState(),
     });
     this.discord = Host.discordConnector(options, prepared.encryptor, (view) => {

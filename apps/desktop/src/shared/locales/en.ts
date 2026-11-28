@@ -1241,7 +1241,7 @@ export const en = {
   "catalog.reviews.delete": "Delete",
   "catalog.reviews.deleteTitle": "Delete your review?",
   "catalog.reviews.replyDeleteTitle": "Delete your reply?",
-  "catalog.reviews.deleteMessage": "You can’t undo this.",
+  "catalog.reviews.deleteMessage": "You can't undo this.",
   "catalog.reviews.signIn": "Sign in to rate this module.",
   "catalog.reviews.signInButton": "Sign in",
   "catalog.reviews.own": "It's your module, so you can't rate it. You can reply to reviews.",

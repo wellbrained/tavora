@@ -200,7 +200,10 @@ export class Streaming {
       list: (): HotkeyBinding[] => this.hotkeys.of(module.owner, module.manifest.id, workspaceId).filter((record) => !isOverlayAction(record.action)).map(({ action, target }) => ({ action, target })),
       set: (action: string, target: string, label: string) => this.ask({ owner: module.owner, moduleId: module.manifest.id, workspaceId, action, target }, label),
       remove: (target: string, action: string | null) => {
-        if (this.hotkeys.remove((record) => own(record) && record.target === target && (action === null || record.action === action))) this.changed();
+        const matches = (record: HotkeyRecord) => own(record) && record.target === target && (action === null || record.action === action);
+        // The module took the item's key itself: an Undo from Settings has nothing of it to bring back.
+        this.dropRemovedKeys(matches);
+        if (this.hotkeys.remove(matches)) this.changed();
       },
     };
   }
