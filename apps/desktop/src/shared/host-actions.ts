@@ -359,6 +359,8 @@ export function hostActionTable(c: HostChecks) {
     "save-profile": { name: c.profileName, initials: c.initials },
     "set-profile-picture": { png: c.picture },
     "remove-profile-picture": {},
+    /** The picture of the setup the Overlay page shows. */
+    "remove-overlay-picture": {},
 
     // Modules
     /** Opens the user's modules folder in the file manager, creating it first. */

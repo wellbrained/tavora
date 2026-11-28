@@ -81,6 +81,8 @@ const SAVES: Record<SaveKind, { title: [string, string]; filter: [string, string
 /** A remembered folder: one of Tavora's own dialogs, or a module's file dialogs (kept under owner:id). */
 type Memory = { place: DialogPlace } | { module: string };
 
+const PICTURE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp"]);
+
 export class FileDialogs {
   constructor(private readonly options: FileDialogsOptions) {}
 
@@ -164,10 +166,19 @@ export class FileDialogs {
    */
   async pickReadOnly(name: string, request: LinkFileRequest): Promise<string[]> {
     const german = this.german();
+    // Only pictures asked for (Notes, Whiteboard): the module gets a picture added, not a file it keeps reading.
+    const picture = request.extensions.every((extension) => PICTURE_EXTENSIONS.has(extension.toLowerCase()));
+    const words = picture
+      ? german
+        ? { title: `Bild zu ${name} hinzufügen`, button: "Bild hinzufügen" }
+        : { title: `Add a picture to ${name}`, button: "Add picture" }
+      : german
+        ? { title: `Datei mit ${name} verknüpfen`, button: "Datei verknüpfen" }
+        : { title: `Link a file to ${name}`, button: "Link file" };
     const picked = await this.options.dialogs.open({
       ...(request.start ? { defaultPath: request.start } : {}),
-      title: german ? `Datei mit ${name} verknüpfen` : `Link a file to ${name}`,
-      buttonLabel: german ? "Datei verknüpfen" : "Link file",
+      title: words.title,
+      buttonLabel: words.button,
       properties: request.multiple ? ["openFile", "multiSelections"] : ["openFile"],
       filters: [{ name: german ? "Datei auswählen" : "Choose a file", extensions: request.extensions }],
     });

@@ -200,7 +200,10 @@ export class Streaming {
       list: (): HotkeyBinding[] => this.hotkeys.of(module.owner, module.manifest.id, workspaceId).filter((record) => !isOverlayAction(record.action)).map(({ action, target }) => ({ action, target })),
       set: (action: string, target: string, label: string) => this.ask({ owner: module.owner, moduleId: module.manifest.id, workspaceId, action, target }, label),
       remove: (target: string, action: string | null) => {
-        if (this.hotkeys.remove((record) => own(record) && record.target === target && (action === null || record.action === action))) this.changed();
+        const matches = (record: HotkeyRecord) => own(record) && record.target === target && (action === null || record.action === action);
+        // The module took the item's key itself: an Undo from Settings has nothing of it to bring back.
+        this.dropRemovedKeys(matches);
+        if (this.hotkeys.remove(matches)) this.changed();
       },
     };
   }
@@ -238,9 +241,11 @@ export class Streaming {
   }
 
   /** Gives a binding its key back as it was (undo brought its item back), unless it has one again or another key uses it now. */
-  restoreKey(record: HotkeyRecord): void {
-    if (this.hotkeys.find(record) || this.hotkeys.conflict(record, record.accelerator, (key) => this.overlayKeys?.general(key) ?? false)) return;
-    if (this.hotkeys.set(record)) this.changed();
+  restoreKey(record: HotkeyRecord): boolean {
+    if (this.hotkeys.find(record) || this.hotkeys.conflict(record, record.accelerator, (key) => this.overlayKeys?.general(key) ?? false)) return false;
+    if (!this.hotkeys.set(record)) return false;
+    this.changed();
+    return true;
   }
 
   /** Takes away the hotkeys matching `test`. */
@@ -386,20 +391,37 @@ export class Streaming {
     this.overlays.resetAll();
   }
 
-  removeHotkey(binding: Omit<HotkeyRecord, "label" | "accelerator">): void {
-    this.hotkeys.remove((record) => sameBinding(record, binding));
+  /**
+   * The user removed a hotkey in Settings. Answers with how to give it back (for Undo), or null when it wasn't set; that
+   * says false once the binding has a key again, another one uses it, or its workspace or module is gone.
+   */
+  removeHotkey(binding: Omit<HotkeyRecord, "label" | "accelerator">): (() => boolean) | null {
+    const record = this.keyRecord(binding);
+    if (!record) return null;
+    this.removeKeys((other) => sameBinding(other, binding));
+    this.removedKeys.add(record);
+    return () => this.removedKeys.delete(record) && this.restoreKey(record);
+  }
+
+  /** Keys removed in Settings that Undo may still give back. */
+  private readonly removedKeys = new Set<HotkeyRecord>();
+
+  private dropRemovedKeys(test: (record: HotkeyRecord) => boolean): void {
+    for (const record of this.removedKeys) if (test(record)) this.removedKeys.delete(record);
   }
 
   /** A workspace left the library for good: its overlay links and hotkeys go too. */
   forgetWorkspace(workspaceId: string): void {
     this.overlays.forget((link) => link.workspaceId === workspaceId);
     this.hotkeys.remove((record) => record.workspaceId === workspaceId);
+    this.dropRemovedKeys((record) => record.workspaceId === workspaceId);
   }
 
   /** A module's data was deleted: its overlay links and hotkeys go too. */
   forgetModule(owner: string, moduleId: string): void {
     this.overlays.forget((link) => link.owner === owner && link.moduleId === moduleId);
     this.hotkeys.remove((record) => record.owner === owner && record.moduleId === moduleId);
+    this.dropRemovedKeys((record) => record.owner === owner && record.moduleId === moduleId);
   }
 
   private actionName(record: Pick<HotkeyRecord, "moduleId" | "action">): string {

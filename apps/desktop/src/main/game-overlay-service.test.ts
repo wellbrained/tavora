@@ -259,7 +259,7 @@ async function setup({ supported = true, enabled = true, file }: { supported?: b
       },
       keyOf: (binding) => (binding.action === OVERLAY_LAYER_ACTION && world.layerAccelerator ? { accelerator: world.layerAccelerator, taken: false } : null),
       keyRecord: (binding) => keys.find((record) => record.owner === binding.owner && record.moduleId === binding.moduleId && record.workspaceId === binding.workspaceId && record.action === binding.action && record.target === binding.target) ?? null,
-      restoreKey: (record) => void world.restoredKeys.push(record),
+      restoreKey: (record) => (world.restoredKeys.push(record), true),
     },
     installed: { shown: (id) => world.modules.get(id) },
     workspaces: {

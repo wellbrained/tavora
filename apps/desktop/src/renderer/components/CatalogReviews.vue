@@ -6,10 +6,10 @@ import { Trash2 } from "@lucide/vue";
 // the main process checks the rest and sends the installed version along. Every text is plain text,
 // and a reviewer's picture is a PNG the main process checked by its hash. Report sends only the review's id.
 // Posting a rating and a publisher's reply show at once and save in the background (they come back if saving fails);
-// deleting a rating or a reply and reporting wait for the answer.
-import { computed, onMounted, ref } from "vue";
+// deleting a rating or a reply asks first and, like reporting, waits for the answer.
+import { computed, nextTick, onMounted, ref, shallowRef } from "vue";
 import type { CatalogOwnReview, CatalogReviews, CatalogReviewsResult, CatalogReviewView } from "../../shared/host-api";
-import { act, api, dialog, notSaved, openProfile } from "../host";
+import { act, api, dialog, notSaved, openProfile, type ConfirmRequest } from "../host";
 import { useOptimistic, useOptimisticKeyed } from "@tavora/official-ui/optimistic";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { useTask } from "@tavora/official-ui/use-task";
@@ -18,6 +18,7 @@ import { Meter } from "@tavora/official-ui/components/ui/meter";
 import { StarRating } from "@tavora/official-ui/components/ui/star-rating";
 import { Textarea } from "@tavora/official-ui/components/ui/textarea";
 import { formatDate, formatNumber, t } from "../i18n";
+import ConfirmDialog from "./ConfirmDialog.vue";
 import ProfileAvatar from "./profile/ProfileAvatar.vue";
 
 const props = defineProps<{ moduleId: string; moduleName: string; publisher: string | null }>();
@@ -174,9 +175,49 @@ function keep() {
   void setMine(kept);
 }
 
-async function remove() {
+/** The question before a delete, over the module's page. */
+const asking = shallowRef<ConfirmRequest | null>(null);
+
+const root = ref<HTMLElement | null>(null);
+/** Where focus goes once the question is gone: the control that deleted is gone too, so it would fall to the page. */
+let focusAfter: string | null = null;
+
+function closeAsking() {
+  asking.value = null;
+  const selector = focusAfter;
+  focusAfter = null;
+  // After the dialog took its focus back (nothing, as the Delete button is gone).
+  if (selector) void nextTick(() => setTimeout(() => root.value?.querySelector<HTMLElement>(selector)?.focus(), 0));
+}
+
+/** Asks, then sends `action`; why it failed shows in the question, or at `fail` when that was closed meanwhile. */
+function askDelete(title: string, action: Parameters<typeof act>[0], done: () => Promise<void>, focus: string, fail?: (message: string) => void) {
+  focusAfter = null;
+  const request: ConfirmRequest = {
+    kind: "confirm",
+    danger: true,
+    title,
+    message: t("catalog.reviews.deleteMessage"),
+    confirm: t("catalog.reviews.delete"),
+    run: async () => {
+      let failed: string | null = null;
+      const ok = await run(action, (message) => {
+        failed = message;
+        if (asking.value !== request) (fail ?? ((text: string) => (error.value = text)))(message);
+      });
+      if (ok) {
+        focusAfter = focus;
+        await done();
+      }
+      return failed;
+    },
+  };
+  asking.value = request;
+}
+
+function remove() {
   if (mineWaiting.value) return;
-  if (await run({ type: "unrate-catalog-module", moduleId: props.moduleId })) await reload();
+  askDelete(t("catalog.reviews.deleteTitle"), { type: "unrate-catalog-module", moduleId: props.moduleId }, reload, '[data-testid="catalog-reviews-stars"] [role="radio"]');
 }
 
 function startReply(review: CatalogReviewView) {
@@ -198,14 +239,19 @@ function sendReply(review: CatalogReviewView) {
   void replyShown.set(review.id, { text: value, date: new Date().toISOString() });
 }
 
-/** Takes the reply away; this waits for the answer. */
-async function deleteReply(review: CatalogReviewView) {
+/** Asks, then takes the reply away; this waits for the answer. */
+function deleteReply(review: CatalogReviewView) {
   if (replyShown.waiting(review.id)) return;
-  const fail = (message: string) => (reviewErrors.value = { ...reviewErrors.value, [review.id]: message });
-  if (await run({ type: "reply-catalog-review", moduleId: props.moduleId, reviewId: review.id, text: null }, fail)) {
-    replying.value = null;
-    await reload();
-  }
+  askDelete(
+    t("catalog.reviews.replyDeleteTitle"),
+    { type: "reply-catalog-review", moduleId: props.moduleId, reviewId: review.id, text: null },
+    async () => {
+      replying.value = null;
+      await reload();
+    },
+    `[data-testid="catalog-review-${review.id}"] [data-testid="catalog-review-reply-start"]`,
+    (message) => (reviewErrors.value = { ...reviewErrors.value, [review.id]: message }),
+  );
 }
 
 async function report(review: CatalogReviewView) {
@@ -226,7 +272,7 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
 </script>
 
 <template>
-  <section data-testid="catalog-reviews" :data-status="loader.state.value.status" :aria-label="t('catalog.reviews.title')">
+  <section ref="root" data-testid="catalog-reviews" :data-status="loader.state.value.status" :aria-label="t('catalog.reviews.title')">
     <h3 class="mb-3 font-medium">{{ t("catalog.reviews.title") }}</h3>
     <p v-if="!result && !loader.error.value" class="text-muted-foreground text-sm" role="status">{{ t("catalog.reviews.loading") }}</p>
     <div v-else-if="!loaded" class="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" role="status" data-testid="catalog-reviews-missing">
@@ -324,5 +370,6 @@ const dateOf = (value: string) => (value && !Number.isNaN(Date.parse(value)) ? f
         </li>
       </ul>
     </template>
+    <ConfirmDialog v-if="asking" :key="asking.title" nested :request="asking" @close="closeAsking" />
   </section>
 </template>

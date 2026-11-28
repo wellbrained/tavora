@@ -3,7 +3,7 @@
   "id": "tavora.todos",
   "name": "To-Dos",
   "description": "What you want to do in this game, in your own groups, with sub-to-dos and pinned objectives.",
-  "version": "0.2.102",
+  "version": "0.2.103",
   "apiVersion": "1",
   "minTavora": "0.21.95",
   "entry": "dist/index.html",

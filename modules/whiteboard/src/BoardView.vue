@@ -17,7 +17,7 @@ import { language, t } from "./i18n";
 import Palette from "./Palette.vue";
 import type { PalettePlace } from "./palette";
 import PictureLocks from "./PictureLocks.vue";
-import type { ToolbarPlace } from "./toolbar";
+import { isPictureToolKey, type ToolbarPlace } from "./toolbar";
 
 const props = defineProps<{
   sdk: TavoraSDK;
@@ -36,6 +36,8 @@ const emit = defineEmits<{
   closed: [session: BoardSession];
   toolbar: [place: ToolbarPlace];
   palette: [place: PalettePlace];
+  /** 9, Excalidraw's shortcut for its picture tool, was pressed: the page adds a picture. */
+  picture: [];
 }>();
 
 /** The element Excalidraw fills. */
@@ -145,13 +147,22 @@ function toggleLock(id: string, locked: boolean) {
   session?.setPictureLocked(id, locked);
 }
 
+// Excalidraw's picture tool (its button is hidden in style.css) would open the system's file picker, which module
+// pages cannot, so its key never reaches Excalidraw. The tool itself stays, for paste and drop.
+function pictureKey(event: KeyboardEvent) {
+  if (!isPictureToolKey(event)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (!event.repeat) emit("picture");
+}
+
 function pointerMove(event: PointerEvent) {
   hoveredImage.value = session?.imageAt(event.clientX, event.clientY) ?? null;
 }
 </script>
 
 <template>
-  <div class="relative size-full" @pointermove="pointerMove" @pointerleave="hoveredImage = null">
+  <div class="relative size-full" @keydown.capture="pictureKey" @pointermove="pointerMove" @pointerleave="hoveredImage = null">
     <div ref="host" class="size-full" />
     <PictureLocks :spots="state?.spots ?? []" :active-id="hoveredImage" @toggle="toggleLock" />
     <Palette :board="board" :place="palette" @place="emit('palette', $event)" />

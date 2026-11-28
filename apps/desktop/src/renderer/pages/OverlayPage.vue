@@ -128,6 +128,11 @@ const setupOptions = computed(() => (view.value?.games ?? []).map((item) => ({ v
 const setupName = computed(() => view.value?.games.find((item) => item.id === view.value?.gameId)?.name ?? "");
 const selected = computed(() => selectedItems(view.value));
 
+/** The background picture goes at once; Undo on the toast puts it back. */
+function removePicture() {
+  void deleteWithUndo({ type: "remove-overlay-picture" }, t("overlays.layout.pictureRemoved"));
+}
+
 /**
  * Delete a game's overlay: it goes at once with its frames, and a toast offers Undo (the page's Ctrl+Z stays its own history
  * and never takes it back). The page falls back to All games, which then shows over the game; Undo brings the overlay
@@ -217,7 +222,7 @@ const stayDetails = computed<Record<string, string>>(() => ({ stay: t("overlays.
             <!-- Off, it still shows why: a disabled button with a title keeps its hint (see the kit's Button). Everywhere and All games have no one window to take. -->
             <Button v-if="isGame" variant="ghost" size="sm" :disabled="!view.canTakePicture" :title="pictureHint ?? undefined" :aria-description="pictureHint ?? undefined" data-testid="layout-take-picture" @click="send({ type: 'take-picture' })"><Camera />{{ t("overlays.layout.takePicture") }}</Button>
             <Button variant="ghost" size="sm" data-testid="layout-choose-picture" @click="send({ type: 'choose-picture' })"><ImageIcon />{{ t("overlays.layout.choosePicture") }}</Button>
-            <Button v-if="view.picture" variant="danger" size="sm" data-testid="layout-remove-picture" @click="send({ type: 'remove-picture' })"><Trash2 />{{ t("overlays.layout.removePicture") }}</Button>
+            <Button v-if="view.picture" variant="danger" size="sm" data-testid="layout-remove-picture" @click="removePicture"><Trash2 />{{ t("overlays.layout.removePicture") }}</Button>
           </div>
         </Toolbar>
         <div v-if="view.notice || view.copied || !view.enabled" class="flex flex-col gap-2 border-b px-3 py-2">

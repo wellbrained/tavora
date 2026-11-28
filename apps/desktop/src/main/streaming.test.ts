@@ -190,6 +190,44 @@ describe("the hotkey dialog", () => {
   });
 });
 
+describe("removing a hotkey in Settings", () => {
+  const binding = { owner: MODULE.owner, moduleId: MODULE.manifest.id, workspaceId: "poe2", action: "start-pause", target: "item-1" };
+
+  async function withKey() {
+    const set = await setup();
+    const asked = set.hotkeys.set("start-pause", "item-1", "Boss timer");
+    set.streaming.answer(set.streaming.request()!.id, "set", "F9");
+    await asked;
+    return set;
+  }
+
+  it("can be put back once", async () => {
+    const { streaming } = await withKey();
+    const restore = streaming.removeHotkey(binding)!;
+    expect(streaming.keyOf(binding)).toBeNull();
+    expect(restore()).toBe(true);
+    expect(streaming.keyOf(binding)?.accelerator).toBe("F9");
+    expect(restore()).toBe(false);
+    expect(streaming.removeHotkey({ ...binding, target: "none" })).toBeNull();
+  });
+
+  it("brings nothing back once the module removed the item's key itself", async () => {
+    const { streaming, hotkeys } = await withKey();
+    const restore = streaming.removeHotkey(binding)!;
+    hotkeys.remove("item-1", null);
+    expect(restore()).toBe(false);
+    expect(streaming.keyOf(binding)).toBeNull();
+  });
+
+  it("stays removed once its workspace is gone", async () => {
+    const { streaming } = await withKey();
+    const restore = streaming.removeHotkey(binding)!;
+    streaming.forgetWorkspace("poe2");
+    expect(restore()).toBe(false);
+    expect(streaming.keyOf(binding)).toBeNull();
+  });
+});
+
 describe("which hotkeys work", () => {
   it("only the workspace shown now's, while the module has a panel there", async () => {
     const { streaming, registered, world, hotkeys } = await setup();

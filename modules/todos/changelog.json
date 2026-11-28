@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.2.103",
+    "date": "2026-11-28",
+    "notes": [
+      "Deleting a group that has to-dos asks you first and says how many go with it."
+    ]
+  },
+  {
     "version": "0.2.102",
     "date": "2026-11-28",
     "notes": [

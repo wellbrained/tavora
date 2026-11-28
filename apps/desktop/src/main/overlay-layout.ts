@@ -648,10 +648,6 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
         if (!fromShell) return;
         this.track(this.choosePicture());
         return;
-      case "remove-picture":
-        if (!fromShell) return;
-        this.track(this.options.pictures.remove(this.gameId).then(() => this.loadPicture(this.gameId)));
-        return;
       case "dismiss-notice":
         this.notice = null;
         this.copied = null;
@@ -1156,8 +1152,30 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
     this.refresh();
   }
 
+  /**
+   * The user removed the picture of the setup shown. Answers with how to put it back (for Undo), or null when there was
+   * none; that says false once the setup has a picture again or its workspace is gone.
+   */
+  async removePicture(): Promise<(() => Promise<boolean>) | null> {
+    const gameId = this.gameId;
+    const png = await this.options.pictures.read(gameId);
+    await this.options.pictures.remove(gameId);
+    await this.loadPicture(gameId);
+    if (!png) return null;
+    return async () => {
+      if (this.forgotten.has(gameId) || (await this.options.pictures.has(gameId))) return false;
+      const saved = (await this.options.pictures.save(gameId, png)) === "saved";
+      await this.loadPicture(gameId);
+      return saved;
+    };
+  }
+
+  /** Workspaces that left the library: no Undo brings their picture back. */
+  private readonly forgotten = new Set<string>();
+
   /** A workspace left the library: the picture of its game goes. */
   forgetWorkspace(workspaceId: string): void {
+    this.forgotten.add(workspaceId);
     this.track(this.options.pictures.remove(workspaceId));
   }
 }

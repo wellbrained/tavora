@@ -2,8 +2,8 @@
 // To-Dos: a toolbar, current objectives, then the user's own groups. Every
 // To-Dos panel of a workspace shows the same list; what is folded, hidden or being
 // edited is each panel's own state.
-import { ChevronsDownUp, ChevronsUpDown, Settings as SettingsIcon } from "@lucide/vue";
-import { connectModule, errorMessage, useFocusRecovery } from "@tavora/official-ui";
+import { ChevronsDownUp, ChevronsUpDown, Settings as SettingsIcon, Trash2 } from "@lucide/vue";
+import { ConfirmDialog, connectModule, errorMessage, useFocusRecovery } from "@tavora/official-ui";
 import { unknownFields } from "@tavora/official-ui/lib/utils";
 import { leaveRow } from "@tavora/official-ui/components/ui/animated-list";
 import { Button } from "@tavora/official-ui/components/ui/button";
@@ -286,9 +286,21 @@ function firstTask(text: string) {
   void store.value!.apply((data) => addTask(data, null, { id, title: text, createdAt }, groupId));
 }
 
-/** Deletes a group with its to-dos at once; Undo on the toast puts it back where it was, as it was. */
+/** The group whose delete waits for a yes: one with to-dos goes for good, so it is asked first. */
+const deletingGroup = ref<string | null>(null);
+const askedGroup = computed(() => list.value.groups.find((group) => group.id === deletingGroup.value));
+// Deleted or emptied by another panel meanwhile: the question goes, and doesn't come back with an Undo there.
+watch(askedGroup, (group) => {
+  if (!group?.tasks.length) deletingGroup.value = null;
+});
+
+/** Deletes a group: an empty one at once with Undo, one with to-dos after asking. */
 function removeGroup(group: Group) {
   const todos = store.value!;
+  if (group.tasks.length) {
+    deletingGroup.value = group.id;
+    return;
+  }
   const removed = removedGroup(todos.list.value, group.id);
   if (!removed) return;
   todos.apply((data) => deleteGroup(data, group.id));
@@ -298,6 +310,12 @@ function removeGroup(group: Group) {
     todos.apply((data) => void restoreGroup(data, removed));
     groupsFocus.restore(group.id);
   });
+}
+
+function confirmRemoveGroup() {
+  const group = askedGroup.value;
+  deletingGroup.value = null;
+  if (group) void store.value!.apply((data) => deleteGroup(data, group.id));
 }
 
 // ── Drag and drop ────────────────────────────────────────────────────
@@ -433,6 +451,16 @@ function dropTask() {
       />
     </div>
   </div>
+  <ConfirmDialog
+    v-if="askedGroup"
+    :icon="Trash2"
+    :confirm-icon="Trash2"
+    :title="t('delete.title', { name: askedGroup.name })"
+    :description="plural('delete.description', askedGroup.tasks.length)"
+    :confirm="t('delete.confirm')"
+    @confirm="confirmRemoveGroup"
+    @cancel="deletingGroup = null"
+  />
   <!-- Outside the views, so Undo toasts show in the settings too; never over the game. -->
   <Toaster v-if="place !== 'game'" />
 </template>
