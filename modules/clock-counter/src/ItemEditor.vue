@@ -3,7 +3,7 @@
 // Overlays: what the overlay says and how it looks (with a live preview, the same in game and on stream), and where it shows (in game, on stream). Tavora shows them as a dialog over the workspace
 // and names it after the item; every change saves at once. Text and number fields save when they lose focus or on Enter, not on
 // every key, and whatever is still typed saves when the page changes or this goes away.
-import { ChevronDown, Copy, Eye, Hash, Hourglass, Keyboard, Link, Paintbrush, Plus, Timer, Type, X } from "@lucide/vue";
+import { ChevronDown, Copy, Eye, Hash, Hourglass, Keyboard, Link, Paintbrush, Timer, Type, X } from "@lucide/vue";
 import { ConfirmDialog, errorMessage, SegmentedControl, useFocusRecovery } from "@tavora/official-ui";
 import { undoable } from "@tavora/official-ui/components/ui/toast";
 import { Button } from "@tavora/official-ui/components/ui/button";
