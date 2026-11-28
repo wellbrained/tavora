@@ -52,7 +52,9 @@ case "${1:-}" in
     if id -nG tavora-api 2>/dev/null | tr ' ' '\n' | grep -qx clamav; then echo 'Warning: tavora-api is still in the clamav group; run tavora-api-clamav again.'; fi
     pid="$(systemctl show -P MainPID tavora-api 2>/dev/null || echo 0)"
     if [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then
-      if nsenter --mount="/proc/$pid/ns/mnt" -- test -e "$clamd" 2>/dev/null; then echo 'Warning: the service can still see clamd'"'"'s own socket; restart it (systemctl restart tavora-api).'; else echo 'The service sees only the filter.'; fi
+      # Looked at through /proc/$pid/root from here, never by running a program inside the service's mounts: there the
+      # service could have put its own file in place of `test`, and root would run it (audit run 3).
+      if [[ -e "/proc/$pid/root$clamd" ]]; then echo 'Warning: the service can still see clamd'"'"'s own socket; restart it (systemctl restart tavora-api).'; else echo 'The service sees only the filter.'; fi
     fi
     clamscan --version 2>/dev/null || true
     grep -E '^(CLAMD_|CLAMSCAN_)' /srv/tavora-api/shared/production.env 2>/dev/null || echo 'The service has no ClamAV setting yet.'

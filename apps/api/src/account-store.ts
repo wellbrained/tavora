@@ -28,10 +28,18 @@ export const CODE_OTHER_TRIES = 3;
  * - a sign-in code asked from a network the address signed in from in the last 30 days (KNOWN_NETWORK_MS): 3 every
  *   15 minutes and 5 a day per network;
  * - anyone else (a sign-in code from a new network, a code to a new address, a suspended account's delete code): 3
- *   every 15 minutes and 5 a day per network, and 10 a day from all of them together.
+ *   every 15 minutes and 5 a day per network, and 10 a day from all of them together; past those 10, a network that
+ *   hasn't asked for the address that day still gets one code an hour (CODE_OVERFLOW_SPACING_MS, audit run 2).
  * Strangers on other networks can only use up the last group: the owner still signs in from a network they used
  * before and still changes or deletes from inside the account, and strangers can mail the address at most 10 times a
- * day. An owner on a network they never signed in from shares that group with strangers. The 3 codes an address may
+ * day plus one an hour. An owner on a network they never signed in from shares that group with strangers, so the hour
+ * is what keeps strangers on a few networks from locking them out for a day: they wait an hour at most, unless
+ * strangers take every hour from yet another network. Each such code reaches the owner's inbox and works from the
+ * owner's network too, but only until strangers spend its CODE_OTHER_TRIES from yet another network (audit run 3), so
+ * strangers with about 25 networks a day can keep an owner off a new network as long as they keep at it. Counting
+ * others' tries per network would end that and let them guess a code 3 times per network instead; the owner still
+ * signs in from a network they used before, with Discord or on a PC that is signed in (security.md, Known limits).
+ * The 3 codes an address may
  * draw from the emails kept for accounts on a busy day (accounts.ts accountShareRateLimiter) are counted per group too
  * (codeGroup), so strangers can't use up those of the networks the owner signed in from either.
  */
@@ -40,6 +48,8 @@ export const CODE_WINDOW_MS = 15 * 60_000;
 export const CODES_PER_DAY = 10;
 export const CODES_PER_ASKER_DAY = 5;
 export const CODES_FROM_OTHERS_PER_DAY = 10;
+/** Past CODES_FROM_OTHERS_PER_DAY, how far apart codes to an address go to networks that haven't asked for it that day. */
+export const CODE_OVERFLOW_SPACING_MS = 60 * 60_000;
 /** How long a network an address signed in from counts as the owner's. */
 export const KNOWN_NETWORK_MS = 30 * 24 * 60 * 60_000;
 /** code_requests.owner: which group of an address's limits a request counts in. */
@@ -1370,7 +1380,12 @@ export class AccountStore {
     if (group === ASKED_BY.owner) return limitWait(recent, now, [CODES_PER_WINDOW, CODE_WINDOW_MS], [CODES_PER_DAY, DAY_MS]);
     const mine = "from" in asker ? (this.askers.get(askerKey(asker.from, email)) ?? []).filter((at) => at > now - DAY_MS) : [];
     const network = limitWait(mine, now, [CODES_PER_WINDOW, CODE_WINDOW_MS], [CODES_PER_ASKER_DAY, DAY_MS]);
-    return group === ASKED_BY.known ? network : Math.max(network, limitWait(recent, now, [CODES_FROM_OTHERS_PER_DAY, DAY_MS]));
+    if (group === ASKED_BY.known) return network;
+    // Strangers together: 10 a day, then one an hour for a network that hasn't asked for the address that day (the owner on
+    // a new network may be one), so strangers on a few networks can't stop a sign-in for a day.
+    const others = limitWait(recent, now, [CODES_FROM_OTHERS_PER_DAY, DAY_MS]);
+    const overflow = others > 0 && mine.length === 0 ? limitWait(recent, now, [1, CODE_OVERFLOW_SPACING_MS]) : others;
+    return Math.max(network, Math.min(others, overflow));
   }
 
   /** Which group of an address's limits `asker` counts in (see CODES_PER_WINDOW): its own account, a network it signed in from, or anyone else. */

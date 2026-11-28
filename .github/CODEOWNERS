@@ -38,6 +38,12 @@
 /packages/module-schema/src/index.ts @wellbrained
 /packages/module-schema/src/api-reasons.ts @wellbrained
 /packages/sdk/src/protocol.ts @wellbrained
+# The workspace packages' package files: their exports decide which file a bare import loads there (audit run 3).
+/packages/*/package.json @wellbrained
+
+# The check that every file above is owned, and what picks the tests CI runs.
+/scripts/codeowners.test.ts @wellbrained
+/vitest.config.ts @wellbrained
 
 # The server's receiver and setup: what a deploy key may publish.
 /deploy/server/ @wellbrained

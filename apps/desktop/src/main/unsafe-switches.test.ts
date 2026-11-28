@@ -43,6 +43,17 @@ describe("findUnsafeSwitch", () => {
     expect(findUnsafeSwitch([EXE, "  --disable-gpu"])).toBeUndefined();
   });
 
+  // Chromium's whitespace on Windows (base/strings kWhitespaceWide), which it trims from each argument.
+  const CHROMIUM_WHITESPACE = [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000];
+  it.each(CHROMIUM_WHITESPACE.map((code) => [code.toString(16).padStart(4, "0"), String.fromCharCode(code)]))(
+    "finds a switch behind U+%s, which Chromium trims (audit run 3)",
+    (_name, space) => {
+      expect(findUnsafeSwitch([EXE, `${space}--remote-debugging-port=9222`])).toBe("remote-debugging-port");
+      expect(findUnsafeSwitch([EXE, `${space}/no-sandbox`])).toBe("no-sandbox");
+      expect(findUnsafeSwitch([EXE, `${space}--disable-gpu`])).toBeUndefined();
+    },
+  );
+
   // The switches a denylist missed (security audit run 5), and more of the kind: none of them is one Tavora takes.
   it.each([
     "--inspect-port=9229",

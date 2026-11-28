@@ -227,7 +227,8 @@ describe("signing in with a code", () => {
       }
     }
     expect((await call("POST", "/code", { email: "owner@example.com" }, undefined, "203.0.113.9")).status).toBe(429);
-    expect(inbox.mails().filter((mail) => mail.to === "owner@example.com")).toHaveLength(4);
+    // The owner's code, 3 from strangers up to the 10, and one more to the third network an hour after the 10th (past the 10, one an hour).
+    expect(inbox.mails().filter((mail) => mail.to === "owner@example.com")).toHaveLength(5);
     // ... but the networks the owner signed in from still get codes,
     expect((await call("POST", "/code", { email: "owner@example.com" }, undefined, "192.0.2.10")).status).toBe(202);
     expect(await (await call("POST", "/verify", { email: "owner@example.com", code: lastCode() }, undefined, "192.0.2.10")).json()).toMatchObject({ status: "signed-in" });
@@ -237,6 +238,36 @@ describe("signing in with a code", () => {
     expect((await call("POST", "/email/code", { email: "new-owner@example.com", confirmCurrent: true }, token)).status).toBe(202);
     expect(inbox.mails().map((mail) => mail.to).sort()).toEqual(["new-owner@example.com", "owner@example.com"]);
     expect((await call("POST", "/delete/code", {}, token)).status).toBe(202);
+  });
+
+  it("still sends a new network a code within the hour after strangers on two networks fill the 10 a day (audit run 2)", async () => {
+    const { call, clock, inbox, lastCode, signIn } = setup();
+    await signIn("victim@example.com");
+    inbox.clear();
+    // A day on, so the sign-in's own code no longer counts.
+    clock.now += 24 * 60 * 60_000 + 60_000;
+    for (const network of ["192.0.2.7", "198.51.100.7"]) {
+      for (let i = 0; i < 5; i++) {
+        expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, network)).status).toBe(202);
+        clock.now += 6 * 60_000;
+      }
+    }
+    expect(inbox.mails()).toHaveLength(10);
+    // A new network waits for the hour after the last of them, not a day.
+    const refused = await call("POST", "/code", { email: "victim@example.com" }, undefined, "100.64.9.20");
+    expect(refused.status).toBe(429);
+    expect(Number(refused.headers.get("retry-after"))).toBeLessThanOrEqual(60 * 60);
+    clock.now += 60 * 60_000;
+    inbox.clear();
+    expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, "100.64.9.20")).status).toBe(202);
+    expect(await (await call("POST", "/verify", { email: "victim@example.com", code: lastCode() }, undefined, "100.64.9.20")).json()).toMatchObject({ status: "signed-in" });
+    // The inbox stays guarded: one code an hour past the 10, only to a network that hasn't asked for the address that day.
+    expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, "100.64.10.20")).status).toBe(429);
+    clock.now += 60 * 60_000;
+    expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, "192.0.2.7")).status).toBe(429);
+    expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, "100.64.10.20")).status).toBe(202);
+    expect((await call("POST", "/code", { email: "victim@example.com" }, undefined, "100.64.11.20")).status).toBe(429);
+    expect(inbox.mails()).toHaveLength(2);
   });
 
   it("refuses what is not an address or not JSON, and says when mail fails", async () => {

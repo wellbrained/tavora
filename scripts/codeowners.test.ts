@@ -36,6 +36,9 @@ const ALSO = [
   "pnpm-workspace.yaml",
   "pnpm-lock.yaml",
   "patches/x.patch",
+  // This check, and what picks the tests CI runs (audit run 3): unowned, a pull request could change both.
+  "scripts/codeowners.test.ts",
+  "vitest.config.ts",
 ];
 
 /** A workspace package's file for a bare import (@tavora/pack, @tavora/sdk/protocol), by its "source" export; null for others. */
@@ -49,7 +52,17 @@ function workspaceFile(spec: string): string | null {
   return source ? path.join(folder, source) : null;
 }
 
-/** Every repository file `entries` load as code. Type-only imports load nothing. */
+/** The package.json whose exports pick the file for a bare workspace import, or null. */
+function workspacePackageFile(spec: string): string | null {
+  const match = /^@tavora\/([^/]+)/.exec(spec);
+  const file = match ? path.join(root, "packages", match[1]!, "package.json") : null;
+  return file && existsSync(file) ? file : null;
+}
+
+/**
+ * Every repository file `entries` load as code, and the package.json of each workspace package they import by name: its
+ * exports decide which file loads (audit run 3). Type-only imports load nothing.
+ */
 function loaded(entries: string[]): string[] {
   const seen = new Set<string>();
   const visit = (file: string) => {
@@ -59,6 +72,8 @@ function loaded(entries: string[]): string[] {
     const pattern = /^\s*(?:import|export)\s+(?!type\s)(?:[^"';]*?\sfrom\s*)?["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)/gm;
     for (const found of text.matchAll(pattern)) {
       const spec = found[1] ?? found[2]!;
+      const packageFile = spec.startsWith(".") ? null : workspacePackageFile(spec);
+      if (packageFile) seen.add(packageFile);
       let next = spec.startsWith(".") ? path.resolve(path.dirname(file), spec) : workspaceFile(spec);
       if (!next) continue;
       if (!existsSync(next) && next.endsWith(".js")) next = `${next.slice(0, -3)}.ts`;
@@ -90,6 +105,8 @@ describe("CODEOWNERS", () => {
     const files = [...loaded(PRIVILEGED), ...ALSO];
     expect(files).toContain("apps/desktop/scripts/installed-version.mjs");
     expect(files).toContain("apps/desktop/src/shared/release-catalog.ts");
+    expect(files).toContain("packages/module-schema/package.json");
+    expect(files).toContain("packages/sdk/package.json");
     expect(files.filter((file) => !owned(rules, file))).toEqual([]);
   });
 

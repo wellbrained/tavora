@@ -34,6 +34,8 @@ ProtectHome=true
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# No namespaces of its own: inside one it could mount over what root's tools run (audit run 3).
+RestrictNamespaces=true
 # clamd's own socket takes any command (SCAN a path, SHUTDOWN): the service gets only tavora-clamd-filter's, which passes scans.
 InaccessiblePaths=-/run/clamav
 # Only its own two ports: it can't take over another app's port while that app restarts.

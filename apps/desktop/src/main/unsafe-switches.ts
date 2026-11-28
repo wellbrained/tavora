@@ -55,7 +55,9 @@ const MAX_SHOWN = 60;
 export function findUnsafeSwitch(argv: readonly string[]): string | undefined {
   for (const arg of argv) {
     // Chromium trims whitespace before it looks for a switch, so " --remote-debugging-port" is one too (audit run 7).
-    const match = /^\s*(?:--|-|\/)([^=]*)(?:=(.*))?$/s.exec(arg);
+    // Its whitespace has U+0085 (next line), which `\s` lacks (audit run 3 of 2026-11-28); `\s` has U+FEFF, which
+    // Chromium's lacks, so a switch behind it is refused although Chromium wouldn't take it: the safe side.
+    const match = /^[\s\u0085]*(?:--|-|\/)([^=]*)(?:=(.*))?$/s.exec(arg);
     if (!match) continue;
     const name = (match[1] ?? "").toLowerCase();
     const allowed = Object.hasOwn(ALLOWED_SWITCHES, name) ? ALLOWED_SWITCHES[name] : undefined;
