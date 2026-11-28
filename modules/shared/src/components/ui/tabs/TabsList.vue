@@ -8,13 +8,13 @@ import { cn } from "../../../lib/utils"
 import { useSlidingIndicator } from "../sliding-indicator"
 import { tabsIndicatorKey } from "./context"
 
-// With `class="flex-wrap"` the tabs go on to a next row and the list grows with them.
 // An underlined row of tabs, like the panel tabs: the selected one carries
 // a 2 px gold line. The line is one piece that slides to the tab you click, and jumps when the arrow keys pick.
 // The tabs may sit in wrappers (a tooltip's span): the line is placed by measuring, not by where they are in the
 // DOM. When no tab can be found or measured, the active tab draws its own line instead.
 // `indicator: false` leaves it to the tabs: each draws its own line at once, for a strip whose tabs come, go and
 // move all the time (TabStrip).
+// With `class="flex-wrap"` the tabs go on to a next row and the list grows with them.
 const props = withDefaults(defineProps<TabsListProps & { class?: HTMLAttributes["class"]; indicator?: boolean }>(), { indicator: true })
 
 const delegatedProps = reactiveOmit(props, "class", "indicator")

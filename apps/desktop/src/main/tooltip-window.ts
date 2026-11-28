@@ -199,6 +199,7 @@ export class TooltipWindow {
                 return;
             }
             if (channel === "tooltip:size" && typeof args[1] === "number" && Number.isFinite(args[1])) {
+                // The widest card is 520 px, and the PoE look keeps 3 px of room on each side (shared/tooltip-document).
                 this.size.height = Math.max(60, Math.min(2000, Math.ceil(args[1])));
                 if (typeof args[2] === "number" && Number.isFinite(args[2]))
                     this.size.width = Math.max(120, Math.min(526, Math.ceil(args[2])));

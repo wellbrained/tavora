@@ -102,6 +102,11 @@ describe("tooltip page and the kit's card: the PoE look's frame", () => {
         }
     });
 
+    it("tints the picture's edge by rarity in both", () => {
+        expect(KIT_CSS).toContain(".tavora-item-card-rich-art>img{border-color:var(--ic-frame-mid)}");
+        expect(TOOLTIP_DOCUMENT).toContain("body.poe .art img{border-color:var(--frame-mid)}");
+    });
+
     it("is a border picture reaching 3px out in both, with a diamond on each divider", () => {
         expect(KIT_CSS).toContain("border-image:var(--ic-frame) 26 / 26px / 3px stretch");
         expect(TOOLTIP_DOCUMENT).toContain("border-image:var(--frame) 26 / 26px / 3px stretch");
