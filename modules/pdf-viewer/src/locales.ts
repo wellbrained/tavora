@@ -37,6 +37,9 @@ export const en = {
   "remove.title": "Remove “{name}”?",
   "remove.description": "This deletes the copy Tavora keeps. The original file stays where it is.",
   "remove.confirm": "Remove",
+  "remove.goneTitle": "Delete “{name}”?",
+  "remove.goneDescription": "This deletes the copy Tavora keeps. The original is gone, so it may be your only one.",
+  "remove.goneConfirm": "Delete",
 
   "add.adding": "Adding “{name}”…",
   "add.notSupported": "“{name}” isn't a PDF or a PNG, JPEG, GIF or WebP picture.",
@@ -139,6 +142,9 @@ export const de: Record<keyof typeof en, string> = {
   "remove.title": "„{name}“ entfernen?",
   "remove.description": "Das löscht die Kopie, die Tavora aufbewahrt. Die Originaldatei bleibt, wo sie ist.",
   "remove.confirm": "Entfernen",
+  "remove.goneTitle": "„{name}“ löschen?",
+  "remove.goneDescription": "Das löscht die Kopie, die Tavora aufbewahrt. Das Original ist weg, vielleicht ist es deine einzige.",
+  "remove.goneConfirm": "Löschen",
 
   "add.adding": "Füge „{name}“ hinzu…",
   "add.notSupported": "„{name}“ ist keine PDF und kein PNG-, JPEG-, GIF- oder WebP-Bild.",

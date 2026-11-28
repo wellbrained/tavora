@@ -142,23 +142,19 @@ export async function openBoardLibrary(sdk: TavoraSDK, options: BoardLibraryOpti
       await session.rename(id, name);
     },
 
-    /**
-     * Deletes a board; there is always one left, so a blank one is made when it was the last. Resolves with a way to put
-     * it back as it was (Undo).
-     */
-    async remove(id: string): Promise<() => Promise<void>> {
+    /** Deletes a board for good; there is always one left, so a blank one is made when it was the last. */
+    async remove(id: string): Promise<void> {
       // A save still waiting must not bring the board back once it is gone.
       const open = id === session.currentId ? view : null;
       open?.discard();
-      let undo: () => Promise<void>;
       try {
         try {
-          undo = await session.remove(id);
+          await session.remove(id);
         } catch (error) {
           if (!isConflict(error)) throw error;
           // Another panel saved the board since the list was read: delete the copy it has now.
           await session.refresh();
-          undo = await session.remove(id);
+          await session.remove(id);
         }
       } catch (error) {
         // Not deleted: the board stays open, so what is drawn on it is saved again.
@@ -166,7 +162,6 @@ export async function openBoardLibrary(sdk: TavoraSDK, options: BoardLibraryOpti
         throw error;
       }
       if (session.items.length === 0 && !session.currentId) await create("blank");
-      return undo;
     },
 
     /**

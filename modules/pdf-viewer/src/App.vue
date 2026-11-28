@@ -34,7 +34,8 @@ const usage = ref("");
 const dragging = ref(false);
 const picker = ref<HTMLInputElement | null>(null);
 const renaming = ref<FileEntry | null>(null);
-const removing = ref<FileEntry | null>(null);
+/** The file the delete dialog asks about; `gone`: its original was not found, so Tavora's copy may be the only one. */
+const removing = ref<{ file: FileEntry; gone: boolean } | null>(null);
 const busy = ref(false);
 /** What the last check of each file's original found, by file id. */
 const statuses = ref(new Map<string, LinkStatus>());
@@ -272,18 +273,6 @@ async function keepActive() {
   });
 }
 
-async function removeActive() {
-  const file = active.value;
-  if (!file || !store.value) return;
-  try {
-    await store.value.remove(file.id);
-    tabState.value = closeTab(tabState.value, file.id);
-    statuses.value.delete(file.id);
-  } catch {
-    notice(t("save.removeFailed", { name: file.name }));
-  }
-}
-
 async function showInFolder(id: string) {
   try {
     await store.value?.showInFolder(id);
@@ -340,20 +329,24 @@ async function rename(id: string, name: string) {
   await store.value?.rename(id, name).catch(() => notice(t("save.renameFailed", { name: before })));
 }
 
-function askRemove(id: string) {
+async function askRemove(id: string) {
+  if (!byId.value.has(id)) return;
+  listOpen.value = false;
+  // Looked at now: only open tabs are checked as they go, and the question must not promise an original that is gone.
+  await checkOriginal(id);
   const file = byId.value.get(id);
   if (!file) return;
-  listOpen.value = false;
-  removing.value = file;
+  removing.value = { file, gone: statuses.value.get(id) === "gone" };
 }
 
 async function remove() {
-  const file = removing.value;
+  const file = removing.value?.file;
   if (!file || !store.value) return;
   busy.value = true;
   try {
     await store.value.remove(file.id);
     tabState.value = closeTab(tabState.value, file.id);
+    statuses.value.delete(file.id);
     removing.value = null;
   } catch {
     removing.value = null;
@@ -402,7 +395,7 @@ async function remove() {
     <Notice v-else-if="activeStatus === 'gone'" variant="warning" class="m-1 mb-0 items-center py-1.5" :title="t('original.gone')" data-testid="original-gone">
       <template #action>
         <div class="flex gap-1">
-          <Button size="sm" variant="destructive" data-testid="original-remove" @click="removeActive">{{ t("original.remove") }}</Button>
+          <Button size="sm" variant="destructive" data-testid="original-remove" @click="active && askRemove(active.id)">{{ t("original.remove") }}</Button>
           <Button size="sm" variant="ghost" data-testid="original-keep" @click="keepActive">{{ t("original.keep") }}</Button>
         </div>
       </template>
@@ -439,7 +432,7 @@ async function remove() {
     <input ref="picker" type="file" multiple class="hidden" :accept="ACCEPT_ATTRIBUTE" :aria-label="t('pick.label')" data-testid="file-input" @change="onPicked" />
 
     <NameDialog v-if="renaming" :icon="Pencil" :title="t('rename.title')" :label="t('rename.label')" :confirm="t('rename.save')" :cancel="t('cancel')" :value="renaming.name" @submit="rename(renaming.id, $event)" @cancel="renaming = null" />
-    <ConfirmDialog v-if="removing" :icon="Trash2" :confirm-icon="Trash2" :title="t('remove.title', { name: removing.name })" :description="t('remove.description')" :confirm="t('remove.confirm')" :cancel="t('cancel')" :busy="busy" @confirm="remove" @cancel="removing = null" />
+    <ConfirmDialog v-if="removing" :icon="Trash2" :confirm-icon="Trash2" :title="t(removing.gone ? 'remove.goneTitle' : 'remove.title', { name: removing.file.name })" :description="t(removing.gone ? 'remove.goneDescription' : 'remove.description')" :confirm="t(removing.gone ? 'remove.goneConfirm' : 'remove.confirm')" :cancel="t('cancel')" :busy="busy" @confirm="remove" @cancel="removing = null" />
     <Toaster />
   </div>
 </template>

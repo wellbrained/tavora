@@ -439,6 +439,24 @@ export function insert(list: ItemList, item: Item, index = list.items.length): v
 export const shownLinks = (list: ItemList, counter: Counter): CounterLink[] =>
   counter.links.filter((link) => list.items.some((other) => other.id === link.target && other.kind === "counter"));
 
+/** A link taken away, with where it was, so Undo can put it back. */
+export type LostLink = { source: string; index: number; link: CounterLink };
+
+/** The links other counters have to this one: deleting it takes them away. */
+export const incomingLinks = (list: ItemList, id: string): LostLink[] =>
+  list.items.flatMap((item) => (item.kind === "counter" ? item.links.flatMap((link, index) => (link.target === id ? [{ source: item.id, index, link: { ...link } }] : [])) : []));
+
+/** Whether a taken link can come back: both counters are there, they aren't linked again already, and there is room. */
+export function canPutLinkBack(list: ItemList, { source, link }: LostLink): boolean {
+  const counter = find(list, source);
+  return counter?.kind === "counter" && find(list, link.target)?.kind === "counter" && counter.links.length < MAX.links && !counter.links.some((other) => other.target === link.target);
+}
+
+export function putLinkBack(list: ItemList, lost: LostLink): void {
+  if (!canPutLinkBack(list, lost)) return;
+  (find(list, lost.source) as Counter).links.splice(lost.index, 0, { ...lost.link });
+}
+
 /** Removes an item, and the links to it. */
 export function remove(list: ItemList, id: string): void {
   list.items = list.items.filter((item) => item.id !== id);

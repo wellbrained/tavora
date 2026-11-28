@@ -140,15 +140,14 @@ test("whiteboard: draw on a board, keep it, switch boards, delete one and bring 
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Atlas map");
   await expect.poll(async () => Object.keys(await storedBoards(userData)).sort()).toEqual(["Atlas map", "Board 1"]);
 
-  // Deleting shows an Undo notice and Board 1 is shown; Undo brings the board back.
+  // Deleting asks first; then the board is gone and Board 1 is shown.
   await inModule(app, WHITEBOARD, `${q("board-menu")}.click()`);
   await inModule(app, WHITEBOARD, `${q("board-delete")}.click()`);
+  await expect.poll(() => inModule(app, WHITEBOARD, `!!${q("confirm-submit")}`)).toBe(true);
+  expect(Object.keys(await storedBoards(userData))).toHaveLength(2);
+  await inModule(app, WHITEBOARD, `${q("confirm-submit")}.click()`);
   await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Board 1");
-  await expect.poll(() => inModule(app, WHITEBOARD, `${NEWEST_TOAST}?.innerText ?? ""`)).toContain("Atlas map");
   await expect.poll(async () => Object.keys(await storedBoards(userData))).toEqual(["Board 1"]);
-  await inModule(app, WHITEBOARD, `${UNDO_BUTTON}.click()`);
-  await expect.poll(() => inModule(app, WHITEBOARD, `${q("board-name")}?.textContent ?? ""`)).toBe("Atlas map");
-  await expect.poll(async () => Object.keys(await storedBoards(userData)).sort()).toEqual(["Atlas map", "Board 1"]);
   await app.close();
 });
 

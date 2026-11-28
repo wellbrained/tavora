@@ -19,7 +19,7 @@ import { ACTIVE_GROUP, ROW_FADE } from "./active";
 import ItemCard from "./ItemCard.vue";
 import ItemEditor from "./ItemEditor.vue";
 import SettingsSkeleton from "./SettingsSkeleton.vue";
-import { clocksRunning, count, find, groupOf, insert, lap, linkedGroups, MAX, move, moveTo, newItem, parseList, remove, resetClock, resetCounter, shownLinks, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
+import { clocksRunning, count, find, groupOf, incomingLinks, insert, lap, linkedGroups, MAX, move, moveTo, newItem, parseList, putLinkBack, remove, resetClock, resetCounter, shownLinks, startPause, visualOrder, type Counter, type Item, type ItemKind, type ItemList } from "./items";
 import { offerDelete } from "./delete-offer";
 import { sweepHotkeys } from "./hotkey-sweep";
 import { buildLiveState } from "./live";
@@ -295,9 +295,11 @@ function forget(item: Item): void {
 
 function removeItem(item: Item): void {
   const index = list.value.items.findIndex((other) => other.id === item.id);
-  // Counters linked to it lose the link; Undo brings back the item, not their links. Its group hears of it too.
+  // Counters linked to it lose the link; Undo brings back the item and those links. Its group hears of it too.
   const group = item.kind === "counter" ? groupOf(list.value, item.id) : null;
-  void store.value?.apply([item.id, ...(group?.members.map((member) => member.id) ?? [])], (data) => remove(data, item.id));
+  const related = [item.id, ...(group?.members.map((member) => member.id) ?? [])];
+  const lost = incomingLinks(list.value, item.id);
+  void store.value?.apply(related, (data) => remove(data, item.id));
   void hideOverGame(item.id).catch(() => undefined);
   if (editing.value === item.id) closeEditing();
   const offer = offerDelete(item, index, {
@@ -307,7 +309,10 @@ function removeItem(item: Item): void {
       // Checked on the list as it is now; the change itself may run again on a newer one.
       if (find(list.value, kept.id) || list.value.items.length >= MAX.items) return false;
       // Back with the same id, so its OBS link and hotkeys work again.
-      void store.value?.apply([kept.id], (data) => insert(data, kept, at));
+      void store.value?.apply(related, (data) => {
+        insert(data, kept, at);
+        for (const one of lost) putLinkBack(data, one);
+      });
       rowFocus.restore(kept.id);
     },
     forget: (kept) => {

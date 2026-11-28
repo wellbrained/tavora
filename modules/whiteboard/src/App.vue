@@ -3,10 +3,11 @@
 // a workspace shows the same boards; which board a panel shows, its views and where its palette sits are its own state.
 // This page only shows: the boards are the library's (board-library.ts), the open board's drawing and saving the
 // board session's (boardSession.ts).
-import { connectModule, errorMessage } from "@tavora/official-ui";
+import { ConfirmDialog, connectModule, errorMessage } from "@tavora/official-ui";
+import { useTask } from "@tavora/official-ui/use-task";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@tavora/official-ui/components/ui/dropdown-menu";
-import { ArrowLeftRight, ArrowRight, ImagePlus, Minus, MoreHorizontal, Plus, StickyNote, Waypoints } from "@lucide/vue";
+import { ArrowLeftRight, ArrowRight, ImagePlus, Minus, MoreHorizontal, Plus, StickyNote, Trash2, Waypoints } from "@lucide/vue";
 import { EmptyState } from "@tavora/official-ui/components/ui/empty-state";
 import { Notice } from "@tavora/official-ui/components/ui/notice";
 import { toast, Toaster, undoable } from "@tavora/official-ui/components/ui/toast";
@@ -96,7 +97,7 @@ function notify(message: string) {
 }
 
 /**
- * A message with an Undo button: the kit's undoable, so each delete or clear has its own offer, and one that can't come back
+ * A message with an Undo button: the kit's undoable, so each clear has its own offer, and one that can't come back
  * says so. Ctrl+Z stays Excalidraw's own undo on the board.
  */
 function offerUndo(message: string, run: () => Promise<void>) {
@@ -367,19 +368,28 @@ function clearBoard() {
   if (restore) offerUndo(t("clear.done"), async () => restore());
 }
 
-async function remove() {
+/** The board the delete dialog asks about: a board is a saved thing, so it asks first and the delete is final. */
+const deleting = ref<{ id: string; name: string } | null>(null);
+const removal = useTask();
+
+function askRemove() {
   const id = shown.value?.id;
-  if (!id || !library.value) return;
-  const label = name.value;
-  let undo: () => Promise<void>;
-  try {
-    undo = await library.value.remove(id);
-  } catch {
-    notify(t("board.deleteFailed"));
-    return;
-  }
-  delete views[id];
-  offerUndo(t("undo.deleted", { name: label }), undo);
+  if (id) deleting.value = { id, name: name.value };
+}
+
+async function remove() {
+  const target = deleting.value;
+  const lib = library.value;
+  if (!target || !lib || removal.busy.value) return;
+  await removal.run(async () => {
+    try {
+      await lib.remove(target.id);
+      delete views[target.id];
+    } catch {
+      notify(t("board.deleteFailed"));
+    }
+  });
+  deleting.value = null;
 }
 
 /** The board was deleted in another panel: bring it back as this panel last saw it. */
@@ -444,7 +454,7 @@ const addPicture = fromInput(addPictureFrom);
           @create="createBoard"
           @rename="rename"
           @clear="clearBoard"
-          @delete="remove"
+          @delete="askRemove"
           @grid="setGrid"
         />
       </div>
@@ -519,6 +529,7 @@ const addPicture = fromInput(addPictureFrom);
       />
       <EmptyState v-if="boardState.empty" variant="bare" :title="t('empty.hint')" class="text-muted-foreground pointer-events-none absolute top-1/2 left-1/2 z-[1] w-max max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 bg-transparent p-0" data-testid="empty-hint" />
     </main>
+    <ConfirmDialog v-if="deleting" :icon="Trash2" :confirm-icon="Trash2" :title="t('delete.title', { name: deleting.name })" :description="t('delete.description')" :confirm="t('delete.confirm')" :cancel="t('delete.cancel')" :busy="removal.busy.value" @confirm="remove" @cancel="deleting = null" />
     <Toaster />
   </div>
 </template>
