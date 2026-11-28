@@ -123,6 +123,18 @@ async function mountReviews(first: CatalogReviewsResult) {
 }
 
 describe("ratings and reviews", () => {
+  it("says why a delete failed in the question only, while that is open", async () => {
+    const mine = { stars: 5, text: null, version: "1.0.0", hidden: false, held: false };
+    host.act.mockResolvedValue({ ok: false, error: "Can't reach the service." });
+    await mountReviews(reviews({ mine }));
+    await click("catalog-reviews-delete");
+    document.querySelector<HTMLElement>('[data-testid="confirm-submit"]')!.click();
+    await settle();
+    expect(document.querySelector('[data-testid="confirm-submit"]')).not.toBeNull();
+    expect(document.body.textContent).toContain("Can't reach the service.");
+    expect($("catalog-reviews-error")).toBeNull();
+  });
+
   it("asks before deleting your review, and keeps it on Cancel", async () => {
     const mine = { stars: 5, text: null, version: "1.0.0", hidden: false, held: false };
     host.act.mockResolvedValue(ok);

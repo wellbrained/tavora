@@ -289,6 +289,10 @@ function firstTask(text: string) {
 /** The group whose delete waits for a yes: one with to-dos goes for good, so it is asked first. */
 const deletingGroup = ref<string | null>(null);
 const askedGroup = computed(() => list.value.groups.find((group) => group.id === deletingGroup.value));
+// Deleted or emptied by another panel meanwhile: the question goes, and doesn't come back with an Undo there.
+watch(askedGroup, (group) => {
+  if (!group?.tasks.length) deletingGroup.value = null;
+});
 
 /** Deletes a group: an empty one at once with Undo, one with to-dos after asking. */
 function removeGroup(group: Group) {

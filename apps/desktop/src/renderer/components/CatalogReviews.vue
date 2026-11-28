@@ -7,7 +7,7 @@ import { Trash2 } from "@lucide/vue";
 // and a reviewer's picture is a PNG the main process checked by its hash. Report sends only the review's id.
 // Posting a rating and a publisher's reply show at once and save in the background (they come back if saving fails);
 // deleting a rating or a reply asks first and, like reporting, waits for the answer.
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import type { CatalogOwnReview, CatalogReviews, CatalogReviewsResult, CatalogReviewView } from "../../shared/host-api";
 import { act, api, dialog, notSaved, openProfile, type ConfirmRequest } from "../host";
 import { useOptimistic, useOptimisticKeyed } from "@tavora/official-ui/optimistic";
@@ -176,7 +176,7 @@ function keep() {
 }
 
 /** The question before a delete, over the module's page. */
-const asking = ref<ConfirmRequest | null>(null);
+const asking = shallowRef<ConfirmRequest | null>(null);
 
 /** Asks, then sends `action`; why it failed shows in the question, or at `fail` when that was closed meanwhile. */
 function askDelete(title: string, action: Parameters<typeof act>[0], done: () => Promise<void>, fail?: (message: string) => void) {
