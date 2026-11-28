@@ -16,13 +16,14 @@ export const OPEN_TRIES = 3;
  * whole check starts over, with the new file's id: up to OPEN_TRIES times, then "changing". Nothing is ever read from a
  * file that didn't pass all of it. That narrows the gap, it can't close it: a program that swaps a folder at just the
  * right moments around each step still gets past. A drive that gives files no id (0) is told apart only by the path
- * checks. Errors of the file system are thrown.
+ * checks. A file that is gone meanwhile counts as "moved", like a missing one; other errors of the file system are thrown.
  */
 export async function openChecked(file: string, inPlace: () => Promise<boolean>): Promise<FileHandle | "moved" | "changing"> {
   for (let tries = 0; tries < OPEN_TRIES; tries++) {
-    const before = await lstat(file, { bigint: true });
-    if (before.isSymbolicLink() || !(await inPlace())) return "moved";
-    const handle = await open(file, "r");
+    const before = await lstat(file, { bigint: true }).catch(goneAsNull);
+    if (!before || before.isSymbolicLink() || !(await inPlace())) return "moved";
+    const handle = await open(file, "r").catch(goneAsNull);
+    if (!handle) return "moved";
     let kept = false;
     try {
       const opened = await handle.stat({ bigint: true });
@@ -37,6 +38,12 @@ export async function openChecked(file: string, inPlace: () => Promise<boolean>)
     }
   }
   return "changing";
+}
+
+/** null for a file that isn't there (any more); other errors stay errors. */
+function goneAsNull(error: unknown): null {
+  if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+  throw error;
 }
 
 /** Whether the path can be looked at; any error, a missing path or one that can't be read, counts as no. */

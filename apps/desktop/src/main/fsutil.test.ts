@@ -253,7 +253,7 @@ describe("openChecked (audit L9)", () => {
     const { file } = await folders();
     expect(await content(await openChecked(file, async () => true))).toBe("the checked file");
     expect(await openChecked(file, async () => false)).toBe("moved");
-    await expect(openChecked(`${file}.gone`, async () => true)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(openChecked(`${file}.gone`, async () => true)).resolves.toBe("moved");
   });
 
   /** A game's save: a new file written next to it, renamed over it. */
