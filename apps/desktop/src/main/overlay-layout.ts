@@ -1154,28 +1154,35 @@ export class OverlayLayout<W extends LayoutWindow = LayoutWindow> {
 
   /**
    * The user removed the picture of the setup shown. Answers with how to put it back (for Undo), or null when there was
-   * none; that says false once the setup has a picture again or its workspace is gone.
+   * none; that says false once the setup has a picture again or its workspace left the library since.
    */
   async removePicture(): Promise<(() => Promise<boolean>) | null> {
     const gameId = this.gameId;
+    // Noted before the first wait, so a workspace that leaves meanwhile cancels this Undo too.
+    const removal = { gameId };
+    this.removedPictures.add(removal);
     const png = await this.options.pictures.read(gameId);
     await this.options.pictures.remove(gameId);
     await this.loadPicture(gameId);
-    if (!png) return null;
+    if (!png) {
+      this.removedPictures.delete(removal);
+      return null;
+    }
     return async () => {
-      if (this.forgotten.has(gameId) || (await this.options.pictures.has(gameId))) return false;
+      if ((await this.options.pictures.has(gameId)) || !this.removedPictures.delete(removal)) return false;
       const saved = (await this.options.pictures.save(gameId, png)) === "saved";
       await this.loadPicture(gameId);
       return saved;
     };
   }
 
-  /** Workspaces that left the library: no Undo brings their picture back. */
-  private readonly forgotten = new Set<string>();
+  /** Removed pictures that Undo may still bring back. */
+  private readonly removedPictures = new Set<{ gameId: string }>();
 
   /** A workspace left the library: the picture of its game goes. */
   forgetWorkspace(workspaceId: string): void {
-    this.forgotten.add(workspaceId);
+    // Only the Undos open now: the id may be given out again, and a later removal under it can be undone.
+    for (const removal of this.removedPictures) if (removal.gameId === workspaceId) this.removedPictures.delete(removal);
     this.track(this.options.pictures.remove(workspaceId));
   }
 }
