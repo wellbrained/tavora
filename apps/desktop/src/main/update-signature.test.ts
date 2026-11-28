@@ -10,6 +10,7 @@ import {
   makeUpdateKey,
   rawUpdatePublicKey,
   readPinnedUpdateKeys,
+  sha512OfFileSync,
   signedUpdateBytes,
   signUpdate,
   UPDATE_SIGNATURE_FIELD,
@@ -238,7 +239,9 @@ describe("checkDownloadedUpdate", () => {
   it("hashes the file the updater saved and checks the signature against it", async () => {
     const file = await installer("the real installer");
     const signature = signUpdate({ version: "1.0.1", file: "Tavora-Setup-1.0.1.exe", sha512: sha512("the real installer") }, release.privateKey);
-    expect(await checkDownloadedUpdate({ version: "1.0.1", downloadedFile: file, [UPDATE_SIGNATURE_FIELD]: signature }, pinned, "1.0.0")).toEqual({ ok: true, key: "release" });
+    expect(await checkDownloadedUpdate({ version: "1.0.1", downloadedFile: file, [UPDATE_SIGNATURE_FIELD]: signature }, pinned, "1.0.0")).toEqual({ ok: true, key: "release", installer: { file, sha512: sha512("the real installer") } });
+    // The same hash, worked out again right before the installer runs.
+    expect(sha512OfFileSync(file)).toBe(sha512("the real installer"));
   });
 
   it("refuses a file whose bytes were changed after signing", async () => {

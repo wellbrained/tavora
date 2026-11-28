@@ -58,7 +58,7 @@ function ipv4(host: string): number[] | null {
   return numbers.every((n) => n >= 0 && n <= 255) ? numbers : null;
 }
 
-function privateIpv4([a, b]: number[]): boolean {
+function privateIpv4([a, b, c]: number[]): boolean {
   return (
     a === 0 ||
     a === 10 ||
@@ -66,7 +66,12 @@ function privateIpv4([a, b]: number[]): boolean {
     (a === 100 && b! >= 64 && b! <= 127) ||
     (a === 169 && b === 254) ||
     (a === 172 && b! >= 16 && b! <= 31) ||
-    (a === 192 && b === 168)
+    (a === 192 && b === 168) ||
+    // IETF protocol assignments (DS-Lite, NAT64 discovery), benchmarking, and multicast, reserved and broadcast: no
+    // public site lives there, and some home gear answers in them (audit 2026-11-28).
+    (a === 192 && b === 0 && c === 0) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a! >= 224
   );
 }
 
@@ -80,7 +85,8 @@ const LOCAL_NAMES = new Set(["fritz.box", "speedport.ip", "myfritz.box", "router
 
 /**
  * Whether a host name (as `URL.hostname` gives it) points at this PC or the
- * local network: loopback, private and link-local ranges, `localhost`, a name
+ * local network: loopback, private and link-local ranges (and the reserved and
+ * multicast ones, where no public site lives), `localhost`, a name
  * without a dot (`http://router/`, which only the local network's DNS knows),
  * local endings such as `.local`, `.lan` and `.home.arpa`, and common router
  * names. Other names that resolve to such an address are not caught (see DNS
@@ -103,8 +109,8 @@ export function isPrivateHost(hostname: string): boolean {
     return privateIpv4([high >> 8, high & 255, low >> 8, low & 255]);
   }
   const first = parseInt(v6.split(":")[0] || "0", 16);
-  // fc00::/7 unique local, fe80::/10 link-local.
-  return (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80;
+  // fc00::/7 unique local, fe80::/10 link-local, ff00::/8 multicast.
+  return (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80 || (first & 0xff00) === 0xff00;
 }
 
 /** Whether a page address is on this PC or the local network. */

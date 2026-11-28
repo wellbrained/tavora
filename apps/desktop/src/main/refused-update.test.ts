@@ -6,7 +6,7 @@ const file = path.join("cache", "pending", "Tavora-Setup-0.3.0.exe");
 
 function run(info: { downloadedFile?: unknown }, packaged: boolean) {
   const removed: string[] = [];
-  const remove = vi.fn(async (target: string) => void removed.push(target));
+  const remove = vi.fn((target: string) => void removed.push(target));
   removeRefusedInstaller(info, packaged, remove as never);
   return removed;
 }
@@ -16,13 +16,13 @@ describe("removeRefusedInstaller", () => {
     expect(run({ downloadedFile: file }, true)).toEqual([file, path.join("cache", "pending", "current.blockmap"), path.join("cache", "current.blockmap")]);
   });
 
-  it("passes force, and a failing delete is swallowed", async () => {
-    const remove = vi.fn(async () => {
+  it("passes force, and a failing delete is swallowed", () => {
+    const remove = vi.fn(() => {
       throw new Error("EBUSY");
     });
     expect(() => removeRefusedInstaller({ downloadedFile: file }, true, remove as never)).not.toThrow();
     expect(remove).toHaveBeenCalledWith(file, { force: true });
-    await Promise.resolve();
+    expect(remove).toHaveBeenCalledTimes(3);
   });
 
   it("leaves files alone in an unpackaged run or without a file path", () => {

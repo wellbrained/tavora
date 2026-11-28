@@ -1,7 +1,50 @@
 import { randomBytes } from "node:crypto";
-import { lstat, mkdir, open, readdir, readFile, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, rm, stat, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { renameHeld } from "./rename-held";
+
+/** How often openChecked starts over when the file was replaced meanwhile. */
+export const OPEN_TRIES = 3;
+
+/**
+ * Opens a file for reading only when it is the file that was checked (audit L9). `inPlace` checks the path (its real
+ * place, links and junctions in its folders too). The file's id is noted before that check, the opened file must have
+ * the same one, and the path is checked again after the open; comparing with the path only after the open would follow
+ * a swapped folder too. "moved" when the path isn't in place, before or after the open.
+ *
+ * A game that saves puts a new file in the old one's place, which looks like a swap. So when only the id differs, the
+ * whole check starts over, with the new file's id: up to OPEN_TRIES times, then "changing". Nothing is ever read from a
+ * file that didn't pass all of it. That narrows the gap, it can't close it: a program that swaps a folder at just the
+ * right moments around each step still gets past. A drive that gives files no id (0) is told apart only by the path
+ * checks. A file that is gone meanwhile counts as "moved", like a missing one; other errors of the file system are thrown.
+ */
+export async function openChecked(file: string, inPlace: () => Promise<boolean>): Promise<FileHandle | "moved" | "changing"> {
+  for (let tries = 0; tries < OPEN_TRIES; tries++) {
+    const before = await lstat(file, { bigint: true }).catch(goneAsNull);
+    if (!before || before.isSymbolicLink() || !(await inPlace())) return "moved";
+    const handle = await open(file, "r").catch(goneAsNull);
+    if (!handle) return "moved";
+    let kept = false;
+    try {
+      const opened = await handle.stat({ bigint: true });
+      if (!(await inPlace())) return "moved";
+      // A volume's number can come with 32 or 64 bits, depending on the Windows call behind it: its low 32 always match.
+      if (opened.ino === before.ino && BigInt.asUintN(32, opened.dev) === BigInt.asUintN(32, before.dev)) {
+        kept = true;
+        return handle;
+      }
+    } finally {
+      if (!kept) await handle.close();
+    }
+  }
+  return "changing";
+}
+
+/** null for a file that isn't there (any more); other errors stay errors. */
+function goneAsNull(error: unknown): null {
+  if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+  throw error;
+}
 
 /** Whether the path can be looked at; any error, a missing path or one that can't be read, counts as no. */
 export async function pathExists(target: string): Promise<boolean> {

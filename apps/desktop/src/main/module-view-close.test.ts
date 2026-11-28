@@ -97,6 +97,7 @@ vi.mock("electron", async () => {
 });
 
 const { ModuleView, CLOSE_CAP_MS, CLOSE_QUIET_MS } = await import("./module-view");
+const { UPLOADS_AT_ONCE, UPLOADS_WAITING } = await import("./upload-slots");
 
 interface Port extends EventEmitter {
   sent: Record<string, unknown>[];
@@ -111,6 +112,11 @@ let writeMs: number;
 let pictureMs: number;
 let calls: { status: string[]; released: number; menus: number };
 
+async function putPicture() {
+  await new Promise((resolve) => setTimeout(resolve, pictureMs));
+  return { id: "0".repeat(32), type: "image/png", bytes: 3 };
+}
+
 function make() {
   const options = {
     instanceId: "11111111-1111-4111-8111-111111111111",
@@ -119,13 +125,9 @@ function make() {
     workspace: { id: "elden", displayName: "Elden Ring", kind: "game" },
     hostVersion: "0.0.0",
     launch: () => ({ reason: "restore", content: null }),
+    appBlobs: { put: putPicture },
     data: {
-      blobs: {
-        put: async () => {
-          await new Promise((resolve) => setTimeout(resolve, pictureMs));
-          return { id: "0".repeat(32), type: "image/png", bytes: 3 };
-        },
-      },
+      blobs: { put: putPicture },
       documents: { on: () => undefined, off: () => undefined },
       settings: {
         set: async (key: string, value: unknown) => {
@@ -182,6 +184,40 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe("a module's uploads (audit L8)", () => {
+  const upload = (at = "_blobs") => made.serve!(new Request(`tavora-module://tavora.notes/${at}/`, { method: "POST", body: "png" }));
+
+  it("answers 429 once the queue is full, for the workspace's and the module's files together, and takes the next when one is done", async () => {
+    await running();
+    const answers: number[] = [];
+    const sent = Array.from({ length: UPLOADS_AT_ONCE + UPLOADS_WAITING }, (_, index) => upload(index % 2 ? "_app-blobs" : "_blobs").then((response) => answers.push(response.status)));
+    await vi.advanceTimersByTimeAsync(1);
+    const refused = await upload();
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toMatchObject({ error: { code: "BAD_REQUEST" } });
+    expect(answers).toEqual([]);
+
+    // The first ones are done: the waiting ones take their slots, and there is room in the queue again.
+    await vi.advanceTimersByTimeAsync(pictureMs);
+    expect(answers).toHaveLength(UPLOADS_AT_ONCE);
+    const later = upload().then((response) => answers.push(response.status));
+    await vi.advanceTimersByTimeAsync(pictureMs * (1 + Math.ceil(UPLOADS_WAITING / UPLOADS_AT_ONCE)));
+    await Promise.all([...sent, later]);
+    expect(answers).toEqual(Array.from({ length: UPLOADS_AT_ONCE + UPLOADS_WAITING + 1 }, () => 201));
+  });
+
+  it("frees the slot of an upload whose answer throws", async () => {
+    await running();
+    // Past serveBlobs' own errors: reading the request itself fails.
+    const broken = { method: "POST", url: "tavora-module://tavora.notes/_blobs/", headers: new Headers(), get body(): never { throw new Error("broken request"); } } as unknown as Request;
+    for (let index = 0; index < UPLOADS_AT_ONCE + UPLOADS_WAITING + 1; index++) await expect(made.serve!(broken)).rejects.toThrow("broken request");
+    // Every slot is free: this one starts at once.
+    const next = upload();
+    await vi.advanceTimersByTimeAsync(pictureMs + 1);
+    expect((await next).status).toBe(201);
+  });
 });
 
 describe("closing a panel right after typing", () => {

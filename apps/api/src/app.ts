@@ -17,6 +17,7 @@ import { vaultRoutes } from "./vault.ts";
 import { catalogFilter, isOfficialId, isSignedList, type CatalogEntry, type CatalogStore } from "./catalog.ts";
 import { isBot, parseVisit, referrerDomain, SITE_CLICKS, SITE_ORIGIN, UNKNOWN_COUNTRY } from "./site-visits.ts";
 import { isAppVersion, type StatsStore } from "./stats.ts";
+import { DailyOnce } from "./daily-once.ts";
 import { gameKey, gameListKnows, parseRequest, type ModuleRequestStore } from "./module-requests.ts";
 import { catalogTrust, OFFICIAL_PINS, publisherNameOf, type OfficialPins } from "./catalog-trust.ts";
 import { publisherRoutes } from "./publishers.ts";
@@ -284,6 +285,7 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     rating: (summaries ? summaries.get(entry.id) : ratings?.summary(entry.id)) ?? null,
   });
   const catalogApp = new Hono();
+  const installsToday = new DailyOnce(accounts?.now ?? Date.now);
   // Publishing has its own limits per client and per account, so it comes before the read limiter.
   const publish = publishHandlers({
     catalog,
@@ -339,12 +341,15 @@ export function createApp({ db, clientKey, rateLimiter, steam, steamRateLimiter,
     const contact = accounts?.conversations && !isOfficialId(found.module.id) ? publicContact(accounts.conversations, accounts.store, found.module.id, found.module.owner) : undefined;
     return context.json({ module: { ...listed(found.module), ...(contact ? { contact } : {}) }, versions: found.versions, readme: found.readme }, 200, { "Cache-Control": SHARED_FIVE_MINUTES });
   });
-  // Sent once by the app after a user installed a module from Browse: only the module id.
+  // Sent once by the app after a user installed a module from Browse: only the module id. It counts once per client
+  // (an IPv4 address, an IPv6 /64) and module a day (audit L7), remembered only in memory (daily-once.ts); a repeat
+  // gets the same answer, so it can't tell what was counted.
   catalogApp.post("/installed", async (context) => {
     const body = (await context.req.json().catch(() => null)) as { id?: unknown } | null;
     const id = typeof body?.id === "string" && body.id.length <= 200 ? body.id : null;
-    if (!id || !catalog!.countInstall(id)) return fail(context, 404, "not-found", "Not found.");
-    stats?.count("module-install", id);
+    if (!id || !catalog!.isListedWithVersion(id)) return fail(context, 404, "not-found", "Not found.");
+    const client = clientKey ? clientKey(context.req.raw) : "local";
+    if (installsToday.first(JSON.stringify([client, id])) && catalog!.countInstall(id)) stats?.count("module-install", id);
     return context.body(null, 204);
   });
   // Sent once by the app after a module from the catalog was updated: only the module id.

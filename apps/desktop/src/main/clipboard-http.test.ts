@@ -1,6 +1,6 @@
 import { deflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { serveClipboard, type ClipboardDeps } from "./clipboard-http";
+import { CLIPBOARD_PNG_LIMITS, PICTURE_PNG_LIMITS, serveClipboard, type ClipboardDeps } from "./clipboard-http";
 import { checkPng, crc32 } from "./png";
 
 const LIMITS = { maxSide: 100, maxPixels: 5000 };
@@ -36,6 +36,14 @@ export function makePng(width: number, height: number): Uint8Array {
 describe("checkPng", () => {
   it("accepts a complete PNG and reports its size", () => {
     expect(checkPng(makePng(40, 30), LIMITS)).toEqual({ ok: true, width: 40, height: 30 });
+  });
+
+  it("takes fewer pixels for the clipboard, which decodes the picture, than for a saved picture (audit)", () => {
+    // 8000 x 6000: 48 million pixels, past the clipboard's 40 million; the Whiteboard copies at most 32 million.
+    const big = makePng(8000, 6000);
+    expect(checkPng(big, CLIPBOARD_PNG_LIMITS)).toMatchObject({ ok: false });
+    expect(checkPng(big, PICTURE_PNG_LIMITS)).toMatchObject({ ok: true });
+    expect(checkPng(makePng(8000, 4000), CLIPBOARD_PNG_LIMITS)).toMatchObject({ ok: true });
   });
 
   it("refuses a picture beyond the limits", () => {

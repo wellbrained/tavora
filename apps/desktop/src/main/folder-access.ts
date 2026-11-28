@@ -7,12 +7,13 @@
 // folder dialog; that choice stays on this PC (outside backups and cloud copies), per publisher and module.
 
 import { realpathSync, watch, type FSWatcher } from "node:fs";
-import { lstat, open, readdir, realpath, stat } from "node:fs/promises";
+import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { folderKey, isFolderName, isLocalLowGameFolder, isModuleId, isOwnerId, KEY_EXTENSIONS, splitFolderPath, type FolderAccess, type FolderRoot } from "@tavora/module-schema";
 import type { FolderChange, FolderEntry, FolderListing, FolderState } from "@tavora/sdk/protocol";
 import { readBody } from "./clipboard-http";
 import { HostError } from "./errors";
+import { openChecked } from "./fsutil";
 import { isInside, isInsideOrSame } from "./path-inside";
 import { SAVED_FILES, SavedFile } from "./saved-file";
 
@@ -366,7 +367,10 @@ export async function readFolderFile(base: string, entry: FolderAccess, relative
     // learned from it.
     const real = (await inBrowserProfile(base, parts.slice(0, -1))) ? null : await exactly(base, parts);
     if (!real || kindOf(path.basename(real), entry) !== "read") throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
-    const handle = await open(real, "r");
+    // Only the file just checked, not one swapped in since.
+    const handle = await openChecked(real, async () => (await exactly(base, parts)) === real);
+    if (handle === "moved") throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
+    if (handle === "changing") throw new HostError("BAD_REQUEST", "The file changed while being read. Try again.");
     try {
       const info = await handle.stat();
       if (!info.isFile()) throw new HostError("INVALID_PARAMS", "Not a file in this folder.");

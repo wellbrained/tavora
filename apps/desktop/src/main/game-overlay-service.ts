@@ -295,6 +295,8 @@ export class GameOverlays {
   private lastTickWarning = 0;
   /** What each panel passes to panel.setLive, and who listens (live view windows); kept while the panel exists, in memory only. */
   private readonly liveStates = new Map<string, { owner: string; state: JsonValue }>();
+  /** closeNow ran: Tavora is quitting, and the service never looks or opens a window again. */
+  private closedForGood = false;
   /** The one pending look after a state appeared or went, so a page calling panel.setLive in a loop costs one look. */
   private liveTick: ReturnType<typeof setTimeout> | undefined;
   private readonly liveWatchers = new Map<string, Set<(state: JsonValue | null | undefined) => void>>();
@@ -525,7 +527,7 @@ export class GameOverlays {
 
   /** One look at the window in front soon, however many calls ask for it before then. */
   private lookSoon(): void {
-    if (this.liveTick) return;
+    if (this.liveTick || this.closedForGood) return;
     this.liveTick = setTimeout(() => {
       this.liveTick = undefined;
       this.tick();
@@ -850,6 +852,8 @@ export class GameOverlays {
 
   /** Looks at the window in front and shows or hides every item accordingly. */
   tick(): void {
+    // After closeNow (Tavora quits) nothing looks again, so no call that comes in late can build a window.
+    if (this.closedForGood) return;
     try {
       this.prune();
       if (!this.active() || this.store.empty) {
@@ -1156,6 +1160,7 @@ export class GameOverlays {
    * or the process exiting. Tavora's windows must never outlive it.
    */
   closeNow(): void {
+    this.closedForGood = true;
     clearTimeout(this.liveTick);
     this.liveTick = undefined;
     clearInterval(this.timer);

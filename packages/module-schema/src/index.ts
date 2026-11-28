@@ -236,6 +236,11 @@ export const MAX_SCREENSHOTS = 5;
 export const MAX_LISTED_GAMES = 100;
 /** The longest version a catalog listing can have; Tavora skips a listing with a longer one. */
 export const MAX_LISTED_VERSION = 64;
+/**
+ * The most digits in one number of a listed version: past 15, older versions of Tavora can compare it as equal
+ * to its neighbours (a JavaScript number), so the module could never update past it.
+ */
+export const MAX_VERSION_DIGITS = 15;
 
 /**
  * Why the catalog can't list this manifest, or null. Checked when a version is published, not in validateManifest: a
@@ -243,6 +248,7 @@ export const MAX_LISTED_VERSION = 64;
  */
 export function catalogListingProblem(manifest: { version: string; games: readonly string[] }): string | null {
   if (manifest.version.length > MAX_LISTED_VERSION) return `Its version is longer than ${MAX_LISTED_VERSION} characters. Use a shorter one.`;
+  if (manifest.version.split(/[.+-]/).some((part) => /^\d+$/.test(part) && part.length > MAX_VERSION_DIGITS)) return `Each number in its version can have at most ${MAX_VERSION_DIGITS} digits. Use a shorter one.`;
   if (manifest.games.length > MAX_LISTED_GAMES) return `It names ${manifest.games.length} games. A module in the catalog can name at most ${MAX_LISTED_GAMES}.`;
   return null;
 }
@@ -259,9 +265,9 @@ export const MAX_SCREENSHOT_PIXELS = 4096;
 export const UPLOAD_BUDGET_BYTES = 88 * 1024 * 1024;
 
 /**
- * Why the catalog would refuse an upload of this module, before it is sent. `catalogListingProblem`, the readme (UTF-8
- * text of at most MAX_README_BYTES) and the screenshots (a PNG or WebP by their own bytes, as named, at most
- * MAX_SCREENSHOT_BYTES and MAX_SCREENSHOT_PIXELS) and UPLOAD_BUDGET_BYTES. The catalog checks more (a PNG's checksums,
+ * Why the catalog would refuse an upload of this module, before it is sent. The limits of `catalogListingProblem`
+ * (without MAX_VERSION_DIGITS, which only the catalog checks), the readme (UTF-8 text of at most MAX_README_BYTES), the
+ * screenshots (a PNG or WebP by their own bytes, as named, at most MAX_SCREENSHOT_BYTES and MAX_SCREENSHOT_PIXELS) and UPLOAD_BUDGET_BYTES. The catalog checks more (a PNG's checksums,
  * the virus scan), so null means only that none of these will stop it. `describeUploadProblem` words it in English.
  */
 export type CatalogUploadProblem =

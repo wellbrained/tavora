@@ -7,7 +7,7 @@
 // Used by the main process (updates.ts, host.ts) and by Node scripts (release.mjs, update-key.mjs, update-check.mjs),
 // so it imports nothing but Node's own modules and the dependency-free shared/plain-version.ts.
 import { createHash, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { closeSync, createReadStream, openSync, readSync } from "node:fs";
 import { comparePlainVersions, parsePlainVersion } from "../shared/plain-version.ts";
 
 /** The first line of what is signed: a signature over anything else (a catalog list, a module) never counts here. */
@@ -28,8 +28,12 @@ export interface SignedUpdate {
   sha512: string;
 }
 
-/** `feed`: what the feed's second signature said for the downloaded file, when checkDownloadedUpdate was asked to check it. */
-export type UpdateCheck = { ok: true; key: UpdateKeyName; feed?: FeedFreshness } | { ok: false; reason: string };
+/**
+ * `feed`: what the feed's second signature said for the downloaded file, when checkDownloadedUpdate was asked to check it.
+ * `installer`: the file checkDownloadedUpdate hashed and its SHA-512, so the update manager can hash it again right before
+ * it runs (audit L6).
+ */
+export type UpdateCheck = { ok: true; key: UpdateKeyName; feed?: FeedFreshness; installer?: { file: string; sha512: string } } | { ok: false; reason: string };
 
 const FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 // DER prefix of an Ed25519 public key in SubjectPublicKeyInfo form; the raw 32 bytes follow.
@@ -326,6 +330,19 @@ export function sha512OfFile(file: string): Promise<string> {
   });
 }
 
+/** SHA-512 of a file, base64, read in 1 MiB parts without giving up the thread: for the hash right before the installer runs, also while Tavora quits. */
+export function sha512OfFileSync(file: string): string {
+  const hash = createHash("sha512");
+  const part = Buffer.allocUnsafe(1024 * 1024);
+  const fd = openSync(file, "r");
+  try {
+    for (let read = readSync(fd, part, 0, part.length, null); read > 0; read = readSync(fd, part, 0, part.length, null)) hash.update(part.subarray(0, read));
+  } finally {
+    closeSync(fd);
+  }
+  return hash.digest("base64");
+}
+
 /**
  * checkUpdate for the file the updater saved: hashes it first. A file that can't be read is refused. `checkFeed`, when
  * given, also checks the feed's second signature for that file's name and hash once v1 passed; its outcome comes back
@@ -344,8 +361,10 @@ export async function checkDownloadedUpdate(
   } catch (error) {
     return { ok: false, reason: `the downloaded file can't be read (${error instanceof Error ? error.message : String(error)})` };
   }
-  const check = checkUpdate(update, sha512, pinned, currentVersion);
-  if (!check.ok || !checkFeed) return check;
+  const checked = checkUpdate(update, sha512, pinned, currentVersion);
+  if (!checked.ok) return checked;
+  const check = { ...checked, installer: { file: update.downloadedFile, sha512 } };
+  if (!checkFeed) return check;
   let feed: FeedFreshness;
   try {
     feed = checkFeed({ file: baseName(update.downloadedFile), sha512 });

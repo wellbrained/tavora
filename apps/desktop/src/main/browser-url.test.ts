@@ -46,6 +46,13 @@ describe("isPrivateHost", () => {
     }
   });
 
+  it("knows the reserved and multicast ranges no public site uses (audit 2026-11-28)", () => {
+    for (const host of ["192.0.0.1", "192.0.0.170", "198.18.0.1", "198.19.255.255", "224.0.0.1", "239.255.255.250", "240.0.0.1", "255.255.255.255", "[ff02::1]", "[ff05::c]", "[::ffff:efff:fffa]"]) {
+      expect(isPrivateHost(host), host).toBe(true);
+    }
+    for (const host of ["192.0.1.1", "198.17.0.1", "198.20.0.1", "223.255.255.255"]) expect(isPrivateHost(host), host).toBe(false);
+  });
+
   it("knows names only the local network's DNS answers, and common router names (B7)", () => {
     for (const host of ["router", "nas", "printer.lan", "box.home", "nas.home.arpa", "wiki.internal", "fritz.box", "FRITZ.BOX.", "speedport.ip", "routerlogin.net", "pc.localdomain"]) {
       expect(isPrivateHost(host), host).toBe(true);

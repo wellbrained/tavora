@@ -68,20 +68,39 @@ const HEAD_BYTES = 16;
 /** The temp file put() writes first, `<id>.tmp`. */
 const TEMP_BLOB = /^[0-9a-f]{32}\.tmp$/;
 
+/** How long a folder move waits for writes it cut off to clean up (close and remove their temp files). */
+export const CUT_OFF_MS = 5_000;
+
 /** The files being written across all stores, so moving their folder can wait until none is on its way. */
 export class BlobWrites {
   private active = 0;
   private waiting: (() => void)[] = [];
+  /** How to stop each write that is on its way, for a folder move that can't wait any longer. */
+  private readonly cuts = new Set<() => void>();
 
-  /** A write starts; the answer ends it. */
-  begin(): () => void {
+  /** A write starts; the answer ends it. `cut`, when given, stops it (finish() calls it for a write that ran too long). */
+  begin(cut?: () => void): () => void {
     this.active++;
+    if (cut) this.cuts.add(cut);
     let ended = false;
     return () => {
       if (ended) return;
       ended = true;
+      if (cut) this.cuts.delete(cut);
       if (--this.active === 0) for (const wake of this.waiting.splice(0)) wake();
     };
+  }
+
+  /**
+   * For a move of the pictures folder, which refuses new writes while it runs: waits up to `waitMs` for the writes on
+   * their way, then cuts off the ones still running (their files are not kept) and waits up to `cutMs` for them to clean
+   * up. So a module that keeps uploads open (each may stall BLOB_IDLE_MS) can't keep the move busy (audit L8). False
+   * only when a write is still on its way after both.
+   */
+  async finish(waitMs: number, cutMs: number = CUT_OFF_MS): Promise<boolean> {
+    if (await this.idle(waitMs)) return true;
+    for (const cut of [...this.cuts]) cut();
+    return this.idle(cutMs);
   }
 
   /** True once no write is on its way; false when one still is after `timeoutMs` (a stream that stalled). */
@@ -140,11 +159,13 @@ export class BlobStore {
     if (declaredBytes !== undefined && declaredBytes > this.limits.maxFileBytes) {
       return Promise.reject(this.tooLarge());
     }
-    // Counted from now: a move of the folder waits for this write, also while it is still in the queue.
-    const ended = this.writes.begin();
+    // Counted from now: a move of the folder waits for this write, also while it is still in the queue, and cuts it
+    // off when it runs too long.
+    const cut = new AbortController();
+    const ended = this.writes.begin(() => cut.abort());
     return this.queue.run(async () => {
       // The folder started moving while this waited its turn.
-      if (this.locked()) throw this.moving();
+      if (this.locked() || cut.signal.aborted) throw this.moving();
       const used = (await this.scan()).reduce((sum, file) => sum + file.bytes, 0);
       const room = Math.min(this.limits.maxFileBytes, this.limits.maxTotalBytes - used);
       if (room <= 0) throw this.tooMuch();
@@ -158,7 +179,7 @@ export class BlobStore {
       let type: BlobType | null = null;
       const head: number[] = [];
       try {
-        for await (const chunk of untilIdle(body, this.limits.idleMs ?? BLOB_IDLE_MS)) {
+        for await (const chunk of untilIdle(body, this.limits.idleMs ?? BLOB_IDLE_MS, cut.signal, () => this.moving())) {
           written += chunk.byteLength;
           if (written > room) throw written > this.limits.maxFileBytes ? this.tooLarge() : this.tooMuch();
           for (let index = 0; head.length < HEAD_BYTES && index < chunk.byteLength; index++) head.push(chunk[index]!);
@@ -168,6 +189,8 @@ export class BlobStore {
           }
           await handle.write(chunk);
         }
+        // Cut off by a folder move while its last piece was written.
+        if (cut.signal.aborted) throw this.moving();
         // A file shorter than the head is checked at the end.
         type ??= sniffType(Uint8Array.from(head));
         if (written === 0 || type === null) throw this.notAccepted();
@@ -274,26 +297,31 @@ export class BlobStore {
 }
 
 /**
- * The pieces of `body`, given up with an error when none comes for `idleMs`. A request body (a web stream) is read and,
- * on giving up, cancelled with its reader: a pending read of a stream that stalled never settles, and return() on its
- * iterator would wait for it.
+ * The pieces of `body`, given up with an error when none comes for `idleMs`, or with `cutError()` once `cut` aborts (a
+ * folder move cut the write off). A request body (a web stream) is read and, on giving up, cancelled with its reader: a
+ * pending read of a stream that stalled never settles, and return() on its iterator would wait for it.
  */
-async function* untilIdle(body: AsyncIterable<Uint8Array> | ReadableStream<Uint8Array>, idleMs: number): AsyncGenerator<Uint8Array> {
+async function* untilIdle(body: AsyncIterable<Uint8Array> | ReadableStream<Uint8Array>, idleMs: number, cut: AbortSignal, cutError: () => Error): AsyncGenerator<Uint8Array> {
   const stream = "getReader" in body ? body.getReader() : null;
   const pieces = stream ? null : (body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator]();
   const next = (): Promise<IteratorResult<Uint8Array>> => (stream ? stream.read() : pieces!.next()) as Promise<IteratorResult<Uint8Array>>;
   let ended = false;
   try {
     for (;;) {
+      if (cut.aborted) throw cutError();
       let timer: ReturnType<typeof setTimeout> | undefined;
+      let onCut: (() => void) | undefined;
       const idle = new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => reject(new HostError("INTERNAL", "the file stopped coming; try again")), idleMs);
+        onCut = () => reject(cutError());
+        cut.addEventListener("abort", onCut, { once: true });
       });
       let piece: IteratorResult<Uint8Array>;
       try {
         piece = await Promise.race([next(), idle]);
       } finally {
         clearTimeout(timer);
+        cut.removeEventListener("abort", onCut!);
       }
       if (piece.done) {
         ended = true;

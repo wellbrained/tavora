@@ -207,7 +207,7 @@ describe("FeedFreshnessCheck", () => {
     await writeFile(file, "installer");
     const broken = { ...info, tavoraSignature2: "nope" };
     expect(await checkDownloadedUpdate(broken, pinned, "1.0.0", (installer) => feed.check(broken, installer))).toMatchObject({ ok: true, feed: { status: "refused" } });
-    expect(await checkDownloadedUpdate(broken, pinned, "1.0.0")).toEqual({ ok: true, key: "release" });
+    expect(await checkDownloadedUpdate(broken, pinned, "1.0.0")).toMatchObject({ ok: true, key: "release" });
   });
 });
 

@@ -6,7 +6,7 @@
 
 import { isWindowsDeviceName } from "@tavora/module-schema";
 import { LIMITS } from "@tavora/sdk/protocol";
-import { CLIPBOARD_PNG_LIMITS, json, readBody, STATUS } from "./clipboard-http";
+import { json, PICTURE_PNG_LIMITS, readBody, STATUS } from "./clipboard-http";
 import { HostError } from "./errors";
 import { checkPng } from "./png";
 
@@ -50,7 +50,7 @@ export async function servePictureSave(request: Request, url: URL, deps: Picture
     deps.consume();
     if (!request.body) throw new HostError("INVALID_PARAMS", "send the PNG as the request body");
     const png = await readBody(request, LIMITS.maxClipboardImageBytes, "a picture to save");
-    const checked = checkPng(png, CLIPBOARD_PNG_LIMITS);
+    const checked = checkPng(png, PICTURE_PNG_LIMITS);
     if (!checked.ok) throw new HostError("INVALID_PARAMS", `only a complete PNG picture can be saved: ${checked.reason}`);
     const fileName = await deps.save(png, cleanPictureName(url.searchParams.get("name") ?? ""));
     return json(200, { fileName });

@@ -128,6 +128,34 @@ describe("BlobStore.put", () => {
     expect(await readdir(dir)).toEqual([]);
   });
 
+  it("cuts off a write a folder move can't wait for any longer, keeping nothing of it (audit L8)", async () => {
+    const writes = new BlobWrites();
+    let locked = false;
+    const moving = new BlobStore(() => dir, { maxFileBytes: 100, maxTotalBytes: 150 }, () => locked, "workspace", writes);
+    // A module that sends a piece now and then, never stalling long enough to be given up.
+    const trickle = moving.put((async function* () {
+      yield PNG;
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        yield new Uint8Array(1);
+      }
+    })());
+    const queued = moving.put(pieces(GIF));
+    // The trickle is writing (its temp file is there) when the move begins.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect((await readdir(dir)).filter((name) => name.endsWith(".tmp"))).toHaveLength(1);
+    locked = true;
+    const finished = writes.finish(20, 1_000);
+    await expect(trickle).rejects.toThrow(/being moved/);
+    await expect(queued).rejects.toThrow(/being moved/);
+    expect(await finished).toBe(true);
+    locked = false;
+    expect(await moving.list()).toEqual([]);
+    expect(await readdir(dir)).toEqual([]);
+    // Nothing on its way: done at once, nothing cut.
+    expect(await writes.finish(0)).toBe(true);
+  });
+
   it("cancels a request body that stopped coming, as a module's upload is a web stream (review of #979)", async () => {
     const patient = new BlobStore(() => dir, { maxFileBytes: 100, maxTotalBytes: 150, idleMs: 50 });
     let cancelled = false;

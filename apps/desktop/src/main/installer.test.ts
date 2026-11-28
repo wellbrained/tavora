@@ -180,6 +180,13 @@ describe("compareModuleVersions", () => {
     }
     expect(compareModuleVersions("1.0.0-beta.1", "1.0.0-beta.1")).toBe(0);
   });
+
+  it("compares long numbers exactly, past what a JavaScript number holds (audit 2026-11-28)", () => {
+    expect(compareModuleVersions("1.9007199254740992.0", "1.9007199254740993.0")).toBeLessThan(0);
+    expect(compareModuleVersions("10.0.0", "9.0.0")).toBeGreaterThan(0);
+    expect(compareModuleVersions("1.0.0-9007199254740992", "1.0.0-9007199254740993")).toBeLessThan(0);
+    expect(compareModuleVersions("1.0.0-beta.99999999999999999999", "1.0.0-beta.99999999999999999998")).toBeGreaterThan(0);
+  });
 });
 
 describe("applyOwners", () => {

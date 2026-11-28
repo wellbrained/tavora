@@ -191,11 +191,15 @@ describe("reporting a catalog module", () => {
 });
 
 describe("counting installs from Browse", () => {
-  it("counts installs of a listed module and shows the count in the listing, keeping nothing else", async () => {
+  it("counts installs of a listed module once per client a day and shows the count in the listing, keeping nothing else", async () => {
     const { catalog, added } = setup();
-    const app = createApp({ db, catalog, rateLimiter: roomy() });
+    let client = "203.0.113.1";
+    const app = createApp({ db, catalog, rateLimiter: roomy(), clientKey: () => client });
     const installed = (body: unknown) => app.request("http://tavora.test/v1/catalog/installed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     expect((await installed({ id: added.manifest.id })).status).toBe(204);
+    // The same client again that day: the same answer, not counted.
+    expect((await installed({ id: added.manifest.id })).status).toBe(204);
+    client = "203.0.113.2";
     expect((await installed({ id: added.manifest.id })).status).toBe(204);
     expect((await installed({ id: "wellbrained.unknown" })).status).toBe(404);
     expect((await installed({})).status).toBe(404);

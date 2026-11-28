@@ -1,7 +1,7 @@
 import { LIMITS } from "@tavora/sdk/protocol";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MAX_PENDING_BYTES, relayBridge, type RelayPort } from "./relay";
-import { measureWire } from "../shared/wire";
+import { measureWire, utf8Length } from "../shared/wire";
 
 /** A fake end of a channel: records what is posted and lets a test deliver messages. */
 class FakePort implements RelayPort {
@@ -137,6 +137,37 @@ describe("measureWire", () => {
     if (measured.ok) expect(Math.abs(measured.bytes - JSON.stringify(value).length)).toBeLessThan(40);
     expect(measureWire("x".repeat(1000), 100)).toEqual({ ok: false, reason: "too-large" });
     expect(measureWire(Array.from({ length: 1000 }, () => 1), 100)).toEqual({ ok: false, reason: "too-large" });
+  });
+
+  it("counts text as UTF-8 bytes, keys too, so text outside ASCII can't pass the limit at 3 times its size (audit L10)", () => {
+    for (const text of ["plain", "Grüße", "日本語", "🎮 game", "🎮"]) {
+      expect(utf8Length(text)).toBe(new TextEncoder().encode(text).byteLength);
+    }
+    // A lone surrogate counts as the replacement character it becomes.
+    expect(utf8Length("a\ud800b")).toBe(5);
+    expect(utf8Length("\udc00")).toBe(3);
+    expect(measureWire("日".repeat(100), 250)).toEqual({ ok: false, reason: "too-large" });
+    expect(measureWire("x".repeat(100), 250)).toMatchObject({ ok: true });
+    expect(measureWire({ ["ü".repeat(100)]: 1 }, 150)).toEqual({ ok: false, reason: "too-large" });
+    // The JSON text's UTF-8 bytes, give or take the comma counted after each key.
+    const measured = measureWire({ text: "Grüße 🎮" }, 1000);
+    expect(measured.ok && measured.bytes - new TextEncoder().encode(JSON.stringify({ text: "Grüße 🎮" })).byteLength).toBe(1);
+  });
+
+  it("refuses a text or key longer than what's left of the limit without going through its characters", () => {
+    const look = vi.spyOn(String.prototype, "charCodeAt");
+    try {
+      expect(measureWire("\u65e5".repeat(1000), 999)).toEqual({ ok: false, reason: "too-large" });
+      expect(measureWire({ ["\u65e5".repeat(1000)]: 1 }, 999)).toEqual({ ok: false, reason: "too-large" });
+      expect(measureWire(["x".repeat(600), "\u65e5".repeat(400)], 999)).toEqual({ ok: false, reason: "too-large" });
+      // Only the 600 characters that still fit were looked at.
+      expect(look).toHaveBeenCalledTimes(600);
+    } finally {
+      look.mockRestore();
+    }
+    // Up to the limit it counts as before: the text and its two quotes.
+    expect(measureWire("x".repeat(998), 1000)).toEqual({ ok: true, bytes: 1000 });
+    expect(measureWire("x".repeat(999), 1000)).toEqual({ ok: false, reason: "too-large" });
   });
 
   it("refuses nesting that is too deep", () => {

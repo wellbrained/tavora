@@ -24,7 +24,8 @@ import type { ModuleFileDialogs, PanelFileDialogs } from "./file-dialogs";
 import { PanelSession, type PanelConnectors } from "./panel-session";
 import type { BlobStore } from "./blobs";
 import { serveBlobs } from "./blob-http";
-import { serveClipboard } from "./clipboard-http";
+import { takeUploadSlot, type UploadSlots } from "./upload-slots";
+import { json, serveClipboard } from "./clipboard-http";
 import { cleanPictureName, servePictureSave } from "./picture-save-http";
 import { serveJsonOpen, serveJsonSave } from "./json-file-http";
 import { serveFileOpen, serveFileSave } from "./table-file-http";
@@ -157,7 +158,7 @@ interface SessionGesture {
 }
 
 /** Files a session's pages are writing now (blobs.put goes through the module's address, not the bridge). */
-interface Uploads {
+interface Uploads extends UploadSlots {
   running: number;
   /** Told whenever one starts or ends: a closing panel waits until none runs. */
   readonly changed: Set<() => void>;
@@ -166,7 +167,7 @@ const sessionUploads = new WeakMap<Session, Uploads>();
 
 function uploadsOf(ses: Session): Uploads {
   let uploads = sessionUploads.get(ses);
-  if (!uploads) sessionUploads.set(ses, (uploads = { running: 0, changed: new Set() }));
+  if (!uploads) sessionUploads.set(ses, (uploads = { running: 0, changed: new Set(), writing: 0, queued: [] }));
   return uploads;
 }
 
@@ -177,9 +178,15 @@ async function countWrite(ses: Session, request: Request, serve: () => Promise<R
   const tell = () => [...uploads.changed].forEach((changed) => changed());
   uploads.running++;
   tell();
+  let free: (() => void) | null = null;
   try {
+    const slot = takeUploadSlot(uploads);
+    // BAD_REQUEST, as for too many calls: QUOTA_EXCEEDED would read as "the storage is full".
+    if (!slot) return json(429, { error: { code: "BAD_REQUEST", message: "too many files are being stored at once; try again when one is done" } });
+    free = await slot;
     return await serve();
   } finally {
+    free?.();
     uploads.running--;
     tell();
   }
