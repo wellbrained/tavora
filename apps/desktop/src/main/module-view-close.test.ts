@@ -125,9 +125,9 @@ function make() {
     workspace: { id: "elden", displayName: "Elden Ring", kind: "game" },
     hostVersion: "0.0.0",
     launch: () => ({ reason: "restore", content: null }),
+    appBlobs: { put: putPicture },
     data: {
       blobs: { put: putPicture },
-      appBlobs: { put: putPicture },
       documents: { on: () => undefined, off: () => undefined },
       settings: {
         set: async (key: string, value: unknown) => {

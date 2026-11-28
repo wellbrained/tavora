@@ -1,5 +1,5 @@
 import { LIMITS } from "@tavora/sdk/protocol";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MAX_PENDING_BYTES, relayBridge, type RelayPort } from "./relay";
 import { measureWire, utf8Length } from "../shared/wire";
 
