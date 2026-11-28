@@ -36,12 +36,17 @@ export function utf8Length(text: string): number {
  */
 export function measureWire(value: unknown, limit: number): WireMeasure {
   let bytes = 0;
+  // A character is at least one byte, so a longer text is over the limit without looking at its characters.
+  const tooLong = (text: string) => text.length > limit - bytes;
   const walk = (item: unknown, depth: number): "not-json" | "too-large" | null => {
     if (depth > MAX_WIRE_DEPTH) return "not-json";
     // undefined carries no data (JSON drops it); the handlers still refuse it where a value is required.
     if (item === undefined) return null;
     if (item === null || typeof item === "boolean") bytes += 5;
-    else if (typeof item === "string") bytes += utf8Length(item) + 2;
+    else if (typeof item === "string") {
+      if (tooLong(item)) return "too-large";
+      bytes += utf8Length(item) + 2;
+    }
     else if (typeof item === "number") {
       if (!Number.isFinite(item)) return "not-json";
       bytes += String(item).length;
@@ -59,6 +64,7 @@ export function measureWire(value: unknown, limit: number): WireMeasure {
       if (proto !== null && Object.getPrototypeOf(proto) !== null) return "not-json";
       bytes += 2;
       for (const key of Object.keys(item)) {
+        if (tooLong(key)) return "too-large";
         bytes += utf8Length(key) + 4;
         if (bytes > limit) return "too-large";
         const problem = walk((item as Record<string, unknown>)[key], depth + 1);

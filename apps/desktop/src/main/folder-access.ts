@@ -369,7 +369,8 @@ export async function readFolderFile(base: string, entry: FolderAccess, relative
     if (!real || kindOf(path.basename(real), entry) !== "read") throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
     // Only the file just checked, not one swapped in since.
     const handle = await openChecked(real, async () => (await exactly(base, parts)) === real);
-    if (!handle) throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
+    if (handle === "moved") throw new HostError("BAD_REQUEST", "Can't find this file. It may have moved.");
+    if (handle === "changing") throw new HostError("BAD_REQUEST", "The file changed while being read. Try again.");
     try {
       const info = await handle.stat();
       if (!info.isFile()) throw new HostError("INVALID_PARAMS", "Not a file in this folder.");

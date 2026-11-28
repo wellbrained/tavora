@@ -79,6 +79,14 @@ describe("host.ts", () => {
     expect(host).toMatch(/onRefused: \(info\) => removeRefusedInstaller\(info, app\.isPackaged\)/);
   });
 
+  it("hashes an update's installer again before it runs, in a packaged Tavora (audit L6)", () => {
+    expect(body(/this\.updates = new UpdateManager\(\{/)).toContain("...(app.isPackaged ? { rehash: sha512OfFileSync } : {}),");
+  });
+
+  it("cuts off the pictures still being written when their folder moves, not only waits for them (audit L8)", () => {
+    expect(host).toContain("writesDone: (timeoutMs) => this.data.blobWrites.finish(timeoutMs),");
+  });
+
   it("resets the host page's popup watch when its overlay closes, so a late answer shows nothing (renderer/host.ts)", () => {
     // openWatch's reset is overlay-area.test.ts'; this holds the renderer's close to calling it.
     const renderer = readFileSync(path.join(import.meta.dirname, "../renderer/host.ts"), "utf8").replace(/\r\n/g, "\n");

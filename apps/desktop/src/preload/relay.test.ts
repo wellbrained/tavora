@@ -154,6 +154,22 @@ describe("measureWire", () => {
     expect(measured.ok && measured.bytes - new TextEncoder().encode(JSON.stringify({ text: "Grüße 🎮" })).byteLength).toBe(1);
   });
 
+  it("refuses a text or key longer than what's left of the limit without going through its characters", () => {
+    const look = vi.spyOn(String.prototype, "charCodeAt");
+    try {
+      expect(measureWire("\u65e5".repeat(1000), 999)).toEqual({ ok: false, reason: "too-large" });
+      expect(measureWire({ ["\u65e5".repeat(1000)]: 1 }, 999)).toEqual({ ok: false, reason: "too-large" });
+      expect(measureWire(["x".repeat(600), "\u65e5".repeat(400)], 999)).toEqual({ ok: false, reason: "too-large" });
+      // Only the 600 characters that still fit were looked at.
+      expect(look).toHaveBeenCalledTimes(600);
+    } finally {
+      look.mockRestore();
+    }
+    // Up to the limit it counts as before: the text and its two quotes.
+    expect(measureWire("x".repeat(998), 1000)).toEqual({ ok: true, bytes: 1000 });
+    expect(measureWire("x".repeat(999), 1000)).toEqual({ ok: false, reason: "too-large" });
+  });
+
   it("refuses nesting that is too deep", () => {
     let deep: unknown = 1;
     for (let i = 0; i < 100; i++) deep = [deep];

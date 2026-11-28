@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, readFile, rename, symlink, unlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rename, symlink, unlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +9,7 @@ vi.mock("./rename-held", async (original) => {
   return { renameHeld: (from: string, to: string) => (cutOff.value ? new Promise<void>(() => undefined) : actual.renameHeld(from, to)) };
 });
 
-import { LEFTOVER_TEMP_AGE_MS, openChecked, SerialQueue, settleSerial, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
+import { LEFTOVER_TEMP_AGE_MS, OPEN_TRIES, openChecked, SerialQueue, settleSerial, sweepWriteLeftovers, writeFileAtomic } from "./fsutil";
 
 let root: string;
 const now = Date.now();
@@ -215,6 +215,16 @@ describe("SerialQueue", () => {
 });
 
 describe("openChecked (audit L9)", () => {
+  /** What the opened file holds; it is closed after. */
+  async function content(opened: Awaited<ReturnType<typeof openChecked>>) {
+    if (typeof opened === "string") return `not opened: ${opened}`;
+    try {
+      return await opened.readFile("utf8");
+    } finally {
+      await opened.close();
+    }
+  }
+
   /** A checked folder with a file, and one outside it whose file has the same name. */
   async function folders() {
     const dir = await mkdtemp(path.join(tmpdir(), "tavora-opened-"));
@@ -225,6 +235,7 @@ describe("openChecked (audit L9)", () => {
       await writeFile(path.join(folder, "save.json"), text);
     }
     return {
+      dir,
       file: path.join(inside, "save.json"),
       /** Another program puts a junction to the other folder in the checked folder's place. */
       swap: async () => {
@@ -240,37 +251,58 @@ describe("openChecked (audit L9)", () => {
 
   it("opens the checked file, and nothing when it is gone or not in its place", async () => {
     const { file } = await folders();
-    const handle = await openChecked(file, async () => true);
-    expect(await handle!.readFile("utf8")).toBe("the checked file");
-    await handle!.close();
-    expect(await openChecked(file, async () => false)).toBeNull();
-    expect(await openChecked(`${file}.gone`, async () => true)).toBeNull();
+    expect(await content(await openChecked(file, async () => true))).toBe("the checked file");
+    expect(await openChecked(file, async () => false)).toBe("moved");
+    await expect(openChecked(`${file}.gone`, async () => true)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("refuses a file swapped in after the check", async () => {
+  /** A game's save: a new file written next to it, renamed over it. */
+  async function save(file: string, text: string) {
+    await writeFile(`${file}.tmp`, text);
+    await rename(`${file}.tmp`, file);
+  }
+
+  it("opens the new file when a game saves once between the look and the open", async () => {
     const { file } = await folders();
     let checks = 0;
     const check = async () => {
-      if (checks++ === 0) {
-        await rename(file, `${file}.aside`);
-        await writeFile(file, "another file");
-      }
+      if (checks++ === 0) await save(file, "the new save");
       return true;
     };
-    expect(await openChecked(file, check)).toBeNull();
+    expect(await content(await openChecked(file, check))).toBe("the new save");
+    // Twice for the try the save broke, twice for the whole check that ran again.
+    expect(checks).toBe(4);
   });
 
-  it("refuses a folder swapped for a junction after the check, where the path and the opened file agree", async () => {
-    const { file, swap } = await folders();
+  it("says the file is changing when every try meets another save, and opens nothing", async () => {
+    const { file } = await folders();
     let checks = 0;
     const check = async () => {
-      if (checks++ === 0) await swap();
+      // The check before each open (the odd ones are after it): always another file by then.
+      if (checks++ % 2 === 0) await save(file, `save ${checks}`);
       return true;
     };
-    expect(await openChecked(file, check)).toBeNull();
+    expect(await openChecked(file, check)).toBe("changing");
+    expect(checks).toBe(OPEN_TRIES * 2);
+    // Every file it opened on the way is closed again, so the next one can be renamed over.
+    await save(file, "the last save");
+    expect(await content(await openChecked(file, async () => true))).toBe("the last save");
   });
 
-  it("refuses a junction that was there before the check and is gone during it", async () => {
+  it("doesn't read through a junction put in the folder's place: another id, and the path check says so", async () => {
+    const { dir, file, swap } = await folders();
+    const real = async () => (await realpath(file)) === path.join(await realpath(dir), "inside", "save.json");
+    let checks = 0;
+    const check = async () => {
+      const there = await real();
+      if (checks++ === 0) await swap();
+      return there;
+    };
+    expect(await openChecked(file, check)).toBe("moved");
+    expect(checks).toBe(2);
+  });
+
+  it("doesn't open the file a junction led to when the junction is gone during the check", async () => {
     const { file, swap, swapBack } = await folders();
     await swap();
     let checks = 0;
@@ -278,13 +310,14 @@ describe("openChecked (audit L9)", () => {
       if (checks++ === 0) await swapBack();
       return true;
     };
-    expect(await openChecked(file, check)).toBeNull();
+    expect(await content(await openChecked(file, check))).toBe("the checked file");
+    expect(checks).toBe(4);
   });
 
-  it("checks the place again after the open", async () => {
+  it("checks the place again after the open, and doesn't try again when that fails", async () => {
     const { file } = await folders();
     let checks = 0;
-    expect(await openChecked(file, async () => checks++ === 0)).toBeNull();
+    expect(await openChecked(file, async () => checks++ === 0)).toBe("moved");
     expect(checks).toBe(2);
   });
 });
