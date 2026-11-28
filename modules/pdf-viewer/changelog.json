@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.1.96",
+    "date": "2026-11-28",
+    "notes": [
+      "Removing a file whose original is gone now asks first, as Tavora's copy may be your only one."
+    ]
+  },
+  {
     "version": "0.1.95",
     "date": "2026-11-28",
     "notes": [

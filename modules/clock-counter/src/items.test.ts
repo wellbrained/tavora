@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   boxOf,
+  canPutLinkBack,
   count,
   defaultLook,
   defaultStored,
   elapsed,
+  find,
   groupLine,
   groupOf,
   groupOverlayState,
+  incomingLinks,
   insert,
   itemText,
   lap,
@@ -21,6 +24,7 @@ import {
   newItem,
   overlayState,
   parseList,
+  putLinkBack,
   typedNumber,
   readClock,
   clocksRunning,
@@ -596,5 +600,39 @@ describe("the box of an overlay", () => {
   it("goes out with what the overlay publishes, so the page can draw the box", () => {
     const item = parseList(raw({ box: "fixed", speed: "slow" })).items[0]!;
     expect(overlayState(item).look).toMatchObject({ box: "fixed", speed: "slow" });
+  });
+});
+
+describe("links taken away", () => {
+  const linked = () =>
+    parseList({
+      items: [
+        { id: "a", label: "A", kind: "counter", links: [{ target: "c", amount: 2 }, { target: "b", amount: 5 }] },
+        { id: "b", label: "B", kind: "counter" },
+        { id: "c", label: "C", kind: "counter" },
+      ],
+    });
+  const links = (list: ReturnType<typeof linked>) => (find(list, "a") as Counter).links;
+
+  it("come back where they were when the deleted counter does", () => {
+    const list = linked();
+    const item = structuredClone(find(list, "c")!);
+    const lost = incomingLinks(list, "c");
+    remove(list, "c");
+    expect(links(list).map((link) => link.target)).toEqual(["b"]);
+
+    insert(list, item, 2);
+    for (const one of lost) putLinkBack(list, one);
+    expect(links(list)).toEqual([{ target: "c", amount: 2 }, { target: "b", amount: 5 }]);
+  });
+
+  it("stay away when their counter is gone or linked again", () => {
+    const list = linked();
+    const [lost] = incomingLinks(list, "b");
+    expect(canPutLinkBack(list, lost!)).toBe(false);
+    remove(list, "b");
+    expect(canPutLinkBack(list, lost!)).toBe(false);
+    putLinkBack(list, lost!);
+    expect(links(list).map((link) => link.target)).toEqual(["c"]);
   });
 });

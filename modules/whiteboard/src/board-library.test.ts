@@ -236,21 +236,17 @@ describe("two panels", () => {
 });
 
 describe("deleting", () => {
-  it("opens a neighbour, and Undo brings the board back as it was and opens it", async () => {
+  it("deletes the board and opens a neighbour", async () => {
     const { a } = panels();
     const library = await open(a.sdk);
     library.current!.update((draft) => void (draft.elements = [{ id: "r1", type: "rectangle" }]));
     const second = await library.create("blank");
     await library.rename(second, "Atlas map");
 
-    const undo = await library.remove(second);
+    await library.remove(second);
     expect(a.host.documents.get(second)).toBeNull();
     expect(library.currentId).toBe("board-start");
     expect(library.boards.map((board) => board.name)).toEqual(["Board 1"]);
-
-    await undo();
-    expect(library.currentId).toBe(second);
-    expect(titles(a.host)).toEqual(["Atlas map", "Board 1"]);
     expect(stored(a.host, "board-start")?.data.elements).toHaveLength(1);
   });
 

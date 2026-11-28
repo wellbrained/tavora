@@ -4,7 +4,8 @@
 // and names it after the item; every change saves at once. Text and number fields save when they lose focus or on Enter, not on
 // every key, and whatever is still typed saves when the page changes or this goes away.
 import { Hash, Hourglass, Keyboard, Link, Paintbrush, Plus, Timer, Type, X } from "@lucide/vue";
-import { errorMessage, SegmentedControl } from "@tavora/official-ui";
+import { ConfirmDialog, errorMessage, SegmentedControl, useFocusRecovery } from "@tavora/official-ui";
+import { undoable } from "@tavora/official-ui/components/ui/toast";
 import { Button } from "@tavora/official-ui/components/ui/button";
 import { ColorPicker } from "@tavora/official-ui/components/ui/color-picker";
 import { Combobox, ComboboxAnchor, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from "@tavora/official-ui/components/ui/combobox";
@@ -20,6 +21,7 @@ import { t } from "./i18n";
 import {
   ALIGNS,
   boxOf,
+  canPutLinkBack,
   COLORS,
   defaultLook,
   defaultStored,
@@ -27,11 +29,13 @@ import {
   FONTS,
   groupOf,
   groupOverlayState,
+  incomingLinks,
   itemText,
   MAX,
   memberNames,
   overlayState,
   placeholderOf,
+  putLinkBack,
   setStream,
   shownAlign,
   shownFont,
@@ -356,11 +360,33 @@ function saveLinkAmount(target: string) {
   });
 }
 
-const removeLink = (target: string) => updateCounter((counter) => (counter.links = counter.links.filter((link) => link.target !== target)));
+const editorRoot = ref<HTMLElement | null>(null);
+/** A removed link's row hands the focus on to the next one. */
+const linkFocus = useFocusRecovery(editorRoot);
+
+/** Takes a link away at once; Undo (or Ctrl+Z) puts it back where it was, with its amount. */
+function removeLink(target: string) {
+  const lost = incomingLinks(panel.store.list.value, target).find((one) => one.source === id.value);
+  if (!lost) return;
+  const label = links.value.find((link) => link.target === target)?.label ?? t("kind.counter");
+  const touched = [id.value, target];
+  delete amountDrafts[target];
+  updateCounter((counter) => (counter.links = counter.links.filter((link) => link.target !== target)));
+  undoable({
+    title: t("edit.linkRemoved", { label }),
+    undo: () => {
+      if (!canPutLinkBack(panel.store.list.value, lost)) return false;
+      change(touched, (data) => putLinkBack(data, lost));
+      linkFocus.restore(target);
+    },
+  });
+}
 
 // ── On stream ────────────────────────────────────────────────────────
 
 const linkNote = ref<string | null>(null);
+/** The "New link" question: the old OBS link can't be brought back. */
+const askNewLink = ref(false);
 
 /**
  * Runs a call Tavora may refuse and tells the user what to do instead of failing without a word. A panel over the game
@@ -395,6 +421,7 @@ function arrange() {
 }
 
 function resetLink() {
+  askNewLink.value = false;
   return attempt(linkNote, async () => {
     await panel.resetLink(props.item);
     linkNote.value = t("edit.resetLinkDone");
@@ -481,7 +508,7 @@ onBeforeUnmount(saveFields);
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col text-sm" :data-testid="`editor-${item.id}`">
+  <div ref="editorRoot" class="flex h-full min-h-0 flex-col text-sm" :data-testid="`editor-${item.id}`">
     <!-- Tavora's frame names the item when it can (`titled`); an older Tavora can't, and then the page does. -->
     <header v-if="titled === false" class="flex h-12 flex-none items-center border-b px-4">
       <h2 class="min-w-0 truncate text-base font-semibold">{{ title }}</h2>
@@ -574,7 +601,7 @@ onBeforeUnmount(saveFields);
                   </DropdownMenuContent>
                 </DropdownMenu>
               </SettingsRow>
-              <SettingsRow v-for="link in links" :key="link.target" :label="link.label" :hint="t('edit.linkRowHint')">
+              <SettingsRow v-for="link in links" :key="link.target" :label="link.label" :hint="t('edit.linkRowHint')" :data-focus-row="link.target">
                 <Input
                   :model-value="amountDrafts[link.target] ?? String(link.amount)"
                   class="w-20 tabular-nums"
@@ -707,12 +734,13 @@ onBeforeUnmount(saveFields);
           </template>
           <SettingsSection>
             <SettingsRow v-if="panel.store.overlays.value" :label="t('edit.resetLink')" :hint="t('edit.resetLinkHint')">
-              <Button variant="secondary" size="sm" data-testid="reset-link" @click="resetLink">{{ t("edit.resetLink") }}</Button>
+              <Button variant="secondary" size="sm" data-testid="reset-link" @click="askNewLink = true">{{ t("edit.resetLink") }}</Button>
             </SettingsRow>
             <p v-if="linkNote" class="text-muted-foreground pt-3 text-xs" role="status" data-testid="link-note">{{ linkNote }}</p>
           </SettingsSection>
         </SettingsPage>
       </ModuleSettings>
     </div>
+    <ConfirmDialog v-if="askNewLink" :title="t('edit.newLink.title')" :description="t('edit.newLink.description')" :confirm="t('edit.resetLink')" :cancel="t('edit.newLink.cancel')" @confirm="resetLink" @cancel="askNewLink = false" />
   </div>
 </template>

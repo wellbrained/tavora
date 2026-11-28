@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.1.109",
+    "date": "2026-11-28",
+    "notes": [
+      "New link asks first, as the old OBS link stops working.",
+      "Removing a link between counters can be undone.",
+      "Undo after deleting a counter brings back the links to it."
+    ]
+  },
+  {
     "version": "0.1.108",
     "date": "2026-11-28",
     "notes": [

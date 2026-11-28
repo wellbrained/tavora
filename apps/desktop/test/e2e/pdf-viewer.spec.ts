@@ -315,11 +315,14 @@ test("pdf viewer: files picked in Tavora's dialog stay linked to their original"
     await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("original-gone")}`)).toBe(false);
     expect(await tabNames()).toBe("Rules.pdf,Map.pdf");
 
-    // Gone again for the other file: Remove closes its tab and takes it off the list.
+    // Gone again for the other file: Remove asks first, as the copy may be the only one; Delete closes its tab and takes it off the list.
     await rm(map);
     await select("Map.pdf");
     await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("original-gone")}`), { timeout: 15_000 }).toBe(true);
     await inModule(app, PDF_VIEWER, `${q("original-remove")}.click()`);
+    await expect.poll(() => inModule(app, PDF_VIEWER, `!!${q("confirm-submit")}`)).toBe(true);
+    expect(await tabNames()).toBe("Rules.pdf,Map.pdf");
+    await inModule(app, PDF_VIEWER, `${q("confirm-submit")}.click()`);
     await expect.poll(tabNames).toBe("Rules.pdf");
   } finally {
     await app.close();
