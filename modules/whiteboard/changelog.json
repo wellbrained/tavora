@@ -641,12 +641,5 @@
       "Dialogs you open with the keyboard appear instantly.",
       "Toasts wait while the panel is hidden or the game is in front, and slide in and out from their edge."
     ]
-  },
-  {
-    "version": "0.3.11",
-    "date": "2026-11-02",
-    "notes": [
-      "Screen readers read each message once."
-    ]
   }
 ]

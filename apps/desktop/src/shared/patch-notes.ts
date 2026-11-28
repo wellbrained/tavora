@@ -28,6 +28,20 @@ export interface PatchNote {
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    version: "0.26.7",
+    date: "2026-11-28",
+    title: "Safer removing",
+    notes: [
+      "Deleting your review or a reply asks you first.",
+      "Removing your profile picture, an overlay's background picture or a hotkey can be undone.",
+      "When a module asks for a picture, the dialog now says you're adding one.",
+    ],
+    prs: [
+      { number: 1063, title: "Ask or offer Undo before removals; picture dialog wording; Whiteboard 9 key" },
+    ],
+    tags: ["accounts", "catalog", "overlays", "settings", "todos", "whiteboard"],
+  },
+  {
     version: "0.26.6",
     date: "2026-11-28",
     title: "Clearer texts",
