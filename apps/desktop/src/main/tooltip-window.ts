@@ -201,7 +201,7 @@ export class TooltipWindow {
             if (channel === "tooltip:size" && typeof args[1] === "number" && Number.isFinite(args[1])) {
                 this.size.height = Math.max(60, Math.min(2000, Math.ceil(args[1])));
                 if (typeof args[2] === "number" && Number.isFinite(args[2]))
-                    this.size.width = Math.max(120, Math.min(520, Math.ceil(args[2])));
+                    this.size.width = Math.max(120, Math.min(526, Math.ceil(args[2])));
                 this.place();
                 // Its final size (its pictures and letters are in): the page draws it there now (a card in sight stayed
                 // until then), and an unseen one comes into sight once it has.

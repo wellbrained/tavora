@@ -397,3 +397,21 @@ describe("tooltip preload sizes", () => {
         expect(ipc.sent.filter(m => m[0] === "tooltip:drawn")).toEqual([["tooltip:drawn", serial]]);
     });
 });
+
+describe("tooltip preload room around the card", () => {
+    // The PoE look's corner pieces reach past the card: its margin is part of the window's size.
+    it("adds the card's margin to the size it asks for", async () => {
+        const el = document.getElementById("card")!;
+        const size = async () => {
+            ipc.sent.length = 0;
+            render(card);
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const [, , height, width] = ipc.sent.filter(m => m[0] === "tooltip:size").pop()!;
+            return [height, width] as number[];
+        };
+        const [height, width] = await size();
+        el.style.margin = "3px";
+        expect(await size()).toEqual([height! + 6, width! + 6]);
+        el.style.margin = "";
+    });
+});

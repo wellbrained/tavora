@@ -8,6 +8,7 @@ import { cn } from "../../../lib/utils"
 import { useSlidingIndicator } from "../sliding-indicator"
 import { tabsIndicatorKey } from "./context"
 
+// With `class="flex-wrap"` the tabs go on to a next row and the list grows with them.
 // An underlined row of tabs, like the panel tabs: the selected one carries
 // a 2 px gold line. The line is one piece that slides to the tab you click, and jumps when the arrow keys pick.
 // The tabs may sit in wrappers (a tooltip's span): the line is placed by measuring, not by where they are in the
@@ -28,7 +29,7 @@ useSlidingIndicator(root, { selector: '[role="tab"][data-state="active"]', enabl
     ref="root"
     data-slot="tabs-list"
     v-bind="delegatedProps"
-    :class="cn('text-muted-foreground group/tabs relative inline-flex h-[var(--style-control-height,32px)] w-fit items-center gap-1 border-b', props.class)"
+    :class="cn('text-muted-foreground group/tabs relative inline-flex h-[var(--style-control-height,32px)] w-fit items-center gap-1 border-b [&.flex-wrap]:h-auto [&.flex-wrap]:min-h-[var(--style-control-height,32px)]', props.class)"
   >
     <!-- Where the tab's own bottom border used to be: the measured box's bottom 2 px. A border, not a background, so
          it stays when Windows high contrast takes backgrounds away. -->

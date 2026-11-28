@@ -711,6 +711,8 @@ export const en = {
 
   "ex.tabs.Tabs": "Tabs",
   "ex.tabs.Tabs.note": "The accent line slides to the tab you click and jumps when you pick with the arrow keys.",
+  "ex.tabs.TabsWrap": "Tabs on more than one row",
+  "ex.tabs.TabsWrap.note": "A list with flex-wrap grows by a row when the tabs don't fit.",
   "ex.tabs.TabStrip": "Tabs you can close, drag and rename",
   "ex.tabs.TabStrip.note": "TabStrip keeps its line still.",
   "ex.tabs.TabIcon": "A tab with an icon before its name",
@@ -1486,6 +1488,8 @@ export const de: Record<TextKey, string> = {
 
   "ex.tabs.Tabs": "Tabs",
   "ex.tabs.Tabs.note": "Die Akzentlinie gleitet zum angeklickten Tab und springt bei der Wahl mit den Pfeiltasten.",
+  "ex.tabs.TabsWrap": "Tabs in mehreren Zeilen",
+  "ex.tabs.TabsWrap.note": "Eine Liste mit flex-wrap wächst um eine Zeile, wenn die Tabs nicht passen.",
   "ex.tabs.TabStrip": "Tabs zum Schließen, Ziehen und Umbenennen",
   "ex.tabs.TabStrip.note": "TabStrip hält seine Linie still.",
   "ex.tabs.TabIcon": "Ein Tab mit Icon vor dem Namen",

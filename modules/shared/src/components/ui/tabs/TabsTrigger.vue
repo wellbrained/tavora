@@ -23,6 +23,8 @@ const listDraws = inject(tabsIndicatorKey, ref(false))
     v-bind="forwardedProps"
     :class="cn(
       'hover:text-foreground data-[state=active]:text-foreground -mb-px inline-flex h-full items-center justify-center gap-1.5 border-b-2 border-transparent px-2 text-sm font-medium whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-(--disabled-opacity) [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=\'size-\'])]:size-4',
+      // In a list that wraps, a tab keeps a row's height instead of taking the whole list's.
+      'group-[.flex-wrap]/tabs:h-auto group-[.flex-wrap]/tabs:min-h-[calc(var(--style-control-height,32px)-1px)]',
       // The list's line takes this border's place; where the list has none to show (nothing measured), the tab keeps it.
       !listDraws ? 'data-[state=active]:border-primary' : 'group-data-[indicator=off]/tabs:data-[state=active]:border-primary group-data-[indicator=jump]/tabs:transition-none',
       props.class,

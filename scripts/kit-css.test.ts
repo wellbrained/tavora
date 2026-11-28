@@ -82,3 +82,19 @@ describe("elevation and layers", () => {
     }
   })
 })
+
+describe("pill tabs that wrap", () => {
+  // A share of the list's height made every tab as tall as the whole list, so a second row ran over what follows.
+  it("stretch each tab to its row, never to a share of the list", () => {
+    // The nested rule for the tabs in the "Pill tabs outside Classic" section.
+    const body = looks.split("Pill tabs outside Classic")[1]!.split('& [data-slot="tabs-trigger"] {')[1]!.split("&[data-state")[0]
+    expect(body).toMatch(/align-self:\s*stretch/)
+    expect(body).toMatch(/min-height:\s*calc\(var\(--style-control-height, 32px\) - 6px\)/)
+    expect(body).not.toMatch(/(^|[;\s])height:\s*calc\(100%/)
+  })
+
+  it("leave a TabStrip's tabs to the strip's own height, and a keycap tab to its text", () => {
+    expect(rulesFor(looks, '[data-slot="tab-strip"] [data-slot="tabs-trigger"]')).toMatch(/min-height:\s*0/)
+    expect(rulesFor(looks, '[data-slot="tabs-list"].flex-wrap [data-slot="tabs-trigger"]')).toMatch(/min-height:\s*0/)
+  })
+})

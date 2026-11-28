@@ -139,6 +139,10 @@
       box-shadow: 0 1px 0 color-mix(in srgb, black 30%, transparent);
     }
   }
+  /* A key is as tall as its text, in a list that wraps too (not the row height TabsTrigger gives an underlined tab). */
+  & [data-slot="tabs-list"].flex-wrap [data-slot="tabs-trigger"] {
+    min-height: 0;
+  }
 }
 
 /* ---------- Buttons ---------- */
@@ -442,7 +446,10 @@
   }
   & [data-slot="tabs-trigger"] {
     margin: 3px 0;
-    height: calc(100% - 6px);
+    /* Stretched to its row, never a share of the list's height: a list that wraps its tabs grows by a row instead. */
+    height: auto;
+    align-self: stretch;
+    min-height: calc(var(--style-control-height, 32px) - 6px);
     padding: 0 12px;
     border: 0;
     border-radius: var(--radius-md);
@@ -451,6 +458,11 @@
       color: var(--foreground);
     }
   }
+}
+
+/* A TabStrip is as tall as where it sits, which may be less than a control: its tabs only follow it. */
+:root[data-look-tabs="pill"][data-style]:not([data-style="tavora.classic"]) [data-slot="tab-strip"] [data-slot="tabs-trigger"] {
+  min-height: 0;
 }
 
 /* ---------- The chosen row of a pick-one list (Select, Picker, Combobox, menu radio items) ---------- */

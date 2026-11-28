@@ -88,3 +88,26 @@ describe("tooltip page and the kit's card: a unit", () => {
         expect(KIT_CSS).toContain("--ic-bar:var(--skin-bar,var(--skin-surface));--ic-unit-line:var(--skin-text)");
     });
 });
+
+describe("tooltip page and the kit's card: the PoE look's frame", () => {
+    // The corner pieces and colours are written out in both; the card in a panel must look like the one above the workspace.
+    const frames = (css: string) => [...new Set([...css.matchAll(/url\("data:image\/svg\+xml,[^"]*"\)/g)].map(([url]) => url))];
+
+    it("draws the same four frames, one for each rarity and one for the rest", () => {
+        expect(frames(TOOLTIP_DOCUMENT)).toHaveLength(4);
+        expect(frames(KIT_CSS)).toEqual(frames(TOOLTIP_DOCUMENT));
+        for (const tone of ["magic", "rare", "unique"]) {
+            const frame = (css: string, selector: string) => css.split(selector)[1]!.match(/url\("[^"]*"\)/)![0];
+            expect(frame(KIT_CSS, ":has(h3[data-tone=" + tone + "]){")).toBe(frame(TOOLTIP_DOCUMENT, "body.poe #card:has(h2." + tone + "){"));
+        }
+    });
+
+    it("is a border picture reaching 3px out in both, with a diamond on each divider", () => {
+        expect(KIT_CSS).toContain("border-image:var(--ic-frame) 26 / 26px / 3px stretch");
+        expect(TOOLTIP_DOCUMENT).toContain("border-image:var(--frame) 26 / 26px / 3px stretch");
+        // The window keeps the 3px the pieces reach out by (preload/tooltip.ts adds the card's margin to its size).
+        expect(TOOLTIP_DOCUMENT).toContain("body.poe #card{margin:3px;max-height:calc(100vh - 6px);");
+        for (const css of [KIT_CSS, TOOLTIP_DOCUMENT])
+            expect(css).toContain("top:-3.5px;box-sizing:border-box;width:6px;height:6px;margin-left:-3px;rotate:45deg;");
+    });
+});

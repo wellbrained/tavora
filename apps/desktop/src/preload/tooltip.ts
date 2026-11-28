@@ -295,10 +295,15 @@ function settle(data: Data) {
     void Promise.race([waited, new Promise(resolve => setTimeout(resolve, SETTLE_MS))]).then(() => { if (current === data)
         sendSize(true); });
 }
+/** The room the window keeps around the card: its margin (the PoE look's corner pieces reach past the card). */
+function around(card: HTMLElement) {
+    const style = getComputedStyle(card), px = (value: string) => parseFloat(value) || 0;
+    return { width: px(style.marginLeft) + px(style.marginRight), height: px(style.marginTop) + px(style.marginBottom) };
+}
 /** Compact when the card is taller than the window can be. */
 function fit(data: Data) {
     const card = document.getElementById("card")!, room = data.room ?? innerHeight;
-    if (card.scrollHeight > room && room > 100)
+    if (card.scrollHeight + around(card).height > room && room > 100)
         document.body.classList.add("compact");
 }
 /**
@@ -312,7 +317,8 @@ function measureOf(data: Data) {
     else
         fit(data);
     const card = document.getElementById("card")!;
-    const size = { height: card.scrollHeight, width: Math.ceil(card.getBoundingClientRect().width), pictures: Array.from(card.querySelectorAll("img")) };
+    const margin = around(card);
+    const size = { height: card.scrollHeight + margin.height, width: Math.ceil(card.getBoundingClientRect().width + margin.width), pictures: Array.from(card.querySelectorAll("img")) };
     if (back)
         draw(back);
     return size;
